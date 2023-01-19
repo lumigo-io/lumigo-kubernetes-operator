@@ -1,0 +1,31 @@
+# permissions for end users to edit lumigoes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: lumigo-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    app.kubernetes.io/managed-by: kustomize
+  name: lumigo-editor-role
+rules:
+- apiGroups:
+  - operator.lumigo.io
+  resources:
+  - lumigoes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operator.lumigo.io
+  resources:
+  - lumigoes/status
+  verbs:
+  - get

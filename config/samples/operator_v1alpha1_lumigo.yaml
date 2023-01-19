@@ -1,0 +1,12 @@
+apiVersion: operator.lumigo.io/v1alpha1
+kind: Lumigo
+metadata:
+  labels:
+    app.kubernetes.io/name: lumigo
+    app.kubernetes.io/instance: lumigo-sample
+    app.kubernetes.io/part-of: lumigo
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: lumigo
+  name: lumigo-sample
+spec:
+  # TODO(user): Add fields here
