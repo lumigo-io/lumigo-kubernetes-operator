@@ -92,6 +92,7 @@ func main() {
 	if err = (&controllers.LumigoReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Lumigo"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Lumigo")
 		os.Exit(1)

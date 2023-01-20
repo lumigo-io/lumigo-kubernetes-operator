@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -65,9 +66,26 @@ type KubernetesSecretRef struct {
 
 // LumigoStatus defines the observed state of Lumigo
 type LumigoStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// The status of single Lumigo resources
+	Conditions []LumigoCondition `json:"conditions"`
 }
+
+type LumigoCondition struct {
+	Type               LumigoConditionType    `json:"type"`
+	Status             corev1.ConditionStatus `json:"status"`
+	LastUpdateTime     metav1.Time            `json:"lastUpdateTime"`
+	LastTransitionTime metav1.Time            `json:"lastTransitionTime"`
+	Message            string                 `json:"message"`
+}
+
+type LumigoConditionType string
+
+const (
+	LumigoConditionTypeCreated LumigoConditionType = "Created"
+	LumigoConditionTypeActive  LumigoConditionType = "Active"
+	LumigoConditionTypeUpdated LumigoConditionType = "Updated"
+	LumigoConditionTypeError   LumigoConditionType = "Error"
+)
 
 func init() {
 	SchemeBuilder.Register(&Lumigo{}, &LumigoList{})

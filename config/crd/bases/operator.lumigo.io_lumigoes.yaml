@@ -59,6 +59,33 @@ spec:
             type: object
           status:
             description: LumigoStatus defines the observed state of Lumigo
+            properties:
+              conditions:
+                description: The status of single Lumigo resources
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    lastUpdateTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - lastUpdateTime
+                  - message
+                  - status
+                  - type
+                  type: object
+                type: array
+            required:
+            - conditions
             type: object
         type: object
     served: true

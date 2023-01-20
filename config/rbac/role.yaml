@@ -31,3 +31,12 @@ rules:
   - get
   - patch
   - update
+- # The Lumigo operator will access only secrets that are referenced by a Lumigo CRD
+  apiGroups:
+  - "" # Core API group
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
