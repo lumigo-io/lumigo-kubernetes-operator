@@ -161,7 +161,6 @@ func (r *LumigoReconciler) fetchKubernetesSecret(ctx context.Context, namespaceN
 
 func (r *LumigoReconciler) enqueueIfSecretReferencedByLumigo(obj client.Object) []reconcile.Request {
 	// Require the reconciliation for Lumigo instances that reference the provided secret
-	// TODO Actually validate that it is a Kubernetes corev1/corev1beta1` Secret?`
 	reconcileRequests := []reconcile.Request{{}}
 
 	namespace := obj.GetNamespace()

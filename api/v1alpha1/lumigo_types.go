@@ -24,6 +24,7 @@ import (
 // IMPORTANT: Run "make" to regenerate code after modifying this file
 
 // Lumigo is the Schema for the lumigoes API
+// +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 type Lumigo struct {

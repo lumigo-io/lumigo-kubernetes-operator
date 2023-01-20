@@ -20,6 +20,12 @@ Start `minikube`:
 minikube start --insecure-registry "host.docker.internal:5000"
 ```
 
+Install [`cert-manager`](https://cert-manager.io/docs/installation/):
+
+```sh
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.yaml # Check whether there is a newer version!
+```
+
 Start a local Docker registry:
 
 ```sh

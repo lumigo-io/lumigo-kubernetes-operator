@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: host.docker.internal:5000/controller
-  newTag: v26
+  newTag: v56
