@@ -61,7 +61,7 @@ Deploy the Lumigo operator with:
 
 ```sh
 IMG=localhost:5000/controller make docker-build docker-push
-helm install lumigo deploy/helm
+helm install lumigo deploy/helm --namespace lumigo-system --create-namespace
 ```
 
 ### Troubleshooting
