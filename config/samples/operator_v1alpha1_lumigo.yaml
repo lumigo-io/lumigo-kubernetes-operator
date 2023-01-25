@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/created-by: lumigo
   name: lumigo-sample
 spec:
-  credentials:
+  lumigoToken:
     secretRef:
       name: lumigo-credentials
       key: token

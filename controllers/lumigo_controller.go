@@ -36,6 +36,7 @@ import (
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
 )
 
 const (
@@ -197,7 +198,7 @@ func (r *LumigoReconciler) updateStatusIfNeeded(logger logr.Logger, instance *op
 
 	updatedStatus := instance.Status.DeepCopy()
 
-	setErrorActiveConditions(updatedStatus, now, currentErr)
+	conditions.SetErrorActiveConditions(updatedStatus, now, currentErr)
 
 	if !apiequality.Semantic.DeepEqual(&instance.Status, updatedStatus) {
 		instance.Status = *updatedStatus
@@ -216,63 +217,4 @@ func (r *LumigoReconciler) updateStatusIfNeeded(logger logr.Logger, instance *op
 	}
 
 	return result, nil
-}
-
-func setErrorActiveConditions(status *operatorv1alpha1.LumigoStatus, now metav1.Time, err error) {
-	if err != nil {
-		updateLumigoConditions(status, now, operatorv1alpha1.LumigoConditionTypeError, corev1.ConditionTrue, fmt.Sprintf("%v", err))
-		updateLumigoConditions(status, now, operatorv1alpha1.LumigoConditionTypeActive, corev1.ConditionFalse, "Lumigo has an error")
-	} else {
-		// Clear the error status
-		updateLumigoConditions(status, now, operatorv1alpha1.LumigoConditionTypeError, corev1.ConditionFalse, "")
-		updateLumigoConditions(status, now, operatorv1alpha1.LumigoConditionTypeActive, corev1.ConditionTrue, "Lumigo is ready")
-	}
-}
-
-func updateLumigoConditions(status *operatorv1alpha1.LumigoStatus, now metav1.Time, t operatorv1alpha1.LumigoConditionType, conditionStatus corev1.ConditionStatus, desc string) {
-	conditionIndex := getConditionIndexByType(status, t)
-
-	if conditionIndex > -1 {
-		// No condition exists of the given type
-		setLumigoCondition(&status.Conditions[conditionIndex], now, conditionStatus, desc)
-	} else if conditionStatus == corev1.ConditionTrue {
-		status.Conditions = append(status.Conditions, newLumigoCondition(t, conditionStatus, now, "", desc))
-	}
-}
-
-func setLumigoCondition(condition *operatorv1alpha1.LumigoCondition, now metav1.Time, conditionStatus corev1.ConditionStatus, message string) *operatorv1alpha1.LumigoCondition {
-	if condition.Status != conditionStatus {
-		condition.LastTransitionTime = now
-		condition.Status = conditionStatus
-	}
-	condition.LastUpdateTime = now
-	condition.Message = message
-
-	return condition
-}
-
-func newLumigoCondition(conditionType operatorv1alpha1.LumigoConditionType, conditionStatus corev1.ConditionStatus, now metav1.Time, reason, message string) operatorv1alpha1.LumigoCondition {
-	return operatorv1alpha1.LumigoCondition{
-		Type:               conditionType,
-		Status:             conditionStatus,
-		LastUpdateTime:     now,
-		LastTransitionTime: now,
-		Message:            message,
-	}
-}
-
-func getConditionIndexByType(status *operatorv1alpha1.LumigoStatus, t operatorv1alpha1.LumigoConditionType) int {
-	idx := -1
-	if status == nil {
-		return idx
-	}
-
-	for i, condition := range status.Conditions {
-		if condition.Type == t {
-			idx = i
-			break
-		}
-	}
-
-	return idx
 }

@@ -48,7 +48,8 @@ type LumigoSpec struct {
 	// The Lumigo token to be used to authenticate against Lumigo.
 	// For info on how to retrieve your Lumigo token, refer to:
 	// https://docs.lumigo.io/docs/lumigo-tokens
-	LumigoToken Credentials `json:"credentials,omitempty"`
+	LumigoToken Credentials `json:"lumigoToken,omitempty"`
+	Tracing     TracingSpec `json:"tracing,omitempty"`
 }
 
 type Credentials struct {
@@ -63,6 +64,18 @@ type KubernetesSecretRef struct {
 	Name string `json:"name"`
 	// Key of the Kubernetes secret that contains the credential data.
 	Key string `json:"key,omitempty"`
+}
+
+// TracingSpec specified how distributed tracing (for example: tracer injection)
+// should be set up by the operator
+type TracingSpec struct {
+	Injection InjectionSpec `json:"injection"`
+}
+
+type InjectionSpec struct {
+	// Whether Daemonsets, Deployments, ReplicaSets, StatefulSets, CronJobs and Jobs
+	// will be injected by Lumigo or not. If unspecified, defaults to `true`
+	Enabled *bool `json:"enabled"` // Using a pointer to support cases where the value is not set (and it counts as enabled)
 }
 
 // LumigoStatus defines the observed state of Lumigo

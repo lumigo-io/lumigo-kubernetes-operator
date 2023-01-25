@@ -35,7 +35,7 @@ spec:
           spec:
             description: LumigoSpec defines the desired state of Lumigo
             properties:
-              credentials:
+              lumigoToken:
                 description: 'The Lumigo token to be used to authenticate against
                   Lumigo. For info on how to retrieve your Lumigo token, refer to:
                   https://docs.lumigo.io/docs/lumigo-tokens'
@@ -55,6 +55,23 @@ spec:
                     required:
                     - name
                     type: object
+                type: object
+              tracing:
+                description: 'TracingSpec specified how distributed tracing (for example:
+                  tracer injection) should be set up by the operator'
+                properties:
+                  injection:
+                    properties:
+                      enabled:
+                        description: Whether Daemonsets, Deployments, ReplicaSets,
+                          StatefulSets, CronJobs and Jobs will be injected by Lumigo
+                          or not. If unspecified, defaults to `true`
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                required:
+                - injection
                 type: object
             type: object
           status:

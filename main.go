@@ -33,6 +33,7 @@ import (
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/injector"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -97,7 +98,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Lumigo")
 		os.Exit(1)
 	}
-	if err = (&operatorv1alpha1.Lumigo{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = injector.SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Lumigo")
 		os.Exit(1)
 	}
