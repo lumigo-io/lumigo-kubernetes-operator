@@ -1,0 +1,118 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: lumigoes.operator.lumigo.io
+  annotations:
+    cert-manager.io/inject-ca-from: '{{ .Release.Namespace }}/{{ include "helm.fullname"
+      . }}-serving-cert'
+    controller-gen.kubebuilder.io/version: v0.10.0
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+spec:
+  group: operator.lumigo.io
+  names:
+    kind: Lumigo
+    listKind: LumigoList
+    plural: lumigoes
+    singular: lumigo
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Lumigo is the Schema for the lumigoes API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: LumigoSpec defines the desired state of Lumigo
+            properties:
+              lumigoToken:
+                description: 'The Lumigo token to be used to authenticate against Lumigo.
+                  For info on how to retrieve your Lumigo token, refer to: https://docs.lumigo.io/docs/lumigo-tokens'
+                properties:
+                  secretRef:
+                    description: Reference to a Kubernetes secret that contains the
+                      credentials for Lumigo. The secret must be in the same namespace
+                      as the LumigoSpec referencing it.
+                    properties:
+                      key:
+                        description: Key of the Kubernetes secret that contains the
+                          credential data.
+                        type: string
+                      name:
+                        description: Name of a Kubernetes secret.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+              tracing:
+                description: 'TracingSpec specified how distributed tracing (for example:
+                  tracer injection) should be set up by the operator'
+                properties:
+                  injection:
+                    properties:
+                      enabled:
+                        description: Whether Daemonsets, Deployments, ReplicaSets, StatefulSets,
+                          CronJobs and Jobs will be injected by Lumigo or not. If unspecified,
+                          defaults to `true`
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                required:
+                - injection
+                type: object
+            type: object
+          status:
+            description: LumigoStatus defines the observed state of Lumigo
+            properties:
+              conditions:
+                description: The status of single Lumigo resources
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    lastUpdateTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - lastUpdateTime
+                  - message
+                  - status
+                  - type
+                  type: object
+                type: array
+            required:
+            - conditions
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

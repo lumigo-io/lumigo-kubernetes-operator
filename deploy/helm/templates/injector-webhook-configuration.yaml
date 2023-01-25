@@ -1,0 +1,44 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "helm.fullname" . }}-injector-webhook-configuration
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "helm.fullname" . }}-serving-cert
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    caBundle: Cg==
+    service:
+      name: '{{ include "helm.fullname" . }}-injector-webhook-service'
+      namespace: '{{ .Release.Namespace }}'
+      path: /v1alpha1/mutate
+  failurePolicy: Ignore
+  name: lumigoinjector.kb.io
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - daemonsets
+    - deployments
+    - replicasets
+    - statefulsets
+  - apiGroups:
+    - batch
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - cronjobs
+    - jobs
+  sideEffects: None

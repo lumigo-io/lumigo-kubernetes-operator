@@ -2,6 +2,8 @@
 
 ## Local testing with Minikube
 
+Install [minikube](https://minikube.sigs.k8s.io/docs/start/), [Helm](https://helm.sh/docs/intro/install/) and a local Docker daemon, e.g., [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
 Set up your Docker engine to use insecure registries (on Mac OS with Docker Desktop for Mac, the file to edit is `~/.docker/daemon.json`):
 
 ```json
@@ -58,9 +60,9 @@ $ curl localhost:5000/v2/_catalog -v
 Deploy the Lumigo operator with:
 
 ```sh
-IMG=localhost:5000/controller make docker-build docker-push deploy
+IMG=localhost:5000/controller make docker-build docker-push
+helm install lumigo deploy/helm
 ```
-
 
 ### Troubleshooting
 
@@ -98,3 +100,9 @@ $ minikube delete
 💀  Removed all traces of the "minikube" cluster.
 $ minikube start --insecure-registry "host.docker.internal:5000"
 ```
+
+## Helm chart
+
+The first version of the [Helm chart](./deploy/helm/) has been generated with [helmify](https://github.com/arttor/helmify) by running `kustomize build config/default | helmify deploy/helm`.
+However, manual edits and corrections were necessary, and running `helmify` again would override them.
+THe Helm website has a [handy guide to the basics](https://helm.sh/docs/chart_template_guide/) of Helm Chart templating.

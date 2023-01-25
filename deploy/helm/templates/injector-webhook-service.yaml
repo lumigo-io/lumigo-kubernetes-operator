@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "helm.fullname" . }}-injector-webhook-service
+  labels:
+    app.kubernetes.io/component: injector
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+  {{- include "helm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.injectorWebhookService.type }}
+  selector:
+    control-plane: controller-manager
+  {{- include "helm.selectorLabels" . | nindent 4 }}
+  ports:
+	{{- .Values.injectorWebhookService.ports | toYaml | nindent 2 -}}
