@@ -1,0 +1,3 @@
+boto3
+botocore
+opentelemetry-api==1.15.0
