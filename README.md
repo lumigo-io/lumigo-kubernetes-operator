@@ -26,7 +26,7 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 
 ### Enabling automatic tracing
 
-The Lumigo operator is capable of automatically add distributed tracing to pods created via:
+The Lumigo operator automatically adds distributed tracing to pods created via:
 
 * Deployments ([`apps/v1.Deployment`](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/))
 * Daemonsets ([`apps/v1.DaemonSet`](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/))
@@ -65,9 +65,57 @@ spec:
 
 __TODO__ show example
 
+#### Opting out for specific resources
+
+To prevent the Lumigo operator from injecting tracing to pods managed by some resource in a namespace that contains a `Lumigo` resource, add the `lumigo.auto-trace` label set to `false`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hello-node
+    lumigo.auto-trace: "false"  # <-- No injection will take place
+  name: hello-node
+  namespace: my-namespace
+spec:
+  selector:
+    matchLabels:
+      app: hello-node
+  template:
+    metadata:
+      labels:
+        app: hello-node
+    spec:
+      containers:
+      - command:
+        - /agnhost
+        - netexec
+        - --http-port=8080
+        image: registry.k8s.io/e2e-test-images/agnhost:2.39
+        name: agnhost
+```
+
+In the logs of the Lumigo operator, you will see a message like the following:
+
+```
+1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/mutate", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
+```
+
 ### Uninstall
 
-__TODO__
+The removal of the Lumigo operator is performed by:
+
+```sh
+helm delete lumigo --namespace lumigo-system
+```
+
+__TODO__ Update on the removal of CRDs
+
+## TLS certificates
+
+The Lumigo operator injector webhook uses a self-signed certificate that is automatically generate during the [installation of the Helm chart](#installing-the-lumigo-operator).
+The generated certificate has a 365 days expiration, and a new certificate will be generated every time you upgrade Lumigo operator's helm chart.
 
 ## Troubleshooting
 

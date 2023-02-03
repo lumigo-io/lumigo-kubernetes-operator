@@ -3,8 +3,6 @@ kind: CustomResourceDefinition
 metadata:
   name: lumigoes.operator.lumigo.io
   annotations:
-    cert-manager.io/inject-ca-from: '{{ .Release.Namespace }}/{{ include "helm.fullname"
-      . }}-serving-cert'
     controller-gen.kubebuilder.io/version: v0.10.0
   labels:
   {{- include "helm.labels" . | nindent 4 }}

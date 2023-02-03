@@ -125,7 +125,8 @@ func (h *LumigoWebhookHandler) Handle(ctx context.Context, request admission.Req
 		return admission.Allowed(err.Error())
 	}
 
-	// TODO Mutate
+	// TODO Implement mutate
+	// TODO Use as value the version of the current operator
 	resourceAdaper.GetObjectMeta().Labels[LumigoAutoTraceLabelKey] = "true"
 
 	marshalled, err := resourceAdaper.Marshal()

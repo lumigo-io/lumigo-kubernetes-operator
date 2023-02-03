@@ -1,0 +1,41 @@
+
+Thank you for installing the Lumigo operator.
+
+Your release is named '{{ .Release.Name }}', and your Lumigo operator is running in the '{{ .Release.Namespace }}' namespace.
+
+To see the status of your operator, run the following command:
+
+  $ kubectl get deployment {{ include "helm.fullname" . }}-controller-manager -o wide --namespace {{ .Release.Namespace }}
+
+{{- $lumigoes := (lookup "operator.lumigo.io/v1alpha1" "Lumigo" "" "").items }}
+{{ if (empty $lumigoes) }}
+None of your namespaces is currently monitored by the Lumigo operator.
+{{ else }}
+The Lumigo operator currently monitors the following namespaces:
+
+{{ range $index, $lumigo := $lumigoes }}
+* {{ printf "%s" $lumigo.metadata.namespace }}
+{{ end }}
+{{ end }}
+To monitor a namespace with the Lumigo operator, create a secret containing the Lumigo token and 'Lumigo' resource in that namespace:
+
+  $ kubectl create secret generic lumigo-credentials --from-literal token=<LUMIGO_TOKEN>
+  $ echo '{
+      "apiVersion": "operator.lumigo.io/v1alpha1",
+      "kind": "Lumigo",
+      "metadata": {
+        "name": "lumigo"
+      },
+      "spec": {
+        "lumigoToken": {
+          "secretRef": {
+            "name": "lumigo-credentials",
+            "key": "token"
+          } 
+        }
+      }
+    }' | kubectl apply -f - --namespace <NAMESPACE>
+
+To retrieve your Lumigo token, refer to: https://docs.lumigo.io/docs/lumigo-tokens.
+
+For more information on how to configure the Lumigo operator, refer to: https://github.com/lumigo-io/lumigo-kubernetes-operator

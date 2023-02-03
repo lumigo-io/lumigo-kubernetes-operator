@@ -1,4 +1,5 @@
-import { join } from 'path';
+import { existsSync } from 'fs';
+import { dirname, join, resolve } from 'path';
 import { URL } from 'url';
 import { CfnOutput, Duration, SecretValue, Stack, StackProps } from 'aws-cdk-lib';
 import { Vpc } from 'aws-cdk-lib/aws-ec2';
@@ -9,8 +10,8 @@ import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { IQueue, Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { App, Chart, Helm } from 'cdk8s';
-import { Container, Deployment as KubeDeployment, Secret as KubeSecret } from 'cdk8s-plus-23';
-import { Lumigo } from '../../imports/operator.lumigo.io';
+import { Deployment as KubeDeployment, Secret as KubeSecret } from 'cdk8s-plus-23';
+import { Lumigo } from '../imports/operator.lumigo.io';
 import { Construct } from 'constructs';
 
 export interface EksStackProps extends StackProps {
@@ -50,9 +51,10 @@ export class EksPythonSqsLambdaStack extends Stack {
     const vpc = new Vpc(this, 'EksPythonSqsLambdaStackVpc');
 
     const cluster = new Cluster(this, 'Cluster', {
-      vpc: vpc,
-      defaultCapacity: 1, // Just one node for the deployment test
+      clusterName: 'EksPythonSqsLambdaCluster',
       version: KubernetesVersion.V1_23,
+      defaultCapacity: 1, // Just one node for the deployment test
+      vpc,
     });
 
     /**
@@ -67,13 +69,29 @@ export class EksPythonSqsLambdaStack extends Stack {
       },
     });
 
-    const lumigoOperatorChart = new Helm(this, 'LumigoOperator', {
-      chart: 'nginx-ingress',
-      repo: '../../../../deploy/helm',
+    const projectRoot = getProjectRoot();
+
+    const lumigoOperatorImageAsset = new DockerImageAsset(this, 'LumigoOperator', {
+      directory: projectRoot,
+      platform: Platform.LINUX_AMD64,
+      exclude: ['tests'], // Avoid recursive inclusion in Docker build context
+    });
+    
+    // TODO Build and publish operatoer image
+    const lumigoOperatorChart = new Chart(new App(), `${props.clusterName}-lumigo-operator`, {});
+    /* const lumigoOperatorHelmChart =*/ new Helm(lumigoOperatorChart, 'LumigoOperator', {
+      chart: join(projectRoot, 'deploy', 'helm'),
       releaseName: 'test',
       namespace: lumigoOperatorNamespace,
+      helmFlags: ['--wait'],
+      values: {
+        'controllerManager.manager.image.repository': lumigoOperatorImageAsset.repository.repositoryUri,
+        'controllerManager.manager.image.tag': lumigoOperatorImageAsset.imageTag,
+      }
     });
-    lumigoOperatorChart.node.addDependency(lumigoOperatorNamespaceManifest);
+    
+    const lumigoOperatorChartManifest = cluster.addCdk8sChart('test-app', lumigoOperatorChart, {});
+    lumigoOperatorChartManifest.node.addDependency(lumigoOperatorNamespaceManifest);
 
     /**
      * Deploy test app
@@ -143,8 +161,7 @@ export class EksPythonSqsLambdaStack extends Stack {
         namespace: testAppNamespace,
       },
       replicas: 2,
-      containers: [
-        new Container({
+      containers: [{
           image: testAppImageAsset.imageUri,
           envVariables: {
             'OTEL_SERVICE_NAME': {
@@ -161,7 +178,7 @@ export class EksPythonSqsLambdaStack extends Stack {
             },
           },
           ports: [{ number: 8080 }],
-        })
+        }
       ]
     });
     queue.grantSendMessages(testAppServiceAccount);
@@ -169,7 +186,7 @@ export class EksPythonSqsLambdaStack extends Stack {
     testAppDeployment.node.addDependency(lumigoSecret, lumigoInstance);
 
     const testAppChartManifest = cluster.addCdk8sChart('test-app', testAppChart, {});
-    testAppChartManifest.node.addDependency(testAppServiceAccount);
+    testAppChartManifest.node.addDependency(testAppServiceAccount, lumigoOperatorChart);
 
     new CfnOutput(this, 'aws_region', {
       value: props.env?.region || 'unknown_region',
@@ -187,6 +204,27 @@ export class EksPythonSqsLambdaStack extends Stack {
       value: cluster.adminRole.roleArn,
     });
 
+    new CfnOutput(this, 'lumigo_operator_controller_image_uri', {
+      value: lumigoOperatorImageAsset.imageUri,
+    });
+
+    new CfnOutput(this, 'lumigo_operator_controller_image_tag', {
+      value: lumigoOperatorImageAsset.imageTag,
+    });
   }
 
+}
+
+function getProjectRoot(): string {
+  let dir = __dirname;
+
+  while (!existsSync(join(dir, 'PROJECT'))) {
+    if (dir === '/') {
+      throw new Error('Root of repository not found');
+    }
+
+    dir = dirname(dir);
+  }
+
+  return resolve(dir);
 }

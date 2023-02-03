@@ -1,13 +1,3 @@
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ include "helm.fullname" . }}-controller-manager
-  labels:
-    app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: lumigo
-    app.kubernetes.io/part-of: lumigo
-  {{- include "helm.labels" . | nindent 4 }}
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,8 +32,6 @@ spec:
                 values:
                 - amd64
                 - arm64
-                - ppc64le
-                - s390x
               - key: kubernetes.io/os
                 operator: In
                 values:
@@ -83,6 +71,8 @@ spec:
           capabilities:
             drop:
             - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
         volumeMounts:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
@@ -108,6 +98,8 @@ spec:
           capabilities:
             drop:
             - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
       securityContext:
         runAsNonRoot: true
       serviceAccountName: {{ include "helm.fullname" . }}-controller-manager
@@ -116,4 +108,4 @@ spec:
       - name: cert
         secret:
           defaultMode: 420
-          secretName: webhook-server-cert
+          secretName: '{{ include "helm.fullname" . }}-lumigo-injector-webhook-certs'
