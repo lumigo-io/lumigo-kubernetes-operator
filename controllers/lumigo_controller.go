@@ -41,7 +41,7 @@ import (
 
 const (
 	defaultRequeuePeriod    = 60 * time.Second
-	defaultErrRequeuePeriod = 5 * time.Second
+	defaultErrRequeuePeriod = 1 * time.Second
 	maxTriggeredStateGroups = 10
 )
 
@@ -90,7 +90,43 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return result, err
 	}
 
-	// TODO Validate there is only one Lumigo instance in any one namespace
+	// Validate there is only one Lumigo instance in any one namespace
+	lumigoesInNamespace := &operatorv1alpha1.LumigoList{}
+	if err := r.Client.List(ctx, lumigoesInNamespace, &client.ListOptions{Namespace: req.Namespace}); err != nil {
+		// Error retrieving Lumigo instances in namespace - requeue the request.
+		// TODO Log?
+		return result, err
+	}
+
+	// Remove from the slice the current Lumigo instance we are processing
+	otherLumigoesInNamespace := []operatorv1alpha1.Lumigo{}
+	for _, otherLumigoInstance := range lumigoesInNamespace.Items {
+		if otherLumigoInstance.Name != lumigoInstance.Name {
+			otherLumigoesInNamespace = append(otherLumigoesInNamespace, otherLumigoInstance)
+		}
+	}
+
+	if len(otherLumigoesInNamespace) > 0 {
+		// Too many Lumigo instances in namespace, set them all to erroneous and reconcile
+		for _, otherLumigoInNamespace := range otherLumigoesInNamespace {
+			if _, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{
+				Namespace: otherLumigoInNamespace.Namespace,
+				Name:      otherLumigoInNamespace.Name,
+			}}); err != nil {
+				log.Error(fmt.Errorf("cannot reconcile other Lumigo instance in this namespace"), "thisLumigoInstanceName", lumigoInstance.Name, "otherLumigoInstanceName", otherLumigoInNamespace.GetName())
+			}
+		}
+
+		// Requeue reconciling this instance after the error delay, it might be that the multiple-instances
+		// was a transitory issue due to a renaming.
+		result, err := r.updateStatusIfNeeded(log, lumigoInstance, now, fmt.Errorf("multiple Lumigo instances in this namespace"), result)
+		if err != nil {
+			// Cannot update status of the currently processed Lumigo instance; requeue
+			return result, err
+		}
+
+		return result, nil
+	}
 
 	if lumigoInstance.Spec == (operatorv1alpha1.LumigoSpec{}) {
 		return ctrl.Result{}, fmt.Errorf("the Lumigo spec is empty")
