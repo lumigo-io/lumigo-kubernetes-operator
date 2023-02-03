@@ -20,6 +20,7 @@ The Lumigo operator currently monitors the following namespaces:
 To monitor a namespace with the Lumigo operator, create a secret containing the Lumigo token and 'Lumigo' resource in that namespace:
 
   $ kubectl create secret generic lumigo-credentials --from-literal token=<LUMIGO_TOKEN>
+
   $ echo '{
       "apiVersion": "operator.lumigo.io/v1alpha1",
       "kind": "Lumigo",
