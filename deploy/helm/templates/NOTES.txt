@@ -1,9 +1,11 @@
+{{- $coloredOutput := and .Values.output.color (eq .Values.output.color true) -}}
+Thank you for installing the {{ include "highlight" (list "Lumigo" "red" $coloredOutput) }} operator.
 
-Thank you for installing the Lumigo operator.
+{{ include "highlight" (list "# Your Lumigo operator" "cyan" $coloredOutput) }}
 
-Your release is named '{{ .Release.Name }}', and your Lumigo operator is running in the '{{ .Release.Namespace }}' namespace.
+Your release is named '{{ .Release.Name }}', and your Lumigo operator is running in the '{{ include "highlight" (list .Release.Namespace "cyan" $coloredOutput) }}' namespace.
 
-To see the status of your operator, run the following command:
+To see the {{ include "highlight" (list "status" "cyan" $coloredOutput) }} of your operator, run:
 
   $ kubectl get deployment {{ include "helm.fullname" . }}-controller-manager -o wide --namespace {{ .Release.Namespace }}
 
@@ -14,12 +16,21 @@ None of your namespaces is currently monitored by the Lumigo operator.
 The Lumigo operator currently monitors the following namespaces:
 
 {{ range $index, $lumigo := $lumigoes }}
-* {{ printf "%s" $lumigo.metadata.namespace }}
+* {{ include "highlight" (list $lumigo.metadata.namespace "green" $coloredOutput) }}
 {{ end }}
 {{ end }}
-To monitor a namespace with the Lumigo operator, create a secret containing the Lumigo token and 'Lumigo' resource in that namespace:
 
-  $ kubectl create secret generic lumigo-credentials --from-literal token=<LUMIGO_TOKEN>
+{{ include "highlight" (list "# Next steps" "cyan" $coloredOutput) }}
+
+To {{ include "highlight" (list "monitor" "cyan" $coloredOutput) }} applications in a namespace with the Lumigo operator:
+
+1. create a secret with a {{ include "highlight" (list "Lumigo token" "red" $coloredOutput) }} in that namespace:
+
+  $ kubectl create secret generic --namespace {{ include "highlight" (list "<NAMESPACE>" "red" $coloredOutput) }} lumigo-credentials --from-literal token={{ include "highlight" (list "<LUMIGO_TOKEN>" "red" $coloredOutput) }}
+
+  To retrieve your Lumigo token, refer to: https://docs.lumigo.io/docs/lumigo-tokens.
+
+2. create a {{ include "highlight" (list "'Lumigo' resource" "orange" $coloredOutput) }} in that namespace:
 
   $ echo '{
       "apiVersion": "operator.lumigo.io/v1alpha1",
@@ -35,8 +46,10 @@ To monitor a namespace with the Lumigo operator, create a secret containing the 
           } 
         }
       }
-    }' | kubectl apply -f - --namespace <NAMESPACE>
-
-To retrieve your Lumigo token, refer to: https://docs.lumigo.io/docs/lumigo-tokens.
+    }' | kubectl apply -f - --namespace {{ include "highlight" (list "<NAMESPACE>" "red" $coloredOutput) }}
 
 For more information on how to configure the Lumigo operator, refer to: https://github.com/lumigo-io/lumigo-kubernetes-operator
+{{- if $coloredOutput }}
+
+{{ print "(To turn off ANSI colors in the output, set the 'output.color' value to 'false')" }}
+{{- end }}

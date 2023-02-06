@@ -1,3 +1,5 @@
+output:
+  color: true
 controllerManager:
   kubeRbacProxy:
     image:

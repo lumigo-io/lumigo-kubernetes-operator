@@ -60,3 +60,29 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+If the output is a shell, introduce ANSI colors around the provided text
+*/}}
+{{- define "highlight" -}}
+{{- $message := index . 0 -}}
+{{- $color := index . 1 -}}
+{{- $coloredOutput := index . 2 -}}
+{{- $colorPoint := 33 }}
+{{- if eq $color "red" -}}
+{{- $colorPoint = 31 }}
+{{- else if eq $color "green" }}
+{{- $colorPoint = 32 }}
+{{- else if eq $color "orange" }}
+{{- $colorPoint = 33 }}
+{{- else if eq $color "magenta" }}
+{{- $colorPoint = 35 }}
+{{- else if eq $color "cyan" }}
+{{- $colorPoint = 36 }}
+{{- end }}
+{{- if and ($coloredOutput) (eq $coloredOutput true) -}}
+{{ printf "[%sm%s[m" ($colorPoint | toString) $message -}}
+{{- else -}}
+{{ printf "%s" $message -}}
+{{- end }}
+{{- end }}
