@@ -76,8 +76,7 @@ export class EksPythonSqsLambdaStack extends Stack {
       platform: Platform.LINUX_AMD64,
       exclude: ['tests'], // Avoid recursive inclusion in Docker build context
     });
-    
-    // TODO Build and publish operatoer image
+
     const lumigoOperatorChart = new Chart(new App(), `${props.clusterName}-lumigo-operator`, {});
     /* const lumigoOperatorHelmChart =*/ new Helm(lumigoOperatorChart, 'LumigoOperator', {
       chart: join(projectRoot, 'deploy', 'helm'),
@@ -89,8 +88,12 @@ export class EksPythonSqsLambdaStack extends Stack {
         'controllerManager.manager.image.tag': lumigoOperatorImageAsset.imageTag,
       }
     });
-    
-    const lumigoOperatorChartManifest = cluster.addCdk8sChart('test-app', lumigoOperatorChart, {});
+
+    // The EKS cluster's NodeInstanceRole needs to be granted pull from the ECR repo
+    // https://docs.aws.amazon.com/AmazonECR/latest/userguide/ECR_on_EKS.html
+    lumigoOperatorImageAsset.repository.grantPull(cluster.defaultNodegroup!.role);
+
+    const lumigoOperatorChartManifest = cluster.addCdk8sChart('lumigo-operator', lumigoOperatorChart, {});
     lumigoOperatorChartManifest.node.addDependency(lumigoOperatorNamespaceManifest);
 
     /**
@@ -98,12 +101,6 @@ export class EksPythonSqsLambdaStack extends Stack {
      */
     const testAppChart = new Chart(new App(), `${props.clusterName}-test-app`, {});
     testAppChart.node.addDependency(lumigoOperatorChart);
-
-    // Creation of app image
-    const testAppImageAsset = new DockerImageAsset(this, 'EksPythonSqsApp', {
-      directory: __dirname + '/container',
-      platform: Platform.LINUX_AMD64,
-    });
 
     const testAppNamespace = 'test-app';
     const lumigoTokenSecretName = 'lumigo';
@@ -127,6 +124,14 @@ export class EksPythonSqsLambdaStack extends Stack {
     });
     // Avoid race condition between namespace and service account creation
     testAppServiceAccount.node.addDependency(testAppNamespaceManifest);
+
+    const testAppImageAsset = new DockerImageAsset(this, 'EksPythonSqsApp', {
+      directory: __dirname + '/container',
+      platform: Platform.LINUX_AMD64,
+    });
+    // The EKS cluster's NodeInstanceRole needs to be granted pull from the ECR repo
+    // https://docs.aws.amazon.com/AmazonECR/latest/userguide/ECR_on_EKS.html
+    testAppImageAsset.repository.grantPull(cluster.defaultNodegroup!.role);
 
     const lumigoSecret = new KubeSecret(testAppChart, lumigoTokenSecretName, {
       metadata: {
