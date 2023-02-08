@@ -62,6 +62,19 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
+Returns the error in the status condition if the Lumigo resource passed in input,
+if any; otherwise, returns nil.
+*/}}
+{{- define "lumigo.error" }}
+{{- $lumigo := . }}
+{{- range $index, $condition := $lumigo.status.conditions }}
+{{- if and (eq $condition.type "Error") (ne $condition.status "False") }}
+{{- $condition.message }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
 If the output is a shell, introduce ANSI colors around the provided text
 */}}
 {{- define "highlight" -}}

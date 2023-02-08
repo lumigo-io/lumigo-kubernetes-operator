@@ -9,16 +9,33 @@ To see the {{ include "highlight" (list "status" "cyan" $coloredOutput) }} of yo
 
   $ kubectl get deployment {{ include "helm.fullname" . }}-controller-manager -o wide --namespace {{ .Release.Namespace }}
 
+{{- if .Values.output.showOperatorStatus }}
 {{- $lumigoes := (lookup "operator.lumigo.io/v1alpha1" "Lumigo" "" "").items }}
-{{ if (empty $lumigoes) }}
+{{- $lumigo_statuses := dict }}
+{{- if not (empty $lumigoes) }}
+{{- range $index, $lumigo := $lumigoes }}
+{{- $_ := set $lumigo_statuses $lumigo.metadata.namespace (include "lumigo.error" $lumigo) }}
+{{- end }}
+{{- end }}
+{{ if (empty (keys $lumigo_statuses)) }}
 None of your namespaces is currently monitored by the Lumigo operator.
-{{ else }}
+{{- else }}
 The Lumigo operator currently monitors the following namespaces:
 
-{{ range $index, $lumigo := $lumigoes }}
-* {{ include "highlight" (list $lumigo.metadata.namespace "green" $coloredOutput) }}
-{{ end }}
-{{ end }}
+{{- range $index, $namespace := (keys $lumigo_statuses) }}
+{{ $lumigoError := get $lumigo_statuses $namespace }}
+{{- if $lumigoError -}}
+{{- if $coloredOutput -}}
+* {{ include "highlight" (list $namespace "red" $coloredOutput) }}: {{ print $lumigoError }}
+{{- else }}
+* {{ print $namespace }}: [ERROR] {{ print $lumigoError }}
+{{- end }}
+{{- else }}
+* {{ include "highlight" (list $namespace "green" $coloredOutput) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
 
 {{ include "highlight" (list "# Next steps" "cyan" $coloredOutput) }}
 

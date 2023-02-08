@@ -1,5 +1,6 @@
 output:
   color: true
+  showOperatorStatus: true
 controllerManager:
   kubeRbacProxy:
     image:
