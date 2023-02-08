@@ -1,15 +1,20 @@
 {{- $coloredOutput := and .Values.output.color (eq .Values.output.color true) -}}
+
+{{- if and .Release.IsInstall }}
 Thank you for installing the {{ include "highlight" (list "Lumigo" "red" $coloredOutput) }} operator.
 
-{{ include "highlight" (list "# Your Lumigo operator" "cyan" $coloredOutput) }}
-
 Your release is named '{{ .Release.Name }}', and your Lumigo operator is running in the '{{ include "highlight" (list .Release.Namespace "cyan" $coloredOutput) }}' namespace.
+{{- else }}
+Your {{ include "highlight" (list "Lumigo" "red" $coloredOutput) }} operator is upgraded.
+{{- end }}
+
+{{ include "highlight" (list "# Your Lumigo operator" "cyan" $coloredOutput) }}
 
 To see the {{ include "highlight" (list "status" "cyan" $coloredOutput) }} of your operator, run:
 
   $ kubectl get deployment {{ include "helm.fullname" . }}-controller-manager -o wide --namespace {{ .Release.Namespace }}
 
-{{- if .Values.output.showOperatorStatus }}
+{{- if and .Release.IsUpgrade .Values.output.showOperatorStatus }}
 {{- $lumigoes := (lookup "operator.lumigo.io/v1alpha1" "Lumigo" "" "").items }}
 {{- $lumigo_statuses := dict }}
 {{- if not (empty $lumigoes) }}
