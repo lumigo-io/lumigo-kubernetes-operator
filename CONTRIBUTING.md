@@ -2,7 +2,7 @@
 
 ## Local testing with Minikube
 
-Install [minikube](https://minikube.sigs.k8s.io/docs/start/), [Helm](https://helm.sh/docs/intro/install/) and a local Docker daemon, e.g., [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+Install [minikube](https://minikube.sigs.k8s.io/docs/start/), [Helm](https://helm.sh/docs/intro/install/), [Go](https://go.dev/doc/install) and a local Docker daemon, e.g., [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 Set up your Docker engine to use insecure registries (on Mac OS with Docker Desktop for Mac, the file to edit is `~/.docker/daemon.json`):
 
