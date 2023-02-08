@@ -77,7 +77,7 @@ To fix it, disable AirPlay Receiver in `System Preferences --> Sharing --> AirPl
 
 #### ErrImagePull for the Operator image
 
-If you see which when checking the controller pod with kubectl describe pod`:
+If you see which when checking the controller pod with `kubectl describe pod`:
 
 ```
   Warning  Failed     7s (x3 over 49s)   kubelet            Failed to pull image "host.docker.internal:5000/controller:latest": rpc error: code = Unknown desc = Error response from daemon: Get "https://host.docker.internal:5000/v2/": http: server gave HTTP response to HTTPS client
@@ -99,4 +99,4 @@ $ minikube start --insecure-registry "host.docker.internal:5000"
 
 The first version of the [Helm chart](./deploy/helm/) has been generated with [helmify](https://github.com/arttor/helmify) by running `kustomize build config/default | helmify deploy/helm`.
 However, manual edits and corrections were necessary, and running `helmify` again would override them.
-THe Helm website has a [handy guide to the basics](https://helm.sh/docs/chart_template_guide/) of Helm Chart templating.
+The Helm website has a [handy guide to the basics](https://helm.sh/docs/chart_template_guide/) of Helm Chart templating.
