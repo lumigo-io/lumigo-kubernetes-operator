@@ -46,6 +46,10 @@ spec:
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ .Values.kubernetesClusterDomain }}
+        - name: LUMIGO_OPERATOR_VERSION
+          value: "{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}"
+        - name: LUMIGO_INJECTOR_IMAGE
+          value: {{ .Values.injectorWebhook.lumigoInjector.image.repository }}:{{ .Values.injectorWebhook.lumigoInjector.image.tag | default "latest" }}
         image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
         livenessProbe:
           httpGet:

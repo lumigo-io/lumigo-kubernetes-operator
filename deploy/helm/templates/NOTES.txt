@@ -23,7 +23,7 @@ To see the {{ include "highlight" (list "status" "cyan" $coloredOutput) }} of yo
 {{- end }}
 {{- end }}
 {{ if (empty (keys $lumigo_statuses)) }}
-None of your namespaces is currently monitored by the Lumigo operator.
+None of your namespaces are currently monitored by the Lumigo operator.
 {{- else }}
 The Lumigo operator currently monitors the following namespaces:
 

@@ -25,6 +25,11 @@ controllerManager:
         cpu: 10m
         memory: 64Mi
   replicas: 1
+injectorWebhook:
+  lumigoInjector:
+    image:
+      repository: public.ecr.aws/lumigo/lumigo-autotrace
+      tag: latest
 injectorWebhookService:
   ports:
   - port: 443

@@ -8,7 +8,7 @@ const env = {
 
 const app = new App();
 
-new EksPythonSqsLambdaStack(app, 'k8s-operator-itest', {
+new EksPythonSqsLambdaStack(app, 'lumigo-operator-itest', {
   env,
   clusterName: 'OperatorITestCluster',
   lumigoEndpoint: new URL('https://ga-otlp.lumigo-tracer-edge.golumigo.com/'),

@@ -22,6 +22,8 @@ import (
 	"regexp"
 	"time"
 
+	// appsv1 "k8s.io/api/apps/v1"
+	// batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -58,6 +60,13 @@ func (r *LumigoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&operatorv1alpha1.Lumigo{}).
 		// Watch for changes in secrets that are referenced in Lumigo instances as containing the Lumigo token
 		Watches(&source.Kind{Type: &corev1.Secret{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfSecretReferencedByLumigo)).
+		// Watch for resources injected by the webhook, so that we can add an event to them about the injection
+		// Watches(&source.Kind{Type: &appsv1.DaemonSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
+		// Watches(&source.Kind{Type: &appsv1.Deployment{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
+		// Watches(&source.Kind{Type: &appsv1.ReplicaSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
+		// Watches(&source.Kind{Type: &appsv1.StatefulSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
+		// Watches(&source.Kind{Type: &batchv1.CronJob{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
+		// Watches(&source.Kind{Type: &batchv1.Job{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
 		Complete(r)
 }
 
@@ -194,6 +203,29 @@ func (r *LumigoReconciler) fetchKubernetesSecret(ctx context.Context, namespaceN
 	}
 
 	return secret, nil
+}
+
+func (r *LumigoReconciler) enqueueIfInjectedByLumigo(obj client.Object) []reconcile.Request {
+	// Require the reconciliation for Lumigo instances that reference the provided secret
+	reconcileRequests := []reconcile.Request{{}}
+
+	namespace := obj.GetNamespace()
+	lumigoInstances := &operatorv1alpha1.LumigoList{}
+
+	if err := r.Client.List(context.TODO(), lumigoInstances, &client.ListOptions{Namespace: namespace}); err != nil {
+		r.Log.Error(err, "unable to list Lumigo instances in namespace '%s'", namespace)
+		// TODO Can we re-enqueue or something? Should we signal an error in the Lumigo operator?
+		return reconcileRequests
+	}
+
+	// TODO Validate there is exactly one Lumigo instance and that it is active
+	lumigoInstance := lumigoInstances.Items[0]
+	reconcileRequests = append(reconcileRequests, reconcile.Request{NamespacedName: types.NamespacedName{
+		Namespace: lumigoInstance.Namespace,
+		Name:      lumigoInstance.Name,
+	}})
+
+	return reconcileRequests
 }
 
 func (r *LumigoReconciler) enqueueIfSecretReferencedByLumigo(obj client.Object) []reconcile.Request {

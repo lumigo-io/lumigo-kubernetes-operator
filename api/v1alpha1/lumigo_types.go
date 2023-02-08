@@ -95,10 +95,8 @@ type LumigoCondition struct {
 type LumigoConditionType string
 
 const (
-	LumigoConditionTypeCreated LumigoConditionType = "Created"
-	LumigoConditionTypeActive  LumigoConditionType = "Active"
-	LumigoConditionTypeUpdated LumigoConditionType = "Updated"
-	LumigoConditionTypeError   LumigoConditionType = "Error"
+	LumigoConditionTypeActive LumigoConditionType = "Active"
+	LumigoConditionTypeError  LumigoConditionType = "Error"
 )
 
 func init() {

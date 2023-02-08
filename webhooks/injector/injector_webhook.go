@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,9 +37,10 @@ import (
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
 )
 
-const LumigoAutoTraceLabelKey = "lumigo.auto-trace"
+const lumigoAutoTraceLabelKey = "lumigo.auto-trace"
 
 var (
 	decoder = scheme.Codecs.UniversalDecoder()
@@ -46,7 +48,9 @@ var (
 
 func SetupWebhookWithManager(mgr ctrl.Manager) error {
 	webhook := &admission.Webhook{
-		Handler: &LumigoWebhookHandler{},
+		Handler: &LumigoWebhookHandler{
+			LumigoOperatorVersion: os.Getenv("LUMIGO_OPERATOR_VERSION"),
+		},
 	}
 
 	handler, err := admission.StandaloneWebhook(webhook, admission.StandaloneOptions{})
@@ -59,19 +63,20 @@ func SetupWebhookWithManager(mgr ctrl.Manager) error {
 }
 
 type LumigoWebhookHandler struct {
-	client  client.Client
-	decoder *admission.Decoder
+	client                client.Client
+	decoder               *admission.Decoder
+	LumigoOperatorVersion string
 }
 
 // The client is automatically injected by the Webhook machinery
-func (v *LumigoWebhookHandler) InjectClient(c client.Client) error {
-	v.client = c
+func (h *LumigoWebhookHandler) InjectClient(c client.Client) error {
+	h.client = c
 	return nil
 }
 
 // The decoder is automatically injected by the Webhook machinery
-func (v *LumigoWebhookHandler) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
+func (h *LumigoWebhookHandler) InjectDecoder(d *admission.Decoder) error {
+	h.decoder = d
 	return nil
 }
 
@@ -120,16 +125,28 @@ func (h *LumigoWebhookHandler) Handle(ctx context.Context, request admission.Req
 		return admission.Allowed(fmt.Sprintf("Tracing injection is disabled in the '%s' namespace; resource will not be mutated", namespace))
 	}
 
-	if err := validateMutationShouldOccur(&lumigo, resourceAdaper.GetObjectMeta()); err != nil {
+	if err := validateMutationShouldOccur(&lumigo, *resourceAdaper.GetObjectMeta()); err != nil {
 		// If we find a reason why the mutation should not occur, pass that as reason why the admission is allowed without modifications
 		return admission.Allowed(err.Error())
 	}
 
-	// TODO Implement mutate
-	// TODO Use as value the version of the current operator
-	resourceAdaper.GetObjectMeta().Labels[LumigoAutoTraceLabelKey] = "true"
+	mutator := &mutation.Mutator{
+		LumigoToken: &lumigo.Spec.LumigoToken,
+		Log:         &log,
+	}
+	podSpec := resourceAdaper.GetPodSpec()
+	if err = mutator.Mutate(podSpec); err != nil {
+		// TODO Check this does not prevent resource from being created
+		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("cannot inject Lumigo tracing in the pod spec %w", err))
+	}
+
+	// Use as value the version of the current operator
+	lumigoAutoTraceLabelValue := h.LumigoOperatorVersion
+	resourceAdaper.GetObjectMeta().Labels[lumigoAutoTraceLabelKey] = lumigoAutoTraceLabelValue
+	resourceAdaper.GetPodMeta().Labels[lumigoAutoTraceLabelKey] = lumigoAutoTraceLabelValue
 
 	marshalled, err := resourceAdaper.Marshal()
+
 	if err != nil {
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("cannot marshal object %w", err))
 	}
@@ -143,8 +160,9 @@ type supportedResourceTypes interface {
 
 type resourceAdapter interface {
 	GetNamespace() string
-	GetObjectMeta() metav1.ObjectMeta
-	GetPodSpec() corev1.PodSpec
+	GetObjectMeta() *metav1.ObjectMeta
+	GetPodMeta() *metav1.ObjectMeta
+	GetPodSpec() *corev1.PodSpec
 	Marshal() ([]byte, error)
 }
 
@@ -153,19 +171,24 @@ type resourceAdapterImpl[T supportedResourceTypes] struct {
 	resource *T
 
 	getNamespace  func() string
-	getObjectMeta func() metav1.ObjectMeta
-	getPodSpec    func() corev1.PodSpec
+	getObjectMeta func() *metav1.ObjectMeta
+	getPodMeta    func() *metav1.ObjectMeta
+	getPodSpec    func() *corev1.PodSpec
 }
 
 func (r *resourceAdapterImpl[T]) GetNamespace() string {
 	return r.getNamespace()
 }
 
-func (r *resourceAdapterImpl[T]) GetObjectMeta() metav1.ObjectMeta {
+func (r *resourceAdapterImpl[T]) GetObjectMeta() *metav1.ObjectMeta {
 	return r.getObjectMeta()
 }
 
-func (r *resourceAdapterImpl[T]) GetPodSpec() corev1.PodSpec {
+func (r *resourceAdapterImpl[T]) GetPodMeta() *metav1.ObjectMeta {
+	return r.getPodMeta()
+}
+
+func (r *resourceAdapterImpl[T]) GetPodSpec() *corev1.PodSpec {
 	return r.getPodSpec()
 }
 
@@ -189,11 +212,14 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				getObjectMeta: func() metav1.ObjectMeta {
-					return resource.ObjectMeta
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
-				getPodSpec: func() corev1.PodSpec {
-					return resource.Spec.Template.Spec
+				getPodMeta: func() *metav1.ObjectMeta {
+					return &resource.Spec.Template.ObjectMeta
+				},
+				getPodSpec: func() *corev1.PodSpec {
+					return &resource.Spec.Template.Spec
 				},
 			}, nil
 		}
@@ -210,11 +236,14 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				getObjectMeta: func() metav1.ObjectMeta {
-					return resource.ObjectMeta
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
-				getPodSpec: func() corev1.PodSpec {
-					return resource.Spec.Template.Spec
+				getPodMeta: func() *metav1.ObjectMeta {
+					return &resource.Spec.Template.ObjectMeta
+				},
+				getPodSpec: func() *corev1.PodSpec {
+					return &resource.Spec.Template.Spec
 				},
 			}, nil
 		}
@@ -231,11 +260,14 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				getObjectMeta: func() metav1.ObjectMeta {
-					return resource.ObjectMeta
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
-				getPodSpec: func() corev1.PodSpec {
-					return resource.Spec.Template.Spec
+				getPodMeta: func() *metav1.ObjectMeta {
+					return &resource.Spec.Template.ObjectMeta
+				},
+				getPodSpec: func() *corev1.PodSpec {
+					return &resource.Spec.Template.Spec
 				},
 			}, nil
 		}
@@ -252,11 +284,14 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				getObjectMeta: func() metav1.ObjectMeta {
-					return resource.ObjectMeta
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
-				getPodSpec: func() corev1.PodSpec {
-					return resource.Spec.Template.Spec
+				getPodMeta: func() *metav1.ObjectMeta {
+					return &resource.Spec.Template.ObjectMeta
+				},
+				getPodSpec: func() *corev1.PodSpec {
+					return &resource.Spec.Template.Spec
 				},
 			}, nil
 		}
@@ -273,11 +308,14 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				getObjectMeta: func() metav1.ObjectMeta {
-					return resource.ObjectMeta
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
-				getPodSpec: func() corev1.PodSpec {
-					return resource.Spec.JobTemplate.Spec.Template.Spec
+				getPodMeta: func() *metav1.ObjectMeta {
+					return &resource.Spec.JobTemplate.Spec.Template.ObjectMeta
+				},
+				getPodSpec: func() *corev1.PodSpec {
+					return &resource.Spec.JobTemplate.Spec.Template.Spec
 				},
 			}, nil
 		}
@@ -294,11 +332,14 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				getObjectMeta: func() metav1.ObjectMeta {
-					return resource.ObjectMeta
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
-				getPodSpec: func() corev1.PodSpec {
-					return resource.Spec.Template.Spec
+				getPodMeta: func() *metav1.ObjectMeta {
+					return &resource.Spec.Template.ObjectMeta
+				},
+				getPodSpec: func() *corev1.PodSpec {
+					return &resource.Spec.Template.Spec
 				},
 			}, nil
 		}
@@ -326,10 +367,10 @@ func validateMutationShouldOccur(lumigo *operatorv1alpha1.Lumigo, resourceMeta m
 		return fmt.Errorf("the Lumigo object in the '%s' namespace is in an erroneous status; resource will not be mutated", namespace)
 	}
 
-	autoTraceLabelValue := resourceMeta.Labels[LumigoAutoTraceLabelKey]
+	autoTraceLabelValue := resourceMeta.Labels[lumigoAutoTraceLabelKey]
 	if autoTraceLabelValue == "false" {
 		// Opt-out for this resource, skip injection
-		return fmt.Errorf("the resource has the '%s' label set to 'false'; resource will not be mutated", LumigoAutoTraceLabelKey)
+		return fmt.Errorf("the resource has the '%s' label set to 'false'; resource will not be mutated", lumigoAutoTraceLabelKey)
 	}
 
 	return nil
