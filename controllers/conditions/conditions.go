@@ -25,23 +25,21 @@ import (
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 )
 
-func GetLumigoCondition(status *operatorv1alpha1.LumigoStatus, t operatorv1alpha1.LumigoConditionType) *operatorv1alpha1.LumigoCondition {
-	index := getConditionIndexByType(status, t)
-
-	if index < 0 {
-		return nil
+func GetLumigoConditionByType(status *operatorv1alpha1.LumigoStatus, t operatorv1alpha1.LumigoConditionType) *operatorv1alpha1.LumigoCondition {
+	if index := getConditionIndexByType(status, t); index > -1 {
+		return &status.Conditions[index]
 	}
 
-	return &status.Conditions[index]
+	return nil
 }
 
 func UpdateLumigoConditions(status *operatorv1alpha1.LumigoStatus, t operatorv1alpha1.LumigoConditionType, now metav1.Time, conditionStatus corev1.ConditionStatus, desc string) {
 	conditionIndex := getConditionIndexByType(status, t)
 
 	if conditionIndex > -1 {
-		// No condition exists of the given type
 		SetLumigoCondition(&status.Conditions[conditionIndex], now, conditionStatus, desc)
 	} else if conditionStatus == corev1.ConditionTrue {
+		// No condition exists of the given type
 		status.Conditions = append(status.Conditions, NewLumigoCondition(t, conditionStatus, now, "", desc))
 	}
 }
@@ -57,15 +55,13 @@ func SetErrorActiveConditions(status *operatorv1alpha1.LumigoStatus, now metav1.
 	}
 }
 
-func SetLumigoCondition(condition *operatorv1alpha1.LumigoCondition, now metav1.Time, conditionStatus corev1.ConditionStatus, message string) *operatorv1alpha1.LumigoCondition {
+func SetLumigoCondition(condition *operatorv1alpha1.LumigoCondition, now metav1.Time, conditionStatus corev1.ConditionStatus, message string) {
 	if condition.Status != conditionStatus {
 		condition.LastTransitionTime = now
 		condition.Status = conditionStatus
 	}
 	condition.LastUpdateTime = now
 	condition.Message = message
-
-	return condition
 }
 
 func NewLumigoCondition(conditionType operatorv1alpha1.LumigoConditionType, conditionStatus corev1.ConditionStatus, now metav1.Time, reason, message string) operatorv1alpha1.LumigoCondition {

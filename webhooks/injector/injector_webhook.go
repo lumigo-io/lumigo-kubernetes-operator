@@ -357,12 +357,12 @@ func validateMutationShouldOccur(lumigo *operatorv1alpha1.Lumigo, resourceMeta m
 	status := &lumigo.Status
 
 	// Check if the Lumigo status is active (so the injection _could_ be performed)
-	activeCondition := conditions.GetLumigoCondition(status, operatorv1alpha1.LumigoConditionTypeActive)
+	activeCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeActive)
 	if activeCondition == nil || activeCondition.Status != corev1.ConditionTrue {
 		return fmt.Errorf("the Lumigo object in the '%s' namespace is not active; resource will not be mutated", namespace)
 	}
 
-	errorCondition := conditions.GetLumigoCondition(status, operatorv1alpha1.LumigoConditionTypeError)
+	errorCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeError)
 	if errorCondition != nil && errorCondition.Status == corev1.ConditionTrue {
 		return fmt.Errorf("the Lumigo object in the '%s' namespace is in an erroneous status; resource will not be mutated", namespace)
 	}

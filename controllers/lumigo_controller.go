@@ -25,7 +25,6 @@ import (
 	// appsv1 "k8s.io/api/apps/v1"
 	// batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,7 +41,7 @@ import (
 )
 
 const (
-	defaultRequeuePeriod    = 60 * time.Second
+	defaultRequeuePeriod    = 10 * time.Second
 	defaultErrRequeuePeriod = 1 * time.Second
 	maxTriggeredStateGroups = 10
 )
@@ -84,7 +83,7 @@ func (r *LumigoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=operator.lumigo.io,resources=lumigoes/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("lumigo", req.NamespacedName)
+	log := r.Log.WithValues("lumigo-instance", req.NamespacedName)
 	now := metav1.NewTime(time.Now())
 
 	var result reconcile.Result
@@ -96,15 +95,20 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return result, nil
 		}
 		// Error reading the object - requeue the request.
-		return result, err
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: defaultErrRequeuePeriod,
+		}, err
 	}
 
 	// Validate there is only one Lumigo instance in any one namespace
 	lumigoesInNamespace := &operatorv1alpha1.LumigoList{}
 	if err := r.Client.List(ctx, lumigoesInNamespace, &client.ListOptions{Namespace: req.Namespace}); err != nil {
 		// Error retrieving Lumigo instances in namespace - requeue the request.
-		// TODO Log?
-		return result, err
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: defaultErrRequeuePeriod,
+		}, err
 	}
 
 	// Remove from the slice the current Lumigo instance we are processing
@@ -116,22 +120,16 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if len(otherLumigoesInNamespace) > 0 {
-		// Too many Lumigo instances in namespace, set them all to erroneous and reconcile
-		for _, otherLumigoInNamespace := range otherLumigoesInNamespace {
-			if _, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{
-				Namespace: otherLumigoInNamespace.Namespace,
-				Name:      otherLumigoInNamespace.Name,
-			}}); err != nil {
-				log.Error(fmt.Errorf("cannot reconcile other Lumigo instance in this namespace"), "thisLumigoInstanceName", lumigoInstance.Name, "otherLumigoInstanceName", otherLumigoInNamespace.GetName())
-			}
-		}
-
 		// Requeue reconciling this instance after the error delay, it might be that the multiple-instances
 		// was a transitory issue due to a renaming.
 		result, err := r.updateStatusIfNeeded(log, lumigoInstance, now, fmt.Errorf("multiple Lumigo instances in this namespace"), result)
 		if err != nil {
-			// Cannot update status of the currently processed Lumigo instance; requeue
-			return result, err
+			log.Error(err, "Cannot update this Lumigo in namespace")
+
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: defaultErrRequeuePeriod,
+			}, err
 		}
 
 		return result, nil
@@ -142,6 +140,7 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if err := r.validateCredentials(ctx, req.Namespace, lumigoInstance.Spec.LumigoToken); err != nil {
+		log.Info("Invalid Lumigo token secret reference", "error", err.Error())
 		return r.updateStatusIfNeeded(log, lumigoInstance, now, fmt.Errorf("the Lumigo token is not valid: %w", err), result)
 	}
 
@@ -186,7 +185,8 @@ func (r *LumigoReconciler) validateCredentials(ctx context.Context, namespaceNam
 	if !matched {
 		return fmt.Errorf(
 			"the value of the field '%s' of the secret '%s/%s' does not match the expected structure of Lumigo tokens: "+
-				"it should be `t_` followed by of 21 alphanumeric characters",
+				"it should be `t_` followed by of 21 alphanumeric characters; see https://docs.lumigo.io/docs/lumigo-tokens "+
+				"for instructions on how to retrieve your Lumigo token",
 			credentials.SecretRef.Key, namespaceName, credentials.SecretRef.Name)
 	}
 
@@ -205,28 +205,28 @@ func (r *LumigoReconciler) fetchKubernetesSecret(ctx context.Context, namespaceN
 	return secret, nil
 }
 
-func (r *LumigoReconciler) enqueueIfInjectedByLumigo(obj client.Object) []reconcile.Request {
-	// Require the reconciliation for Lumigo instances that reference the provided secret
-	reconcileRequests := []reconcile.Request{{}}
+// func (r *LumigoReconciler) enqueueIfInjectedByLumigo(obj client.Object) []reconcile.Request {
+// 	// Require the reconciliation for Lumigo instances that reference the provided secret
+// 	reconcileRequests := []reconcile.Request{{}}
 
-	namespace := obj.GetNamespace()
-	lumigoInstances := &operatorv1alpha1.LumigoList{}
+// 	namespace := obj.GetNamespace()
+// 	lumigoInstances := &operatorv1alpha1.LumigoList{}
 
-	if err := r.Client.List(context.TODO(), lumigoInstances, &client.ListOptions{Namespace: namespace}); err != nil {
-		r.Log.Error(err, "unable to list Lumigo instances in namespace '%s'", namespace)
-		// TODO Can we re-enqueue or something? Should we signal an error in the Lumigo operator?
-		return reconcileRequests
-	}
+// 	if err := r.Client.List(context.TODO(), lumigoInstances, &client.ListOptions{Namespace: namespace}); err != nil {
+// 		r.Log.Error(err, "unable to list Lumigo instances in namespace '%s'", namespace)
+// 		// TODO Can we re-enqueue or something? Should we signal an error in the Lumigo operator?
+// 		return reconcileRequests
+// 	}
 
-	// TODO Validate there is exactly one Lumigo instance and that it is active
-	lumigoInstance := lumigoInstances.Items[0]
-	reconcileRequests = append(reconcileRequests, reconcile.Request{NamespacedName: types.NamespacedName{
-		Namespace: lumigoInstance.Namespace,
-		Name:      lumigoInstance.Name,
-	}})
+// 	// TODO Validate there is exactly one Lumigo instance and that it is active
+// 	lumigoInstance := lumigoInstances.Items[0]
+// 	reconcileRequests = append(reconcileRequests, reconcile.Request{NamespacedName: types.NamespacedName{
+// 		Namespace: lumigoInstance.Namespace,
+// 		Name:      lumigoInstance.Name,
+// 	}})
 
-	return reconcileRequests
-}
+// 	return reconcileRequests
+// }
 
 func (r *LumigoReconciler) enqueueIfSecretReferencedByLumigo(obj client.Object) []reconcile.Request {
 	// Require the reconciliation for Lumigo instances that reference the provided secret
@@ -257,32 +257,44 @@ func (r *LumigoReconciler) enqueueIfSecretReferencedByLumigo(obj client.Object) 
 	return reconcileRequests
 }
 
-func (r *LumigoReconciler) updateStatusIfNeeded(logger logr.Logger, instance *operatorv1alpha1.Lumigo, now metav1.Time, currentErr error, result ctrl.Result) (ctrl.Result, error) {
+func (r *LumigoReconciler) updateStatusIfNeeded(logger logr.Logger, instance *operatorv1alpha1.Lumigo, now metav1.Time, newErr error, result ctrl.Result) (ctrl.Result, error) {
 	// Updates the status of a Lumigo instance.
 	// Unfortunately updates do not seem reliable due to some mismatch between the results
 	// of apiequality.Semantic.DeepEqual() and Kubernetes' API (maybe due to bugs, maybe due
 	// to eventual consistency), which causes updates to be lost. To reduce the risk of losing updates,
 	// we reque the request after a grace period.
 
-	updatedStatus := instance.Status.DeepCopy()
+	// TODO FIX ACTIVE CONDITION NOT CORRECTLY SET
 
-	conditions.SetErrorActiveConditions(updatedStatus, now, currentErr)
-
-	if !apiequality.Semantic.DeepEqual(&instance.Status, updatedStatus) {
-		instance.Status = *updatedStatus
-		if err := r.Client.Status().Update(context.TODO(), instance); err != nil {
-			if apierrors.IsConflict(err) {
-				logger.Error(err, "unable to update Lumigo's status")
-
-				return ctrl.Result{Requeue: true, RequeueAfter: defaultErrRequeuePeriod}, nil
-			}
-			logger.Error(err, "unable to update Lumigo's status")
-
-			return ctrl.Result{}, err
+	currentErrorCondition := conditions.GetLumigoConditionByType(&instance.Status, operatorv1alpha1.LumigoConditionTypeError)
+	if currentErrorCondition != nil {
+		var expectedMessage string
+		if newErr != nil {
+			expectedMessage = newErr.Error()
 		}
 
-		return ctrl.Result{Requeue: true, RequeueAfter: defaultRequeuePeriod}, nil
+		if currentErrorCondition.Status == corev1.ConditionTrue && currentErrorCondition.Message == expectedMessage {
+			// No update necessary, the error is already the right one
+			return result, nil
+		}
+
 	}
 
-	return result, nil
+	updatedStatus := instance.Status.DeepCopy()
+
+	conditions.SetErrorActiveConditions(updatedStatus, now, newErr)
+
+	instance.Status = *updatedStatus
+	if err := r.Client.Status().Update(context.TODO(), instance); err != nil {
+		if apierrors.IsConflict(err) {
+			logger.Error(err, "unable to update Lumigo's status")
+
+			return ctrl.Result{Requeue: true, RequeueAfter: defaultErrRequeuePeriod}, nil
+		}
+		logger.Error(err, "unable to update Lumigo's status")
+
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{Requeue: true, RequeueAfter: defaultRequeuePeriod}, nil
 }
