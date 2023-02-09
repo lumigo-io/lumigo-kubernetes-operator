@@ -54,8 +54,8 @@ $ curl localhost:5000/v2/_catalog -v
 Deploy the Lumigo operator with:
 
 ```sh
-IMG=host.docker.internal:5000/controller make docker-build docker-push
-helm install lumigo deploy/helm --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.repository=host.docker.internal:5000/controller"
+CONTROLLER_IMG=host.docker.internal:5000/controller:latest make docker-build docker-push
+helm install lumigo deploy/helm --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.repository=host.docker.internal:5000/controller" --set "controllerManager.manager.image.tag=latest"
 ```
 
 ### Troubleshooting
