@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "helm.fullname" . }}-telemetry-proxy-service
+  labels:
+    app.kubernetes.io/component: telemetry-proxy
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: controller-manager
+  {{- include "helm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.metricsService.type }}
+  selector:
+    control-plane: controller-manager
+  {{- include "helm.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: otlphttp
+    protocol: TCP
+    # TODO Can we use generated certificates to make it HTTPS?
+    # If we used self-signed certs, how would we pass the CA to OTLP exporters in client apps?
+    port: 80
+    targetPort: otlphttp
+

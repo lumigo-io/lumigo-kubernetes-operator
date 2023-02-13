@@ -1,0 +1,32 @@
+# Download our latest otelcollector release
+FROM alpine AS downloader
+
+ARG lumigo_otel_collector_release="v0.52.0-lumigo"
+# Added for compatibility with buildx facilities when not building on buildx
+ARG target_platform="${TARGETPLATFORM}"
+
+RUN apk add curl jq
+
+ENV TARGETPLATFORM="${target_platform:-linux/amd64}"
+
+# Values for TARGETPLATFORM are 'linux/amd64' and 'linux/arm64'; in the release names of the otelcollector,
+# the matching suffixes are 'linux_amd64' and 'linux_arm64', respectively
+RUN mkdir /dist; \
+    export OTELCOL_BINARY_ASSET_NAME="otelcontribcol_${TARGETPLATFORM/\//_}" && \
+    echo "Downloading 'otelcontribcol_${TARGETPLATFORM//\//_}'" && \
+    curl -s https://api.github.com/repos/lumigo-io/opentelemetry-collector-contrib/releases/tags/${lumigo_otel_collector_release}?draft=true | \
+    jq -r ".assets[] | select(.name|match(\"${OTELCOL_BINARY_ASSET_NAME}\")) | .browser_download_url" | \
+    xargs -I {} curl -s -L {} -o /dist/otelcontribcol; \
+    chmod u+x /dist/otelcontribcol
+
+FROM alpine
+
+RUN apk add ca-certificates
+
+ COPY --chown=1234:1234 /dist/otelcontribcol /lumigo/otelcol
+# ADD --chown=1234:1234 ./dist/otelcontribcol_linux_arm64 /lumigo/otelcol
+#
+ADD --chown=1234:1234 ./telemetryproxy/config.yaml /etc/otelcol/config.yaml
+
+ENTRYPOINT ["/lumigo/otelcol"]
+CMD ["--config=/etc/otelcol/config.yaml"]

@@ -31,8 +31,9 @@ import (
 )
 
 type Mutator struct {
-	Log         *logr.Logger
-	LumigoToken *operatorv1alpha1.Credentials
+	Log            *logr.Logger
+	LumigoEndpoint string
+	LumigoToken    *operatorv1alpha1.Credentials
 }
 
 const targetDirectoryPath = "/target"
@@ -138,6 +139,17 @@ func (m *Mutator) Mutate(podSpec *corev1.PodSpec) error {
 			envVars = append(envVars, *lumigoTracerTokenEnvVar)
 		} else {
 			envVars[lumigoTracerTokenEnvVarIndex] = *lumigoTracerTokenEnvVar
+		}
+
+		lumigoEndpointEnvVar := &corev1.EnvVar{
+			Name:  "LUMIGO_ENDPOINT",
+			Value: m.LumigoEndpoint,
+		}
+		lumigoEndpointEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == "LUMIGO_ENDPOINT" })
+		if lumigoEndpointEnvVarIndex < 0 {
+			envVars = append(envVars, *lumigoEndpointEnvVar)
+		} else {
+			envVars[lumigoEndpointEnvVarIndex] = *lumigoEndpointEnvVar
 		}
 
 		container.Env = envVars

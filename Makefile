@@ -5,8 +5,9 @@
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
 
-# Image URL to use all building/pushing image targets
+# Image URLs to use all building/pushing image targets
 CONTROLLER_IMG ?= controller:latest
+PROXY_IMG ?= proxy:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.25.0
 
@@ -63,14 +64,12 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./api/...
 	go vet ./controllers/...
-	go fmt ./mutation/...
+	go vet ./mutation/...
 	go vet ./webhooks/...
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./api/... ./controllers/... ./mutation/... ./webhooks/... -coverprofile cover.out
-	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./controllers/... -coverprofile cover.out
-	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./webhooks/... -coverprofile cover.out
 
 ##@ Build
 
@@ -88,10 +87,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
 	docker build -t ${CONTROLLER_IMG} . -f Dockerfile.controller
+	docker build -t ${PROXY_IMG} . -f Dockerfile.proxy
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${CONTROLLER_IMG}
+	docker push ${PROXY_IMG}
 
 # PLATFORMS defines the target platforms for  the manager image be build to provide support to multiple
 # architectures. (i.e. make docker-buildx CONTROLLER_IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
@@ -102,13 +103,18 @@ docker-push: ## Push docker image with the manager.
 PLATFORMS ?= linux/arm64,linux/amd64#,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: test ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile.controller and insert --platform=${BUILDPLATFORM} into Dockerfile.controller.cross, and preserve the original Dockerfile/controller
+	# copy existing Dockerfile.controller and insert --platform=${BUILDPLATFORM} into Dockerfile.controller.cross, and preserve the original Dockerfile.controller
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.controller > Dockerfile.controller.cross
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
 	- docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller.cross
 	- docker buildx rm project-v3-builder
 	rm Dockerfile.controller.cross
+
+	# copy existing Dockerfile.proxy and insert --platform=${BUILDPLATFORM} into Dockerfile.proxy.cross, and preserve the original Dockerfile.proxy
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross
+	- docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross
+	rm Dockerfile.proxy.cross
 
 ##@ Deployment
 

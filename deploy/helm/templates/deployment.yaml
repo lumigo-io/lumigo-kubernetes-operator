@@ -37,39 +37,40 @@ spec:
                 values:
                 - linux
       containers:
-      - args:
+      - name: manager
+        image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+        command:
+        - /manager
+        args:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
-        command:
-        - /manager
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ .Values.kubernetesClusterDomain }}
+        - name: TELEMETRY_PROXY_OTLP_SERVICE
+          value: "http://{{ include "helm.fullname" . }}-telemetry-proxy-service.{{ .Release.Namespace }}.svc.cluster.local"
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}"
         - name: LUMIGO_INJECTOR_IMAGE
           value: {{ .Values.injectorWebhook.lumigoInjector.image.repository }}:{{ .Values.injectorWebhook.lumigoInjector.image.tag | default "latest" }}
-        image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8081
           initialDelaySeconds: 15
           periodSeconds: 20
-        name: manager
-        ports:
-        - containerPort: 9443
-          name: webhook-server
-          protocol: TCP
         readinessProbe:
           httpGet:
             path: /readyz
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources: {{- toYaml .Values.controllerManager.manager.resources | nindent 10
-          }}
+        resources: {{- toYaml .Values.controllerManager.manager.resources | nindent 10 }}
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -78,10 +79,26 @@ spec:
           readOnlyRootFilesystem: true
           runAsNonRoot: true
         volumeMounts:
-        - mountPath: /tmp/k8s-webhook-server/serving-certs
-          name: cert
+        - name: cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
-      - args:
+      - name: telemetry-proxy
+        image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
+        ports:
+        - containerPort: 4318
+          name: otlphttp
+          protocol: TCP
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1234
+      - name: kube-rbac-proxy
+        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag | default .Chart.AppVersion }}
+        args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
         - --logtostderr=true
@@ -89,8 +106,6 @@ spec:
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ .Values.kubernetesClusterDomain }}
-        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag | default .Chart.AppVersion }}
-        name: kube-rbac-proxy
         ports:
         - containerPort: 8443
           name: https
@@ -106,6 +121,7 @@ spec:
           runAsNonRoot: true
       securityContext:
         runAsNonRoot: true
+        fsGroup: 1234
       serviceAccountName: {{ include "helm.fullname" . }}-controller-manager
       terminationGracePeriodSeconds: 10
       volumes:

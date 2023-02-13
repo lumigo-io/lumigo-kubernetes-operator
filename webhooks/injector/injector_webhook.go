@@ -47,9 +47,15 @@ var (
 )
 
 func SetupWebhookWithManager(mgr ctrl.Manager) error {
+	lumigoEndpoint, isSet := os.LookupEnv("TELEMETRY_PROXY_OTLP_SERVICE")
+	if !isSet {
+		return fmt.Errorf("the 'TELEMETRY_PROXY_OTLP_SERVICE' env var is not set, cannot point the containerized applications' tracers to the Telemetry Proxy OTLP service")
+	}
+
 	webhook := &admission.Webhook{
 		Handler: &LumigoWebhookHandler{
-			LumigoOperatorVersion: os.Getenv("LUMIGO_OPERATOR_VERSION"),
+			LumigoOperatorVersion:     os.Getenv("LUMIGO_OPERATOR_VERSION"),
+			TelemetryProxyOtlpService: lumigoEndpoint,
 		},
 	}
 
@@ -63,9 +69,10 @@ func SetupWebhookWithManager(mgr ctrl.Manager) error {
 }
 
 type LumigoWebhookHandler struct {
-	client                client.Client
-	decoder               *admission.Decoder
-	LumigoOperatorVersion string
+	client                    client.Client
+	decoder                   *admission.Decoder
+	LumigoOperatorVersion     string
+	TelemetryProxyOtlpService string
 }
 
 // The client is automatically injected by the Webhook machinery
@@ -131,8 +138,9 @@ func (h *LumigoWebhookHandler) Handle(ctx context.Context, request admission.Req
 	}
 
 	mutator := &mutation.Mutator{
-		LumigoToken: &lumigo.Spec.LumigoToken,
-		Log:         &log,
+		LumigoToken:    &lumigo.Spec.LumigoToken,
+		LumigoEndpoint: h.TelemetryProxyOtlpService,
+		Log:            &log,
 	}
 	podSpec := resourceAdaper.GetPodSpec()
 	if err = mutator.Mutate(podSpec); err != nil {

@@ -24,6 +24,17 @@ controllerManager:
       requests:
         cpu: 10m
         memory: 64Mi
+  telemetryProxy:
+    image:
+      repository: host.docker.internal:5000/proxy # TODO Update default
+      tag: v65
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 10m
+        memory: 128Mi
   replicas: 1
 injectorWebhook:
   lumigoInjector:
