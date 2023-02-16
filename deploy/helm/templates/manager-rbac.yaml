@@ -34,7 +34,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - events
+  - namespaces
+  - namespaces/status
+  - nodes
+  - nodes/spec
+  - pods
+  - pods/status
+  - replicationcontrollers
+  - replicationcontrollers/status
+  - resourcequotas
   - secrets
+  - services
   verbs:
   - get
   - list
@@ -52,6 +63,7 @@ rules:
   - get
   - list
   - watch
+  - update
 - apiGroups:
   - batch
   apiVersions:
@@ -63,6 +75,7 @@ rules:
   - get
   - list
   - watch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

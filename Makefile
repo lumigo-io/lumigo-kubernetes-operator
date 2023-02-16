@@ -86,8 +86,8 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${CONTROLLER_IMG} . -f Dockerfile.controller
-	docker build -t ${PROXY_IMG} . -f Dockerfile.proxy
+	docker build -t ${CONTROLLER_IMG} -f Dockerfile.controller .
+	docker build -t ${PROXY_IMG} -f Dockerfile.proxy --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
@@ -100,7 +100,7 @@ docker-push: ## Push docker image with the manager.
 # - have enable BuildKit, More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image for your registry (i.e. if you do not inform a valid value via CONTROLLER_IMG=<myregistry/image:<tag>> than the export will fail)
 # To properly provided solutions that supports more than one platform you should use this option.
-PLATFORMS ?= linux/arm64,linux/amd64#,linux/s390x,linux/ppc64le
+PLATFORMS ?= linux/arm64,linux/amd64 #,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: test ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile.controller and insert --platform=${BUILDPLATFORM} into Dockerfile.controller.cross, and preserve the original Dockerfile.controller
@@ -113,7 +113,7 @@ docker-buildx: test ## Build and push docker image for the manager for cross-pla
 
 	# copy existing Dockerfile.proxy and insert --platform=${BUILDPLATFORM} into Dockerfile.proxy.cross, and preserve the original Dockerfile.proxy
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross
-	- docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross
+	- docker buildx build --push --platform=$(PLATFORMS) --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" --tag ${PROXY_IMG} -f Dockerfile.proxy.cross
 	rm Dockerfile.proxy.cross
 
 ##@ Deployment

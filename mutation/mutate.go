@@ -19,27 +19,175 @@ package mutation
 import (
 	// appsv1 "k8s.io/api/apps/v1"
 	// batchv1 "k8s.io/api/batch/v1"
-	"encoding/json"
+
 	"fmt"
 	"os"
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"golang.org/x/exp/slices"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type Mutator struct {
-	Log            *logr.Logger
-	LumigoEndpoint string
-	LumigoToken    *operatorv1alpha1.Credentials
-}
+const LumigoAutoTraceLabelKey = "lumigo.auto-trace"
 
 const targetDirectoryPath = "/target"
 const lumigoInjectorVolumeMountPoint = "/opt/lumigo"
 
-func (m *Mutator) Mutate(podSpec *corev1.PodSpec) error {
+type Mutator interface {
+	GetAutotraceLabelValue() string
+	MutateAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error
+	MutateAppsV1Deployment(deployment *appsv1.Deployment) error
+	MutateAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error
+	MutateAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error
+	MutateBatchV1CronJob(deployment *batchv1.CronJob) error
+	MutateBatchV1Job(deployment *batchv1.Job) error
+}
+
+type mutatorImpl struct {
+	log                         *logr.Logger
+	lumigoAutotraceLabelVersion string
+	lumigoEndpoint              string
+	lumigoToken                 *operatorv1alpha1.Credentials
+	lumigoInjectorImage         string
+}
+
+func (m *mutatorImpl) GetAutotraceLabelValue() string {
+	return m.lumigoAutotraceLabelVersion
+}
+
+func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials) (Mutator, error) {
+	lumigoOperatorVersion, isSet := os.LookupEnv("LUMIGO_OPERATOR_VERSION")
+	if !isSet {
+		lumigoOperatorVersion = "dev"
+	}
+
+	lumigoEndpoint, isSet := os.LookupEnv("TELEMETRY_PROXY_OTLP_SERVICE")
+	if !isSet {
+		return nil, fmt.Errorf("the 'TELEMETRY_PROXY_OTLP_SERVICE' env var is not set, cannot point the containerized applications' tracers to the Telemetry Proxy OTLP service")
+	}
+
+	telemetryProxyOtlpService := lumigoEndpoint + "/v1/traces" // TODO: Fix it when the distros use the Lumigo endpoint as root
+
+	lumigoInjectorImage, isSet := os.LookupEnv("LUMIGO_INJECTOR_IMAGE")
+	if !isSet {
+		return nil, fmt.Errorf("unknown 'lumigo-injector' image: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set")
+	}
+
+	return &mutatorImpl{
+		log:                         Log,
+		lumigoAutotraceLabelVersion: "lumigo-operator.v" + lumigoOperatorVersion,
+		lumigoEndpoint:              telemetryProxyOtlpService,
+		lumigoToken:                 LumigoToken,
+		lumigoInjectorImage:         lumigoInjectorImage,
+	}, nil
+}
+
+func (m *mutatorImpl) MutateAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error {
+	if err := m.validateShouldMutate(daemonSet.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.mutatePodSpec(&daemonSet.Spec.Template.Spec); err != nil {
+		return err
+	}
+
+	daemonSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	daemonSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	return nil
+}
+
+func (m *mutatorImpl) MutateAppsV1Deployment(deployment *appsv1.Deployment) error {
+	if err := m.validateShouldMutate(deployment.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.mutatePodSpec(&deployment.Spec.Template.Spec); err != nil {
+		return err
+	}
+
+	deployment.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	deployment.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	return nil
+}
+
+func (m *mutatorImpl) MutateAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error {
+	if err := m.validateShouldMutate(replicaSet.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.mutatePodSpec(&replicaSet.Spec.Template.Spec); err != nil {
+		return err
+	}
+
+	replicaSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	replicaSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	return nil
+}
+
+func (m *mutatorImpl) MutateAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error {
+	if err := m.validateShouldMutate(statefulSet.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.mutatePodSpec(&statefulSet.Spec.Template.Spec); err != nil {
+		return err
+	}
+
+	statefulSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	statefulSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	return nil
+}
+
+func (m *mutatorImpl) MutateBatchV1CronJob(batchJob *batchv1.CronJob) error {
+	if err := m.validateShouldMutate(batchJob.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.mutatePodSpec(&batchJob.Spec.JobTemplate.Spec.Template.Spec); err != nil {
+		return err
+	}
+
+	batchJob.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	batchJob.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	return nil
+}
+
+func (m *mutatorImpl) MutateBatchV1Job(job *batchv1.Job) error {
+	if err := m.validateShouldMutate(job.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.mutatePodSpec(&job.Spec.Template.Spec); err != nil {
+		return err
+	}
+
+	job.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	job.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	return nil
+}
+
+func (m *mutatorImpl) validateShouldMutate(resourceMeta metav1.ObjectMeta) error {
+	autoTraceLabelValue := resourceMeta.Labels[LumigoAutoTraceLabelKey]
+	if autoTraceLabelValue == "false" {
+		// Opt-out for this resource, skip injection
+		return fmt.Errorf("the resource has the '%s' label set to 'false'", LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 	lumigoInjectorImage, isLumigoInjectorImageSetInEnv := os.LookupEnv("LUMIGO_INJECTOR_IMAGE")
 	if !isLumigoInjectorImageSetInEnv {
 		return fmt.Errorf("unknown 'lumigo-injector' image: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set")
@@ -92,8 +240,6 @@ func (m *Mutator) Mutate(podSpec *corev1.PodSpec) error {
 
 	patchedContainers := make([]corev1.Container, 0)
 	for _, container := range podSpec.Containers {
-		m.Log.Info("Mutating container", "container-name", container.Name)
-
 		lumigoInjectorVolumeMount := &corev1.VolumeMount{
 			Name:      "lumigo-injector",
 			ReadOnly:  true,
@@ -127,9 +273,9 @@ func (m *Mutator) Mutate(podSpec *corev1.PodSpec) error {
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: m.LumigoToken.SecretRef.Name,
+						Name: m.lumigoToken.SecretRef.Name,
 					},
-					Key:      m.LumigoToken.SecretRef.Key,
+					Key:      m.lumigoToken.SecretRef.Key,
 					Optional: newTrue(),
 				},
 			},
@@ -143,7 +289,7 @@ func (m *Mutator) Mutate(podSpec *corev1.PodSpec) error {
 
 		lumigoEndpointEnvVar := &corev1.EnvVar{
 			Name:  "LUMIGO_ENDPOINT",
-			Value: m.LumigoEndpoint,
+			Value: m.lumigoEndpoint,
 		}
 		lumigoEndpointEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == "LUMIGO_ENDPOINT" })
 		if lumigoEndpointEnvVarIndex < 0 {
@@ -157,12 +303,6 @@ func (m *Mutator) Mutate(podSpec *corev1.PodSpec) error {
 		patchedContainers = append(patchedContainers, container)
 	}
 	podSpec.Containers = patchedContainers
-
-	marshalledPodSpec, err := json.Marshal(podSpec)
-	if err != nil {
-		return err
-	}
-	m.Log.Info("PodSpec mutated", "mutated-podspec", marshalledPodSpec)
 
 	return nil
 }

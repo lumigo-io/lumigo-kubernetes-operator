@@ -1,7 +1,8 @@
 # Download our latest otelcollector release
 FROM alpine AS downloader
 
-ARG lumigo_otel_collector_release="v0.52.0-lumigo"
+ARG lumigo_otel_collector_release
+ENV lumigo_otel_collector_release="${lumigo_otel_collector_release}"
 # Added for compatibility with buildx facilities when not building on buildx
 ARG target_platform="${TARGETPLATFORM}"
 
@@ -23,9 +24,7 @@ FROM alpine
 
 RUN apk add ca-certificates
 
- COPY --chown=1234:1234 /dist/otelcontribcol /lumigo/otelcol
-# ADD --chown=1234:1234 ./dist/otelcontribcol_linux_arm64 /lumigo/otelcol
-#
+COPY --from=downloader --chown=1234:1234 /dist/otelcontribcol /lumigo/otelcol
 ADD --chown=1234:1234 ./telemetryproxy/config.yaml /etc/otelcol/config.yaml
 
 ENTRYPOINT ["/lumigo/otelcol"]

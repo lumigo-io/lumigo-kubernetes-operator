@@ -9,5 +9,5 @@ keywords:
 - opentelemetry
 home: https://github.com/lumigo-io/lumigo-kubernetes-operator/
 icon: https://raw.githubusercontent.com/lumigo-io/lumigo-kubernetes-operator/main/images/lumigo.svg
-version: 0.1.0
-appVersion: "0.1.0"
+version: dev
+appVersion: dev

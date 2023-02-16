@@ -5,6 +5,9 @@ receivers:
         auth:
           authenticator: lumigoauth
         include_metadata: true # Needed by `headers_setter/lumigo`
+  k8s_events:
+    auth_type: serviceAccount
+    # namespaces: [default, my_namespace] # Default: all
 
 extensions:
   health_check:
@@ -29,7 +32,21 @@ exporters:
 
 # We cannot add the Batch processor, as it breaks the `headers_setter/lumigo`
 # see https://github.com/open-telemetry/opentelemetry-collector/issues/4544
-processors: {}
+processors:
+  k8sattributes:
+    auth_type: serviceAccount
+    passthrough: false
+    extract:
+      metadata:
+        - k8s.pod.name
+        - k8s.deployment.name
+        - k8s.namespace.name
+        - k8s.node.name
+        - k8s.pod.start_time
+        # TODO MORE
+    pod_association:
+    - from: resource_attribute
+      name: k8s.pod.uid
 
 service:
   extensions:
@@ -40,9 +57,17 @@ service:
     traces:
       receivers:
       - otlp
-      processors: []
+      processors:
+      - k8sattributes
       exporters:
       - otlphttp/lumigo
+      - logging
+    logs:
+      receivers:
+      - k8s_events
+      processors: []
+      exporters:
+      # - otlphttp/lumigo
       - logging
   telemetry:
     logs:

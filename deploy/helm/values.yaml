@@ -16,7 +16,7 @@ controllerManager:
   manager:
     image:
       repository: host.docker.internal:5000/controller # TODO Update default
-      tag: v65
+      tag: latest
     resources:
       limits:
         cpu: 500m
@@ -27,7 +27,7 @@ controllerManager:
   telemetryProxy:
     image:
       repository: host.docker.internal:5000/proxy # TODO Update default
-      tag: v65
+      tag: latest
     resources:
       limits:
         cpu: 500m
@@ -43,15 +43,15 @@ injectorWebhook:
       tag: latest
 injectorWebhookService:
   ports:
-  - port: 443
-    protocol: TCP
-    targetPort: 9443
+    - port: 443
+      protocol: TCP
+      targetPort: 9443
   type: ClusterIP
 kubernetesClusterDomain: cluster.local
 metricsService:
   ports:
-  - name: https
-    port: 8443
-    protocol: TCP
-    targetPort: https
+    - name: https
+      port: 8443
+      protocol: TCP
+      targetPort: https
   type: ClusterIP

@@ -100,3 +100,7 @@ $ minikube start --insecure-registry "host.docker.internal:5000"
 The first version of the [Helm chart](./deploy/helm/) has been generated with [helmify](https://github.com/arttor/helmify) by running `kustomize build config/default | helmify deploy/helm`.
 However, manual edits and corrections were necessary, and running `helmify` again would override them.
 The Helm website has a [handy guide to the basics](https://helm.sh/docs/chart_template_guide/) of Helm Chart templating.
+
+## Change version of the OpenTelemetry Collector Contrib to be used as telemetry-proxy
+
+The [telemetryproxy/VERSION.otelcontibcol](./telemetryproxy/VERSION.otelcontibcol) file contains the _release name_ of the OpenTelemetry Collector Contrib to be used from the [lumigo-io/opentelemetry-collector-contrib](https://github.com/lumigo-io/opentelemetry-collector-contrib/releases) repository.

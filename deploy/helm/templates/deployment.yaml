@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
     control-plane: controller-manager
+    lumigo.auto-trace: 'false' # We do not need the operator to inject itself
   {{- include "helm.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.controllerManager.replicas }}
@@ -17,6 +18,7 @@ spec:
   template:
     metadata:
       labels:
+        lumigo.auto-trace: 'false' # We do not need the operator to inject itself
         control-plane: controller-manager
       {{- include "helm.selectorLabels" . | nindent 8 }}
       annotations:
