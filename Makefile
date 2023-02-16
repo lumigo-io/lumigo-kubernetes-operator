@@ -11,11 +11,13 @@ PROXY_IMG ?= proxy:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.25.0
 
+GOCMD?= go
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
+ifeq (,$(shell $(GOCMD) env GOBIN))
+GOBIN=$(shell $(GOCMD)go env GOPATH)/bin
 else
-GOBIN=$(shell go env GOBIN)
+GOBIN=$(shell $(GOCMD) env GOBIN)
 endif
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
@@ -24,7 +26,12 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 .PHONY: all
-all: build
+all: install-tools build
+
+TOOLS_MOD_DIR := ./tools
+.PHONY: install-tools
+install-tools:
+	cd $(TOOLS_MOD_DIR) && $(GOCMD) install github.com/tcnksm/ghr
 
 ##@ General
 
@@ -55,31 +62,31 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	go fmt ./api/...
-	go fmt ./controllers/...
-	go fmt ./mutation/...
-	go fmt ./webhooks/...
+	$(GOCMD) fmt ./api/...
+	$(GOCMD) fmt ./controllers/...
+	$(GOCMD) fmt ./mutation/...
+	$(GOCMD) fmt ./webhooks/...
 
 .PHONY: vet
 vet: ## Run go vet against code.
-	go vet ./api/...
-	go vet ./controllers/...
-	go vet ./mutation/...
-	go vet ./webhooks/...
+	$(GOCMD) vet ./api/...
+	$(GOCMD) vet ./controllers/...
+	$(GOCMD) vet ./mutation/...
+	$(GOCMD) vet ./webhooks/...
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./api/... ./controllers/... ./mutation/... ./webhooks/... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" $(GOCMD) test ./api/... ./controllers/... ./mutation/... ./webhooks/... -coverprofile cover.out
 
 ##@ Build
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	$(GOCMD) build -o bin/manager main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+	$(GOCMD) run ./main.go
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
@@ -103,18 +110,8 @@ docker-push: ## Push docker image with the manager.
 PLATFORMS ?= linux/arm64,linux/amd64 #,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: test ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile.controller and insert --platform=${BUILDPLATFORM} into Dockerfile.controller.cross, and preserve the original Dockerfile.controller
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.controller > Dockerfile.controller.cross
-	- docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	- docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller.cross
-	- docker buildx rm project-v3-builder
-	rm Dockerfile.controller.cross
-
-	# copy existing Dockerfile.proxy and insert --platform=${BUILDPLATFORM} into Dockerfile.proxy.cross, and preserve the original Dockerfile.proxy
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross
-	- docker buildx build --push --platform=$(PLATFORMS) --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" --tag ${PROXY_IMG} -f Dockerfile.proxy.cross
-	rm Dockerfile.proxy.cross
+	- docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller .
+	- docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" .
 
 ##@ Deployment
 
@@ -164,9 +161,9 @@ $(KUSTOMIZE): $(LOCALBIN)
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) $(GOCMD) install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) $(GOCMD) install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest

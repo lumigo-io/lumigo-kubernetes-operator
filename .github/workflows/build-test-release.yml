@@ -1,0 +1,101 @@
+name: build-and-test
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # We do not need the git history
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Run tests
+        run: |
+          make test
+
+  release:
+    needs:
+    - test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'  # We push only if we built from main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # We do not need the git history
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Install tools
+        run: |
+          make install-tools
+      - name: Set up Helm
+        run: |
+          sudo curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version --short
+          helm plugin install https://github.com/hypnoglow/helm-s3.git
+      - name: Set up yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Login to Amazon ECR Public
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: public
+      - name: Read version
+        id: read_version
+        run: |
+          echo "version=$(cat VERSION)" >> ${GITHUB_OUTPUT}
+          echo "controller_image_repository=public.ecr.aws/lumigo/lumigo-kubernetes-operator" >> ${GITHUB_OUTPUT}
+          echo "proxy_image_repository=public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy" >> ${GITHUB_OUTPUT}
+      - name: Push container images to Amazon ECR
+        env:
+          CONTROLLER_IMG: ${{ steps.read_version.outputs.controller_image_repository }}:${{ steps.read_version.outputs.version }}
+          PROXY_IMG: ${{ steps.read_version.outputs.proxy_image_repository }}:${{ steps.read_version.outputs.version }}
+        run: |
+          make docker-buildx
+      - name: Update Helm chart defaults
+        run: |
+          yq e -i '.controllerManager.manager.image.repository = "${{ steps.read_version.outputs.controller_image_repository }}"' deploy/helm/values.yaml
+          yq e -i '.controllerManager.manager.image.tag = "${{ steps.read_version.outputs.version }}"' deploy/helm/values.yaml
+          yq e -i '.controllerManager.telemetryProxy.image.repository = "${{ steps.read_version.outputs.proxy_image_repository }}"' deploy/helm/values.yaml
+          yq e -i '.controllerManager.telemetryProxy.image.tag = "${{ steps.read_version.outputs.version }}"' deploy/helm/values.yaml
+      - name: Update Helm chart metadata
+        run: |
+          yq e -i '.version = "${{ steps.read_version.outputs.version }}"' deploy/helm/Chart.yaml
+          yq e -i '.appVersion = "${{ steps.read_version.outputs.version }}"' deploy/helm/Chart.yaml
+      - name: Package Helm chart
+        run: |
+          mkdir -p dist/
+          helm package ./deploy/helm --version "${{ steps.read_version.outputs.version }}.0.0" --app-version "${{ steps.read_version.outputs.version }}" --destination dist/
+      - name: Create GitHub release
+        run: |
+          ghr -t "${GITHUB_TOKEN}" -u "${GITHUB_REPOSITORY_OWNER}" -r lumigo-kubernetes-operator -n "${RELEASE_TAG}" --replace "${RELEASE_TAG}" dist/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: v${{ steps.read_version.outputs.version }}
+      - name: Publish Helm chart
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          helm repo add stable-lumigo-operator s3://lumigo-kubernetes-operator-helm/stable/lumigo-operator/
+          helm repo update stable-lumigo-operator
+          helm s3 push "./dist/lumigo-operator-${{ steps.read_version.outputs.version }}.0.0.tgz" stable-lumigo-operator
