@@ -1,12 +1,8 @@
 # Lumigo Kubernetes Operator
 
-![The Lumigo Logo](./images/lumigo.png)
-
 The Kubernetes operator of Lumigo provides a one-click solution to monitoring Kubernetes clusters with Lumigo.
 
-## Setup
-
-### Installing the Lumigo operator
+## Installing the Lumigo operator
 
 Install the Lumigo operator in your Kubernets cluster with [helm](https://helm.sh/):
 
@@ -25,7 +21,7 @@ NAME                                                         READY   STATUS    R
 lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0          56s
 ```
 
-### Enabling automatic tracing
+## Enabling automatic tracing
 
 The Lumigo operator automatically adds distributed tracing to pods created via:
 
@@ -66,44 +62,7 @@ spec:
       key: token # This must match the key in the Kubernetes secret
 ```
 
-#### Opting out for specific resources
-
-To prevent the Lumigo operator from injecting tracing to pods managed by some resource in a namespace that contains a `Lumigo` resource, add the `lumigo.auto-trace` label set to `false`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: hello-node
-    lumigo.auto-trace: "false"  # <-- No injection will take place
-  name: hello-node
-  namespace: my-namespace
-spec:
-  selector:
-    matchLabels:
-      app: hello-node
-  template:
-    metadata:
-      labels:
-        app: hello-node
-    spec:
-      containers:
-      - command:
-        - /agnhost
-        - netexec
-        - --http-port=8080
-        image: registry.k8s.io/e2e-test-images/agnhost:2.39
-        name: agnhost
-```
-
-In the logs of the Lumigo operator, you will see a message like the following:
-
-```
-1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/mutate", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
-```
-
-### Uninstall
+## Uninstall
 
 The removal of the Lumigo operator is performed by:
 
@@ -113,7 +72,6 @@ helm delete lumigo --namespace lumigo-system
 
 All the `Lumigo` resources you have created in your namespaces are going to be automatically deleted.
 
-## TLS certificates
+# Detailed documentation
 
-The Lumigo operator injector webhook uses a self-signed certificate that is automatically generate during the [installation of the Helm chart](#installing-the-lumigo-operator).
-The generated certificate has a 365 days expiration, and a new certificate will be generated every time you upgrade Lumigo operator's helm chart.
+See the [repository documentation](https://github.com/lumigo-io/lumigo-kubernetes-operator) for more information on how to use the Lumigo Kubernetes Operator.
