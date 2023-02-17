@@ -2,6 +2,8 @@
 
 ![The Lumigo Logo](./images/lumigo.png)
 
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/lumigo-operator)](https://artifacthub.io/packages/search?repo=lumigo-operator)
+
 The Kubernetes operator of Lumigo provides a one-click solution to monitoring Kubernetes clusters with Lumigo.
 
 ## Setup
