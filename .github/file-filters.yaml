@@ -1,0 +1,4 @@
+# To be used in conjunction with the https://github.com/dorny/paths-filter GitHub action
+
+new-release:
+  - VERSION
