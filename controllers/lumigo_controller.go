@@ -53,8 +53,11 @@ const (
 // LumigoReconciler reconciles a Lumigo object
 type LumigoReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Log    logr.Logger
+	Scheme                       *runtime.Scheme
+	Log                          logr.Logger
+	LumigoOperatorVersion        string
+	LumigoInjectorImage          string
+	TelemetryProxyOtlpServiceUrl string
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -311,7 +314,7 @@ func (r *LumigoReconciler) updateStatusIfNeeded(logger logr.Logger, instance *op
 func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lumigoInstance *operatorv1alpha1.Lumigo, log *logr.Logger) error {
 	// TODO Make it less chatty, avoid unnecessary updates
 
-	mutator, err := mutation.NewMutator(log, &lumigoInstance.Spec.LumigoToken)
+	mutator, err := mutation.NewMutator(log, &lumigoInstance.Spec.LumigoToken, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
 	}

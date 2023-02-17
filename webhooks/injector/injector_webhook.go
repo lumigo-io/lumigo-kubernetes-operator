@@ -34,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
@@ -43,9 +44,18 @@ var (
 	decoder = scheme.Codecs.UniversalDecoder()
 )
 
-func SetupWebhookWithManager(mgr ctrl.Manager) error {
+type LumigoWebhookHandler struct {
+	client                       client.Client
+	decoder                      *admission.Decoder
+	LumigoOperatorVersion        string
+	LumigoInjectorImage          string
+	TelemetryProxyOtlpServiceUrl string
+	Log                          logr.Logger
+}
+
+func (h *LumigoWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	webhook := &admission.Webhook{
-		Handler: &LumigoWebhookHandler{},
+		Handler: h,
 	}
 
 	handler, err := admission.StandaloneWebhook(webhook, admission.StandaloneOptions{})
@@ -55,11 +65,6 @@ func SetupWebhookWithManager(mgr ctrl.Manager) error {
 	mgr.GetWebhookServer().Register("/v1alpha1/mutate", handler)
 
 	return nil
-}
-
-type LumigoWebhookHandler struct {
-	client  client.Client
-	decoder *admission.Decoder
 }
 
 // The client is automatically injected by the Webhook machinery
@@ -124,7 +129,7 @@ func (h *LumigoWebhookHandler) Handle(ctx context.Context, request admission.Req
 		return admission.Allowed(err.Error())
 	}
 
-	mutator, err := mutation.NewMutator(&log, &lumigo.Spec.LumigoToken)
+	mutator, err := mutation.NewMutator(&log, &lumigo.Spec.LumigoToken, h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl)
 	if err != nil {
 		return admission.Allowed(fmt.Errorf("cannot instantiate mutator: %w", err).Error())
 	}

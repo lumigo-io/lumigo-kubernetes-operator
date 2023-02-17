@@ -92,15 +92,43 @@ func main() {
 
 	logger := ctrl.Log.WithName("controllers").WithName("Lumigo")
 
+	lumigoOperatorVersion, isSet := os.LookupEnv("LUMIGO_OPERATOR_VERSION")
+	if !isSet {
+		lumigoOperatorVersion = "dev"
+	}
+
+	lumigoEndpoint, isSet := os.LookupEnv("TELEMETRY_PROXY_OTLP_SERVICE")
+	if !isSet {
+		setupLog.Error(err, "unable to create controller: environment variable 'TELEMETRY_PROXY_OTLP_SERVICE' is not set", "controller", "Lumigo")
+		os.Exit(1)
+	}
+
+	telemetryProxyOtlpService := lumigoEndpoint + "/v1/traces" // TODO: Fix it when the distros use the Lumigo endpoint as root
+
+	lumigoInjectorImage, isSet := os.LookupEnv("LUMIGO_INJECTOR_IMAGE")
+	if !isSet {
+		setupLog.Error(err, "unable to create controller: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set", "controller", "Lumigo")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.LumigoReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    logger,
+		Client:                       mgr.GetClient(),
+		Scheme:                       mgr.GetScheme(),
+		LumigoOperatorVersion:        lumigoOperatorVersion,
+		LumigoInjectorImage:          lumigoInjectorImage,
+		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
+		Log:                          logger,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Lumigo")
 		os.Exit(1)
 	}
-	if err = injector.SetupWebhookWithManager(mgr); err != nil {
+
+	if err = (&injector.LumigoWebhookHandler{
+		LumigoOperatorVersion:        lumigoOperatorVersion,
+		LumigoInjectorImage:          lumigoInjectorImage,
+		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
+		Log:                          logger,
+	}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Lumigo")
 		os.Exit(1)
 	}

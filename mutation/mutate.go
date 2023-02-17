@@ -21,7 +21,6 @@ import (
 	// batchv1 "k8s.io/api/batch/v1"
 
 	"fmt"
-	"os"
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
@@ -60,30 +59,13 @@ func (m *mutatorImpl) GetAutotraceLabelValue() string {
 	return m.lumigoAutotraceLabelVersion
 }
 
-func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials) (Mutator, error) {
-	lumigoOperatorVersion, isSet := os.LookupEnv("LUMIGO_OPERATOR_VERSION")
-	if !isSet {
-		lumigoOperatorVersion = "dev"
-	}
-
-	lumigoEndpoint, isSet := os.LookupEnv("TELEMETRY_PROXY_OTLP_SERVICE")
-	if !isSet {
-		return nil, fmt.Errorf("the 'TELEMETRY_PROXY_OTLP_SERVICE' env var is not set, cannot point the containerized applications' tracers to the Telemetry Proxy OTLP service")
-	}
-
-	telemetryProxyOtlpService := lumigoEndpoint + "/v1/traces" // TODO: Fix it when the distros use the Lumigo endpoint as root
-
-	lumigoInjectorImage, isSet := os.LookupEnv("LUMIGO_INJECTOR_IMAGE")
-	if !isSet {
-		return nil, fmt.Errorf("unknown 'lumigo-injector' image: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set")
-	}
-
+func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string) (Mutator, error) {
 	return &mutatorImpl{
 		log:                         Log,
-		lumigoAutotraceLabelVersion: "lumigo-operator.v" + lumigoOperatorVersion,
-		lumigoEndpoint:              telemetryProxyOtlpService,
+		lumigoAutotraceLabelVersion: "lumigo-operator.v" + LumigoOperatorVersion,
+		lumigoEndpoint:              TelemetryProxyOtlpServiceUrl,
 		lumigoToken:                 LumigoToken,
-		lumigoInjectorImage:         lumigoInjectorImage,
+		lumigoInjectorImage:         LumigoInjectorImage,
 	}, nil
 }
 
@@ -188,11 +170,6 @@ func (m *mutatorImpl) validateShouldMutate(resourceMeta metav1.ObjectMeta) error
 }
 
 func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
-	lumigoInjectorImage, isLumigoInjectorImageSetInEnv := os.LookupEnv("LUMIGO_INJECTOR_IMAGE")
-	if !isLumigoInjectorImageSetInEnv {
-		return fmt.Errorf("unknown 'lumigo-injector' image: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set")
-	}
-
 	lumigoInjectorVolume := &corev1.Volume{
 		Name: "lumigo-injector",
 		VolumeSource: corev1.VolumeSource{
@@ -213,7 +190,7 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 
 	lumigoInjectorContainer := &corev1.Container{
 		Name:  "lumigo-injector",
-		Image: lumigoInjectorImage,
+		Image: m.lumigoInjectorImage,
 		Env: []corev1.EnvVar{
 			{
 				Name:  "TARGET_DIRECTORY",

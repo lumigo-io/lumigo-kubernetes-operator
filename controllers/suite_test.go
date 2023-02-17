@@ -93,9 +93,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	if err := (&LumigoReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Lumigo"),
+		Client:                       mgr.GetClient(),
+		Scheme:                       mgr.GetScheme(),
+		Log:                          ctrl.Log.WithName("controllers").WithName("Lumigo"),
+		LumigoOperatorVersion:        "test",
+		LumigoInjectorImage:          "localhost:5000/lumigo-injector:latest",
+		TelemetryProxyOtlpServiceUrl: "http://localhost:4318",
 	}).SetupWithManager(mgr); err != nil {
 		Expect(err).ToNot(HaveOccurred())
 	}
