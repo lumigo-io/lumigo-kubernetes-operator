@@ -8,6 +8,6 @@ keywords:
 - distributed tracing
 - opentelemetry
 home: https://github.com/lumigo-io/lumigo-kubernetes-operator/
-icon: https://raw.githubusercontent.com/lumigo-io/lumigo-kubernetes-operator/main/images/lumigo.svg
+icon: https://raw.githubusercontent.com/lumigo-io/lumigo-kubernetes-operator/main/images/lumigo.png
 version: '0'
 appVersion: '0'
