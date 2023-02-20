@@ -52,8 +52,6 @@ rules:
   - watch
 - apiGroups:
   - apps
-  apiVersions:
-  - v1
   resources:
   - daemonsets
   - deployments
@@ -66,8 +64,6 @@ rules:
   - update
 - apiGroups:
   - batch
-  apiVersions:
-  - v1
   resources:
   - cronjobs
   - jobs

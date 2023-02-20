@@ -18,6 +18,7 @@ bases:
 - ../manager
 - ../webhook
 - ../certmanager
+- ../telemetry-proxy
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
 #- ../prometheus
 
@@ -26,6 +27,7 @@ patchesStrategicMerge:
 # If you want your controller-manager to expose the /metrics
 # endpoint w/o any authn/z, please comment the following line.
 - manager_auth_proxy_patch.yaml
+- manager_telemetry_proxy_patch.yaml
 - manager_webhook_patch.yaml
 
 - webhookcainjection_patch.yaml
@@ -46,15 +48,27 @@ vars:
     group: cert-manager.io
     version: v1
     name: serving-cert # this name should match the one in certificate.yaml
-- name: SERVICE_NAMESPACE # namespace of the service
+- name: INJECTOR_SERVICE_NAMESPACE # namespace of the service
   objref:
     kind: Service
     version: v1
     name: injector-webhook-service
   fieldref:
     fieldpath: metadata.namespace
-- name: SERVICE_NAME
+- name: INJECTOR_SERVICE_NAME
   objref:
     kind: Service
     version: v1
     name: injector-webhook-service
+- name: TELEMETRY_PROXY_SERVICE_NAMESPACE # namespace of the service
+  objref:
+    kind: Service
+    version: v1
+    name: telemetry-proxy-service
+  fieldref:
+    fieldpath: metadata.namespace
+- name: TELEMETRY_PROXY_SERVICE_NAME
+  objref:
+    kind: Service
+    version: v1
+    name: telemetry-proxy-service

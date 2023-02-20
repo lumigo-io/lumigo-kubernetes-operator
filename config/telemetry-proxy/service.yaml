@@ -1,0 +1,22 @@
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: telemetry-proxy-service
+  labels:
+    app.kubernetes.io/name: telemetry-proxy-service
+    app.kubernetes.io/instance: telemetry-proxy-service
+    app.kubernetes.io/component: telemetry-proxy
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+spec:
+  type: ClusterIP
+  ports:
+    - name: otlphttp
+      protocol: TCP
+      # TODO Can we use generated certificates to make it HTTPS?
+      # If we used self-signed certs, how would we pass the CA to OTLP exporters in client apps?
+      port: 80
+      targetPort: otlphttp
+  selector:
+    control-plane: controller-manager

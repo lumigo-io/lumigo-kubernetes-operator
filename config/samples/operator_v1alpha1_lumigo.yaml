@@ -3,7 +3,9 @@ kind: Secret
 metadata:
   name: lumigo-credentials
 stringData:
-  token: t_cdef40123435481f8c549
+  # Kubectl won't allow you to deploy this dangling anchor.
+  # Get the actual value from Lumigo following this documentation: https://docs.lumigo.io/docs/lumigo-tokens
+  token: *lumigo-token # Example: t_123456789012345678901
 ---
 apiVersion: operator.lumigo.io/v1alpha1
 kind: Lumigo

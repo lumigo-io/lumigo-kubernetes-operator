@@ -80,6 +80,7 @@ spec:
             - ALL
           readOnlyRootFilesystem: true
           runAsNonRoot: true
+          runAsUser: 1234
         volumeMounts:
         - name: cert
           mountPath: /tmp/k8s-webhook-server/serving-certs

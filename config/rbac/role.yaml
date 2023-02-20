@@ -31,11 +31,42 @@ rules:
   - get
   - patch
   - update
-- # The Lumigo operator will access only secrets that are referenced by a Lumigo CRD
-  apiGroups:
+- apiGroups:
   - "" # Core API group
   resources:
+  - events
+  - namespaces
+  - namespaces/status
+  - nodes
+  - nodes/spec
+  - pods
+  - pods/status
+  - replicationcontrollers
+  - replicationcontrollers/status
+  - resourcequotas
+  # The Lumigo operator will access only secrets that are referenced by a Lumigo CRD
   - secrets
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
   verbs:
   - get
   - list

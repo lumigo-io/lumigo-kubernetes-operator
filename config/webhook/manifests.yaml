@@ -21,7 +21,6 @@ webhooks:
     - apps
     apiVersions:
     - v1
-    # - v1beta1
     operations:
     - CREATE
     - UPDATE
@@ -34,21 +33,10 @@ webhooks:
     - batch
     apiVersions:
     - v1
-    # - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - cronjobs
     - jobs
-  # - apiGroups:
-  #   - ""
-  #   apiVersions:
-  #   - v1
-  #   # - v1beta1
-  #   operations:
-  #   - CREATE
-  #   - UPDATE
-  #   resources:
-  #   - pods
   sideEffects: None

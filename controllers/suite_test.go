@@ -50,7 +50,7 @@ var (
 	testEnv         *envtest.Environment
 	ctx             context.Context
 	cancel          context.CancelFunc
-	defaultTimeout  = 10 * time.Second
+	defaultTimeout  = 20 * time.Second
 	defaultInterval = 100 * time.Millisecond
 )
 

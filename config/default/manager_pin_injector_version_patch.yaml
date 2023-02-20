@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        env:
+          - name: LUMIGO_INJECTOR_IMAGE
+            value: public.ecr.aws/lumigo/lumigo-autotrace:latest # CHANGE this to the image you want to use
