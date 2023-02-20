@@ -7,7 +7,7 @@ The Kubernetes operator of Lumigo provides a one-click solution to monitoring Ku
 Install the Lumigo operator in your Kubernets cluster with [helm](https://helm.sh/):
 
 ```sh
-helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator/stable/lumigo-operator
+helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
 helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace
 ```
 

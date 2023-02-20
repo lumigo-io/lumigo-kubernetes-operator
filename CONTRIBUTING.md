@@ -55,7 +55,7 @@ Deploy the Lumigo operator with:
 
 ```sh
 make docker-build docker-push
-helm install lumigo deploy/helm/templates/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.repository=host.docker.internal:5000/controller" --set "controllerManager.manager.image.tag=latest" --set "controllerManager.telemetryProxy.image.repository=host.docker.internal:5000/telemetr-proxy" --set "controllerManager.telemetryProxy.image.tag=latest"
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.repository=host.docker.internal:5000/controller" --set "controllerManager.manager.image.tag=latest" --set "controllerManager.telemetryProxy.image.repository=host.docker.internal:5000/telemetr-proxy" --set "controllerManager.telemetryProxy.image.tag=latest"
 ```
 
 ### Troubleshooting

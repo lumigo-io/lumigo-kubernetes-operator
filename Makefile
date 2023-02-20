@@ -110,9 +110,25 @@ docker-push: ## Push docker image with the manager.
 # To properly provided solutions that supports more than one platform you should use this option.
 PLATFORMS ?= linux/arm64,linux/amd64 #,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
-docker-buildx: test ## Build and push docker image for the manager for cross-platform support
-	- docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller .
-	- docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" .
+docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy ## Build and push docker image for the manager for cross-platform support
+
+.PHONY: docker-buildx-manager
+docker-buildx-manager: ## Build and push docker image for the manager for cross-platform support; this target does NOT run unit tests, it is meant for CI/CD
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.controller > Dockerfile.controller.cross
+	docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller.cross .
+	- docker buildx rm project-v3-builder
+	rm Dockerfile.controller.cross
+
+.PHONY: docker-buildx-telemetry-proxy
+docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross
+	docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" .
+	- docker buildx rm project-v3-builder
+	rm Dockerfile.proxy.cross
 
 ##@ Deployment
 
