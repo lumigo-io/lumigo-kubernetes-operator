@@ -2,6 +2,7 @@
     "name": "sqs-itest-lambda",
     "version": "1.0.0",
     "devDependencies": {
-        "aws-sdk": "^2.1181.0"
+        "aws-sdk": "^2.1181.0",
+        "@types/aws-lambda": "^8.10.110"
     }
 }
