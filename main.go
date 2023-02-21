@@ -34,6 +34,7 @@ import (
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/injector"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/validator"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -129,9 +130,18 @@ func main() {
 		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
 		Log:                          logger,
 	}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "Lumigo")
+		setupLog.Error(err, "unable to create injector webhook", "webhook", "lumigo-injector")
 		os.Exit(1)
 	}
+
+	if err = (&validator.LumigoValidatorWebhookHandler{
+		LumigoOperatorVersion: lumigoOperatorVersion,
+		Log:                   logger,
+	}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create validator-webhook", "webhook", "lumigo-validator")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
