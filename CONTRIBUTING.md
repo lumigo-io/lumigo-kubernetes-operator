@@ -55,7 +55,15 @@ Deploy the Lumigo operator with:
 
 ```sh
 make docker-build docker-push
-helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.repository=host.docker.internal:5000/controller" --set "controllerManager.manager.image.tag=latest" --set "controllerManager.telemetryProxy.image.repository=host.docker.internal:5000/telemetr-proxy" --set "controllerManager.telemetryProxy.image.tag=latest"
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace
+```
+
+To avoid strange issues with Docker caching the wrong images in your test environment, it is usually a better to always build a new image tag:
+
+```sh
+export IMG_VERSION=1 # Incremend this every time to try a deploy
+make docker-build docker-push
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}"
 ```
 
 ### Troubleshooting
