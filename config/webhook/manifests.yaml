@@ -10,7 +10,7 @@ webhooks:
     service:
       name: injector-webhook-service
       namespace: system
-      path: /v1alpha1/mutate
+      path: /v1alpha1/inject
   failurePolicy: Ignore
   admissionReviewVersions:
   - v1

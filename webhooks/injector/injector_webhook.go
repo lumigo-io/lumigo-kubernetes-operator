@@ -44,7 +44,7 @@ var (
 	decoder = scheme.Codecs.UniversalDecoder()
 )
 
-type LumigoWebhookHandler struct {
+type LumigoInjectorWebhookHandler struct {
 	client                       client.Client
 	decoder                      *admission.Decoder
 	LumigoOperatorVersion        string
@@ -53,7 +53,7 @@ type LumigoWebhookHandler struct {
 	Log                          logr.Logger
 }
 
-func (h *LumigoWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (h *LumigoInjectorWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	webhook := &admission.Webhook{
 		Handler: h,
 	}
@@ -62,24 +62,24 @@ func (h *LumigoWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	mgr.GetWebhookServer().Register("/v1alpha1/mutate", handler)
+	mgr.GetWebhookServer().Register("/v1alpha1/inject", handler)
 
 	return nil
 }
 
 // The client is automatically injected by the Webhook machinery
-func (h *LumigoWebhookHandler) InjectClient(c client.Client) error {
+func (h *LumigoInjectorWebhookHandler) InjectClient(c client.Client) error {
 	h.client = c
 	return nil
 }
 
 // The decoder is automatically injected by the Webhook machinery
-func (h *LumigoWebhookHandler) InjectDecoder(d *admission.Decoder) error {
+func (h *LumigoInjectorWebhookHandler) InjectDecoder(d *admission.Decoder) error {
 	h.decoder = d
 	return nil
 }
 
-func (h *LumigoWebhookHandler) Handle(ctx context.Context, request admission.Request) admission.Response {
+func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admission.Request) admission.Response {
 	log := logf.Log.WithName("lumigo-injector-webhook").WithValues("resource_gvk", request.Kind)
 
 	if request.Operation == admissionv1.Delete {

@@ -123,7 +123,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&injector.LumigoWebhookHandler{
+	if err = (&injector.LumigoInjectorWebhookHandler{
 		LumigoOperatorVersion:        lumigoOperatorVersion,
 		LumigoInjectorImage:          lumigoInjectorImage,
 		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,

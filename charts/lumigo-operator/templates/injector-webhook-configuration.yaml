@@ -28,7 +28,7 @@ webhooks:
     service:
       name: '{{ include "helm.fullname" . }}-injector-webhook-service'
       namespace: '{{ .Release.Namespace }}'
-      path: /v1alpha1/mutate
+      path: /v1alpha1/inject
   failurePolicy: Ignore
   name: lumigoinjector.kb.io
   rules:
