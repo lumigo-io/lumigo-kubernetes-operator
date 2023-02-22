@@ -124,7 +124,7 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Sprintf("Tracing injection is disabled in the '%s' namespace; resource will not be mutated", namespace))
 	}
 
-	if err := validateMutationShouldOccur(&lumigo); err != nil {
+	if err := h.validateMutationShouldOccur(&lumigo); err != nil {
 		// If we find a reason why the mutation should not occur, pass that as reason why the admission is allowed without modifications
 		return admission.Allowed(err.Error())
 	}
@@ -294,19 +294,17 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 
 }
 
-func validateMutationShouldOccur(lumigo *operatorv1alpha1.Lumigo) error {
+func (h *LumigoInjectorWebhookHandler) validateMutationShouldOccur(lumigo *operatorv1alpha1.Lumigo) error {
 	namespace := lumigo.ObjectMeta.Namespace
 
 	status := &lumigo.Status
 
 	// Check if the Lumigo status is active (so the injection _could_ be performed)
-	activeCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeActive)
-	if activeCondition == nil || activeCondition.Status != corev1.ConditionTrue {
+	if activeCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeActive); activeCondition == nil || activeCondition.Status != corev1.ConditionTrue {
 		return fmt.Errorf("the Lumigo object in the '%s' namespace is not active; resource will not be mutated", namespace)
 	}
 
-	errorCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeError)
-	if errorCondition != nil && errorCondition.Status == corev1.ConditionTrue {
+	if errorCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeError); errorCondition != nil && errorCondition.Status == corev1.ConditionTrue {
 		return fmt.Errorf("the Lumigo object in the '%s' namespace is in an erroneous status; resource will not be mutated", namespace)
 	}
 

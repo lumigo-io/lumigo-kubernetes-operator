@@ -78,7 +78,16 @@ func (m *mutatorImpl) MutateAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error {
 		return err
 	}
 
+	if daemonSet.ObjectMeta.Labels == nil {
+		daemonSet.ObjectMeta.Labels = map[string]string{}
+	}
+
 	daemonSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	if daemonSet.Spec.Template.ObjectMeta.Labels == nil {
+		daemonSet.Spec.Template.ObjectMeta.Labels = map[string]string{}
+	}
+
 	daemonSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
 
 	return nil
@@ -93,7 +102,16 @@ func (m *mutatorImpl) MutateAppsV1Deployment(deployment *appsv1.Deployment) erro
 		return err
 	}
 
+	if deployment.ObjectMeta.Labels == nil {
+		deployment.ObjectMeta.Labels = map[string]string{}
+	}
+
 	deployment.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	if deployment.Spec.Template.ObjectMeta.Labels == nil {
+		deployment.Spec.Template.ObjectMeta.Labels = map[string]string{}
+	}
+
 	deployment.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
 
 	return nil
@@ -108,7 +126,16 @@ func (m *mutatorImpl) MutateAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) erro
 		return err
 	}
 
+	if replicaSet.ObjectMeta.Labels == nil {
+		replicaSet.ObjectMeta.Labels = map[string]string{}
+	}
+
 	replicaSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	if replicaSet.Spec.Template.ObjectMeta.Labels == nil {
+		replicaSet.Spec.Template.ObjectMeta.Labels = map[string]string{}
+	}
+
 	replicaSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
 
 	return nil
@@ -123,7 +150,16 @@ func (m *mutatorImpl) MutateAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) e
 		return err
 	}
 
+	if statefulSet.ObjectMeta.Labels == nil {
+		statefulSet.ObjectMeta.Labels = map[string]string{}
+	}
+
 	statefulSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	if statefulSet.Spec.Template.ObjectMeta.Labels == nil {
+		statefulSet.Spec.Template.ObjectMeta.Labels = map[string]string{}
+	}
+
 	statefulSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
 
 	return nil
@@ -138,7 +174,16 @@ func (m *mutatorImpl) MutateBatchV1CronJob(batchJob *batchv1.CronJob) error {
 		return err
 	}
 
+	if batchJob.ObjectMeta.Labels == nil {
+		batchJob.ObjectMeta.Labels = map[string]string{}
+	}
+
 	batchJob.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	if batchJob.Spec.JobTemplate.Spec.Template.Labels == nil {
+		batchJob.Spec.JobTemplate.Spec.Template.Labels = map[string]string{}
+	}
+
 	batchJob.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
 
 	return nil
@@ -153,7 +198,16 @@ func (m *mutatorImpl) MutateBatchV1Job(job *batchv1.Job) error {
 		return err
 	}
 
+	if job.ObjectMeta.Labels == nil {
+		job.ObjectMeta.Labels = map[string]string{}
+	}
+
 	job.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+
+	if job.Spec.Template.ObjectMeta.Labels == nil {
+		job.Spec.Template.ObjectMeta.Labels = map[string]string{}
+	}
+
 	job.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
 
 	return nil
@@ -180,6 +234,10 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 	}
 
 	volumes := podSpec.Volumes
+	if volumes == nil {
+		volumes = []corev1.Volume{}
+	}
+
 	lumigoInjectorVolumeIndex := slices.IndexFunc(podSpec.Volumes, func(c corev1.Volume) bool { return c.Name == "lumigo-injector" })
 	if lumigoInjectorVolumeIndex < 0 {
 		volumes = append(volumes, *lumigoInjectorVolume)
@@ -207,6 +265,10 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 	}
 
 	initContainers := podSpec.InitContainers
+	if initContainers == nil {
+		initContainers = []corev1.Container{}
+	}
+
 	lumigoInjectorContainerIndex := slices.IndexFunc(initContainers, func(c corev1.Container) bool { return c.Name == "lumigo-injector" })
 	if lumigoInjectorContainerIndex < 0 {
 		initContainers = append(initContainers, *lumigoInjectorContainer)
@@ -215,7 +277,7 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 	}
 	podSpec.InitContainers = initContainers
 
-	patchedContainers := make([]corev1.Container, 0)
+	patchedContainers := []corev1.Container{}
 	for _, container := range podSpec.Containers {
 		lumigoInjectorVolumeMount := &corev1.VolumeMount{
 			Name:      "lumigo-injector",
@@ -224,6 +286,10 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		}
 
 		volumeMounts := container.VolumeMounts
+		if volumeMounts == nil {
+			volumeMounts = []corev1.VolumeMount{}
+		}
+
 		lumigoInjectorVolumeMountIndex := slices.IndexFunc(volumeMounts, func(c corev1.VolumeMount) bool { return c.MountPath == lumigoInjectorVolumeMountPoint })
 		if lumigoInjectorVolumeMountIndex < 0 {
 			volumeMounts = append(volumeMounts, *lumigoInjectorVolumeMount)
@@ -233,6 +299,9 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		container.VolumeMounts = volumeMounts
 
 		envVars := container.Env
+		if envVars == nil {
+			envVars = []corev1.EnvVar{}
+		}
 
 		ldPreloadEnvVar := &corev1.EnvVar{
 			Name:  "LD_PRELOAD",
