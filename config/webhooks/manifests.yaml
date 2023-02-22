@@ -1,0 +1,74 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: injector-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhooks-service
+      namespace: system
+      path: /v1alpha1/inject
+  failurePolicy: Ignore
+  admissionReviewVersions:
+  - v1
+  - v1beta1
+  name: lumigoinjector.kb.io
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - daemonsets
+    - deployments
+    - replicasets
+    - statefulsets
+  - apiGroups:
+    - batch
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - cronjobs
+    - jobs
+  scope: "Namespaced"
+  sideEffects: None
+  timeoutSeconds: 5
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validator-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhooks-service
+      namespace: system
+      path: /v1alpha1/validate
+  failurePolicy: Fail
+  admissionReviewVersions:
+  - v1
+  - v1beta1
+  name: lumigovalidator.kb.io
+  rules:
+  - apiGroups:
+    - operator.lumigo.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - lumigoes
+  scope: "Namespaced"
+  sideEffects: None
+  timeoutSeconds: 5
