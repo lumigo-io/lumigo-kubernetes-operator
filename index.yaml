@@ -2,6 +2,23 @@ apiVersion: v1
 entries:
   lumigo-operator:
   - apiVersion: v2
+    appVersion: "3"
+    created: "2023-02-22T18:03:03.402485109Z"
+    description: Chart to deploy the Lumigo Kubernetes Operator
+    digest: d784523e772b8b3e907c24344d8cbc237b29d2604689b6c39500a7cace3210e9
+    home: https://github.com/lumigo-io/lumigo-kubernetes-operator/
+    icon: https://raw.githubusercontent.com/lumigo-io/lumigo-kubernetes-operator/main/images/lumigo.png
+    keywords:
+    - observability
+    - monitoring
+    - distributed tracing
+    - opentelemetry
+    name: lumigo-operator
+    type: application
+    urls:
+    - https://github.com/lumigo-io/lumigo-kubernetes-operator/releases/download/v3/lumigo-operator-3.tgz
+    version: "3"
+  - apiVersion: v2
     appVersion: "2"
     created: "2023-02-21T16:08:53.439536075Z"
     description: Chart to deploy the Lumigo Kubernetes Operator
@@ -35,4 +52,4 @@ entries:
     urls:
     - https://github.com/lumigo-io/lumigo-kubernetes-operator/releases/download/v1/lumigo-operator-1.tgz
     version: 1.0.0
-generated: "2023-02-21T16:08:53.438648976Z"
+generated: "2023-02-22T18:03:03.401302319Z"
