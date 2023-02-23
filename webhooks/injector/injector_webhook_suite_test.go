@@ -62,7 +62,7 @@ var (
 )
 
 var lumigoApiVersion = fmt.Sprintf("%s/%s", operatorv1alpha1.GroupVersion.Group, operatorv1alpha1.GroupVersion.Version)
-var lumigoOperatorVersion = "0.test"
+var lumigoOperatorVersion = "2b1e6b60ca871edee1d8f543c400f0b24663349144b78c79cfa006efaad6176a" // Unrealistically long, but we need to ensure we don't set label values too long
 var lumigoInjectorImage = "localhost:5000/lumigo-autotrace:test"
 var telemetryProxyOtlpServiceUrl = "lumigo-telemetry-proxy.lumigo-system.svc.cluster.local"
 
@@ -432,10 +432,10 @@ var _ = Context("Lumigo validator webhook", func() {
 			}
 
 			Expect(deploymentAfter.ObjectMeta.Labels).To(BeEquivalentTo(map[string]string{
-				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion,
+				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion[0:7],
 			}))
 			Expect(deploymentAfter.Spec.Template.ObjectMeta.Labels).To(BeEquivalentTo(map[string]string{
-				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion,
+				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion[0:7],
 				"deployment":                     name,
 			}))
 			Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(BeTheLumigoInjectorContainer(lumigoInjectorImage)))

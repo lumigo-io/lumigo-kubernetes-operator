@@ -55,24 +55,30 @@ type Mutator interface {
 }
 
 type mutatorImpl struct {
-	log                         *logr.Logger
-	lumigoAutotraceLabelVersion string
-	lumigoEndpoint              string
-	lumigoToken                 *operatorv1alpha1.Credentials
-	lumigoInjectorImage         string
+	log                       *logr.Logger
+	lumigoAutotraceLabelValue string
+	lumigoEndpoint            string
+	lumigoToken               *operatorv1alpha1.Credentials
+	lumigoInjectorImage       string
 }
 
 func (m *mutatorImpl) GetAutotraceLabelValue() string {
-	return m.lumigoAutotraceLabelVersion
+	return m.lumigoAutotraceLabelValue
 }
 
 func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string) (Mutator, error) {
+	version := LumigoOperatorVersion
+
+	if len(version) > 8 {
+		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
+	}
+
 	return &mutatorImpl{
-		log:                         Log,
-		lumigoAutotraceLabelVersion: "lumigo-operator.v" + LumigoOperatorVersion,
-		lumigoEndpoint:              TelemetryProxyOtlpServiceUrl,
-		lumigoToken:                 LumigoToken,
-		lumigoInjectorImage:         LumigoInjectorImage,
+		log:                       Log,
+		lumigoAutotraceLabelValue: "lumigo-operator.v" + version,
+		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
+		lumigoToken:               LumigoToken,
+		lumigoInjectorImage:       LumigoInjectorImage,
 	}, nil
 }
 
@@ -89,13 +95,13 @@ func (m *mutatorImpl) MutateAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error {
 		daemonSet.ObjectMeta.Labels = map[string]string{}
 	}
 
-	daemonSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	daemonSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	if daemonSet.Spec.Template.ObjectMeta.Labels == nil {
 		daemonSet.Spec.Template.ObjectMeta.Labels = map[string]string{}
 	}
 
-	daemonSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	daemonSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	return nil
 }
@@ -113,13 +119,13 @@ func (m *mutatorImpl) MutateAppsV1Deployment(deployment *appsv1.Deployment) erro
 		deployment.ObjectMeta.Labels = map[string]string{}
 	}
 
-	deployment.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	deployment.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	if deployment.Spec.Template.ObjectMeta.Labels == nil {
 		deployment.Spec.Template.ObjectMeta.Labels = map[string]string{}
 	}
 
-	deployment.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	deployment.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	return nil
 }
@@ -137,13 +143,13 @@ func (m *mutatorImpl) MutateAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) erro
 		replicaSet.ObjectMeta.Labels = map[string]string{}
 	}
 
-	replicaSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	replicaSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	if replicaSet.Spec.Template.ObjectMeta.Labels == nil {
 		replicaSet.Spec.Template.ObjectMeta.Labels = map[string]string{}
 	}
 
-	replicaSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	replicaSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	return nil
 }
@@ -161,13 +167,13 @@ func (m *mutatorImpl) MutateAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) e
 		statefulSet.ObjectMeta.Labels = map[string]string{}
 	}
 
-	statefulSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	statefulSet.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	if statefulSet.Spec.Template.ObjectMeta.Labels == nil {
 		statefulSet.Spec.Template.ObjectMeta.Labels = map[string]string{}
 	}
 
-	statefulSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	statefulSet.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	return nil
 }
@@ -185,13 +191,13 @@ func (m *mutatorImpl) MutateBatchV1CronJob(batchJob *batchv1.CronJob) error {
 		batchJob.ObjectMeta.Labels = map[string]string{}
 	}
 
-	batchJob.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	batchJob.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	if batchJob.Spec.JobTemplate.Spec.Template.Labels == nil {
 		batchJob.Spec.JobTemplate.Spec.Template.Labels = map[string]string{}
 	}
 
-	batchJob.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	batchJob.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	return nil
 }
@@ -209,13 +215,13 @@ func (m *mutatorImpl) MutateBatchV1Job(job *batchv1.Job) error {
 		job.ObjectMeta.Labels = map[string]string{}
 	}
 
-	job.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	job.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	if job.Spec.Template.ObjectMeta.Labels == nil {
 		job.Spec.Template.ObjectMeta.Labels = map[string]string{}
 	}
 
-	job.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelVersion
+	job.Spec.Template.ObjectMeta.Labels[LumigoAutoTraceLabelKey] = m.lumigoAutotraceLabelValue
 
 	return nil
 }
