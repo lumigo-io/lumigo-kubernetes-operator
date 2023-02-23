@@ -54,7 +54,6 @@ webhooks:
     resources:
     - cronjobs
     - jobs
-  scope: "Namespaced"
   sideEffects: None
   timeoutSeconds: 5
 ---
@@ -85,6 +84,5 @@ webhooks:
     - CREATE
     resources:
     - lumigoes
-  scope: "Namespaced"
   sideEffects: None
   timeoutSeconds: 5
