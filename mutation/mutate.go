@@ -34,8 +34,15 @@ import (
 
 const LumigoAutoTraceLabelKey = "lumigo.auto-trace"
 
-const targetDirectoryPath = "/target"
-const lumigoInjectorVolumeMountPoint = "/opt/lumigo"
+const TargetDirectoryEnvVarName = "TARGET_DIRECTORY"
+const TargetDirectoryPath = "/target"
+const LumigoInjectorContainerName = "lumigo-injector"
+const LumigoInjectorVolumeName = "lumigo-injector"
+const LumigoInjectorVolumeMountPoint = "/opt/lumigo"
+const LumigoTracerTokenEnvVarName = "LUMIGO_TRACER_TOKEN"
+const LumigoEndpointEnvVarName = "LUMIGO_ENDPOINT"
+const LdPreloadEnvVarName = "LD_PRELOAD"
+const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
 
 type Mutator interface {
 	GetAutotraceLabelValue() string
@@ -225,7 +232,7 @@ func (m *mutatorImpl) validateShouldMutate(resourceMeta metav1.ObjectMeta) error
 
 func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 	lumigoInjectorVolume := &corev1.Volume{
-		Name: "lumigo-injector",
+		Name: LumigoInjectorVolumeName,
 		VolumeSource: corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{
 				SizeLimit: resource.NewScaledQuantity(200, resource.Mega),
@@ -238,7 +245,7 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		volumes = []corev1.Volume{}
 	}
 
-	lumigoInjectorVolumeIndex := slices.IndexFunc(podSpec.Volumes, func(c corev1.Volume) bool { return c.Name == "lumigo-injector" })
+	lumigoInjectorVolumeIndex := slices.IndexFunc(podSpec.Volumes, func(c corev1.Volume) bool { return c.Name == LumigoInjectorVolumeName })
 	if lumigoInjectorVolumeIndex < 0 {
 		volumes = append(volumes, *lumigoInjectorVolume)
 	} else {
@@ -247,19 +254,19 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 	podSpec.Volumes = volumes
 
 	lumigoInjectorContainer := &corev1.Container{
-		Name:  "lumigo-injector",
+		Name:  LumigoInjectorContainerName,
 		Image: m.lumigoInjectorImage,
 		Env: []corev1.EnvVar{
 			{
-				Name:  "TARGET_DIRECTORY",
-				Value: targetDirectoryPath,
+				Name:  TargetDirectoryEnvVarName,
+				Value: TargetDirectoryPath,
 			},
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			{
-				Name:      "lumigo-injector",
+				Name:      LumigoInjectorVolumeName,
 				ReadOnly:  false,
-				MountPath: targetDirectoryPath,
+				MountPath: TargetDirectoryPath,
 			},
 		},
 	}
@@ -269,7 +276,7 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		initContainers = []corev1.Container{}
 	}
 
-	lumigoInjectorContainerIndex := slices.IndexFunc(initContainers, func(c corev1.Container) bool { return c.Name == "lumigo-injector" })
+	lumigoInjectorContainerIndex := slices.IndexFunc(initContainers, func(c corev1.Container) bool { return c.Name == LumigoInjectorContainerName })
 	if lumigoInjectorContainerIndex < 0 {
 		initContainers = append(initContainers, *lumigoInjectorContainer)
 	} else {
@@ -280,9 +287,9 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 	patchedContainers := []corev1.Container{}
 	for _, container := range podSpec.Containers {
 		lumigoInjectorVolumeMount := &corev1.VolumeMount{
-			Name:      "lumigo-injector",
+			Name:      LumigoInjectorVolumeName,
 			ReadOnly:  true,
-			MountPath: lumigoInjectorVolumeMountPoint,
+			MountPath: LumigoInjectorVolumeMountPoint,
 		}
 
 		volumeMounts := container.VolumeMounts
@@ -290,7 +297,7 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 			volumeMounts = []corev1.VolumeMount{}
 		}
 
-		lumigoInjectorVolumeMountIndex := slices.IndexFunc(volumeMounts, func(c corev1.VolumeMount) bool { return c.MountPath == lumigoInjectorVolumeMountPoint })
+		lumigoInjectorVolumeMountIndex := slices.IndexFunc(volumeMounts, func(c corev1.VolumeMount) bool { return c.MountPath == LumigoInjectorVolumeMountPoint })
 		if lumigoInjectorVolumeMountIndex < 0 {
 			volumeMounts = append(volumeMounts, *lumigoInjectorVolumeMount)
 		} else {
@@ -304,10 +311,10 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		}
 
 		ldPreloadEnvVar := &corev1.EnvVar{
-			Name:  "LD_PRELOAD",
-			Value: lumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so",
+			Name:  LdPreloadEnvVarName,
+			Value: LdPreloadEnvVarValue,
 		}
-		ldPreloadEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == "LD_PRELOAD" })
+		ldPreloadEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LdPreloadEnvVarName })
 		if ldPreloadEnvVarIndex < 0 {
 			envVars = append(envVars, *ldPreloadEnvVar)
 		} else {
@@ -315,7 +322,7 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		}
 
 		lumigoTracerTokenEnvVar := &corev1.EnvVar{
-			Name: "LUMIGO_TRACER_TOKEN",
+			Name: LumigoTracerTokenEnvVarName,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -326,7 +333,7 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 				},
 			},
 		}
-		lumigoTracerTokenEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == "LUMIGO_TRACER_TOKEN" })
+		lumigoTracerTokenEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoTracerTokenEnvVarName })
 		if lumigoTracerTokenEnvVarIndex < 0 {
 			envVars = append(envVars, *lumigoTracerTokenEnvVar)
 		} else {
@@ -334,10 +341,10 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		}
 
 		lumigoEndpointEnvVar := &corev1.EnvVar{
-			Name:  "LUMIGO_ENDPOINT",
+			Name:  LumigoEndpointEnvVarName,
 			Value: m.lumigoEndpoint,
 		}
-		lumigoEndpointEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == "LUMIGO_ENDPOINT" })
+		lumigoEndpointEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoEndpointEnvVarName })
 		if lumigoEndpointEnvVarIndex < 0 {
 			envVars = append(envVars, *lumigoEndpointEnvVar)
 		} else {
