@@ -49,18 +49,26 @@ jobs:
         with:
           fetch-depth: 2 # We need this commit and the previous to check validity of version change
       - name: Validate version change
-        run: ./.github/workflows/scripts/validate_version_increment.sh
+        id: validate-version-change
+        run: |
+          if ./.github/workflows/scripts/validate_version_increment.sh; then
+            echo -n "perform-release=true" >> ${GITHUB_OUTPUT}
+          else
+            echo -n "perform-release=false" >> ${GITHUB_OUTPUT}
+          fi
       - name: Export version
         id: export_version
         run: |
           echo -n "version=$(cat VERSION)" >> ${GITHUB_OUTPUT}
     outputs:
+      perform-release: ${{ steps.validate-version-change.outputs.perform-release }}
       version: ${{ steps.export_version.outputs.version }}
 
   publish-controller-ecr-image:
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
+    if: ${{ needs.validate-release-increment.outputs.perform-release == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -86,7 +94,7 @@ jobs:
           registry-type: public
       - name: Build and push container image to Amazon ECR
         env:
-          CONTROLLER_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}
+          CONTROLLER_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate_release_increment.outputs.version }}
         run: |
           make docker-buildx-manager
 
@@ -94,6 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
+    if: ${{ needs.validate-release-increment.outputs.perform-release == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -119,7 +128,7 @@ jobs:
           registry-type: public
       - name: Build and push container image to Amazon ECR
         env:
-          PROXY_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
+          PROXY_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate_release_increment.outputs.version }}
         run: |
           make docker-buildx-telemetry-proxy
 
@@ -129,6 +138,7 @@ jobs:
     - validate-release-increment
     - publish-controller-ecr-image
     - publish-telemetry-proxy-ecr-image
+    if: ${{ needs.validate-release-increment.outputs.perform-release }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
