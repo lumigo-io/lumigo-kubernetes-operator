@@ -67,7 +67,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          context: src
           file: Dockerfile.controller
           tags: localhost:5000/controller:${{ github.sha }}
           push: true
@@ -75,7 +74,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          context: src
           file: Dockerfile.proxy
           tags: localhost:5000/telemetry-proxy:${{ github.sha }}
           push: true
