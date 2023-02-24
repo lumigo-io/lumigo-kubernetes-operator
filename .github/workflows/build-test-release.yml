@@ -69,7 +69,7 @@ jobs:
           helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
           helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --wait
 
-          kubectl get all --all
+          kubectl get all -A
       - name: Build local operator
         env:
           CONTROLLER_IMG: localhost:5000/controller:${{ github.sha }}
@@ -82,7 +82,7 @@ jobs:
             --set "${PROXY_IMG}"
             --wait
 
-          kubectl get all --all
+          kubectl get all -A
 
   all-tests:
     runs-on: ubuntu-latest
