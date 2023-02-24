@@ -61,6 +61,8 @@ jobs:
         run: |
           helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
 
+          helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --dry-run
+
           if ! helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait --timeout 3m; then
             kubectl get all -A
             kubectl get pods -n lumigo-system
@@ -87,6 +89,12 @@ jobs:
           CONTROLLER_IMG: localhost:5000/controller:${{ github.run_number }}
           PROXY_IMG: localhost:5000/telemetry-proxy:${{ github.run_number }}
         run: |
+          helm upgrade --install lumigo charts/lumigo-operator \
+            --namespace lumigo-system --create-namespace \
+            --set "controllerManager.manager.image.tag=${CONTROLLER_IMG}" \
+            --set "controllerManager.telemetryProxy.image.tag=${PROXY_IMG}" \
+            --dry-run
+
           if ! helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.tag=${CONTROLLER_IMG}" \
