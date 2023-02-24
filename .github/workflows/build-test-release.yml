@@ -60,7 +60,7 @@ jobs:
       - name: Install latest Helm chart on artifactory
         run: |
           helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
-          helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait 
+          helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait --timeout 10m
 
           kubectl get all -A
       - name: Build controller and push to local repo
@@ -86,8 +86,7 @@ jobs:
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.tag=${CONTROLLER_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${PROXY_IMG}" \
-            --debug \
-            --wait; then
+            --debug --wait --timeout 10m; then
 
             kubectl get all -A
             kubectl get pods -n lumigo-system
