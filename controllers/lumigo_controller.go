@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -49,6 +50,8 @@ const (
 	defaultErrRequeuePeriod = 1 * time.Second
 	maxTriggeredStateGroups = 10
 )
+
+var LumigoControllerFinalizer = "operator.lumigo.io/finalizer"
 
 // LumigoReconciler reconciles a Lumigo object
 type LumigoReconciler struct {
@@ -100,11 +103,7 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if apierrors.IsNotFound(err) {
 			// Request object may have been deleted after the reconcile request has been issued,
 			// e.g., due to garbage collection.
-			log.Info("Lumigo instance deleted, removing instrumentation from namespace", "namespace", req.Namespace)
-			if err := r.removeLumigoFromResources(ctx, req.Namespace, &log); err != nil {
-				log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
-			}
-
+			log.Info("Lumigo instance deleted")
 			return result, nil
 		}
 		// Error reading the object - requeue the request.
@@ -112,6 +111,34 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			Requeue:      true,
 			RequeueAfter: defaultErrRequeuePeriod,
 		}, err
+	}
+
+	if lumigoInstance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The Lumigo instance is not being deleted, so ensure it has our finalizer
+		if !controllerutil.ContainsFinalizer(lumigoInstance, LumigoControllerFinalizer) {
+			controllerutil.AddFinalizer(lumigoInstance, LumigoControllerFinalizer)
+			if err := r.Update(ctx, lumigoInstance); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// The Lumigo instance is being deleted
+		if controllerutil.ContainsFinalizer(lumigoInstance, LumigoControllerFinalizer) {
+			log.Info("Lumigo instance is being deleted, removing instrumentation from resources in namespace")
+			if err := r.removeLumigoFromResources(ctx, req.Namespace, &log); err != nil {
+				log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
+				return ctrl.Result{}, err
+			}
+
+			// remove our finalizer from the list and update it.
+			controllerutil.RemoveFinalizer(lumigoInstance, LumigoControllerFinalizer)
+			if err := r.Update(ctx, lumigoInstance); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
+		// Stop reconciliation as the Lumigo instance is being deleted
+		return ctrl.Result{}, nil
 	}
 
 	// Validate there is only one Lumigo instance in any one namespace
