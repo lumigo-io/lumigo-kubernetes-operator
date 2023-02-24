@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"regexp"
 	"time"
@@ -51,7 +52,12 @@ const (
 	maxTriggeredStateGroups = 10
 )
 
-var LumigoControllerFinalizer = "operator.lumigo.io/finalizer"
+var (
+	thisPodNamespacedName = types.NamespacedName{
+		Namespace: os.Getenv("LUMIGO_CONTROLLER_NAMESPACE"),
+		Name:      os.Getenv("LUMIGO_CONTROLLER_POD_NAME"),
+	}
+)
 
 // LumigoReconciler reconciles a Lumigo object
 type LumigoReconciler struct {
@@ -76,6 +82,7 @@ func (r *LumigoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// Watches(&source.Kind{Type: &appsv1.StatefulSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
 		// Watches(&source.Kind{Type: &batchv1.CronJob{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
 		// Watches(&source.Kind{Type: &batchv1.Job{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfInjectedByLumigo)).
+		Watches(&source.Kind{Type: &appsv1.Deployment{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfLumigoControllerDeployment)).
 		Complete(r)
 }
 
@@ -115,25 +122,68 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	if lumigoInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The Lumigo instance is not being deleted, so ensure it has our finalizer
-		if !controllerutil.ContainsFinalizer(lumigoInstance, LumigoControllerFinalizer) {
-			controllerutil.AddFinalizer(lumigoInstance, LumigoControllerFinalizer)
+		if !controllerutil.ContainsFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer) {
+			controllerutil.AddFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer)
 			if err := r.Update(ctx, lumigoInstance); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
 	} else {
 		// The Lumigo instance is being deleted
-		if controllerutil.ContainsFinalizer(lumigoInstance, LumigoControllerFinalizer) {
+		if controllerutil.ContainsFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer) {
+			injectionSpec := lumigoInstance.Spec.Tracing.Injection
+
 			log.Info("Lumigo instance is being deleted, removing instrumentation from resources in namespace")
-			if err := r.removeLumigoFromResources(ctx, req.Namespace, &log); err != nil {
-				log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
-				return ctrl.Result{}, err
+			if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.RemoveLumigoFromResourcesOnDeletion, true) {
+				if err := r.removeLumigoFromResources(ctx, req.Namespace, &log); err != nil {
+					log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
+					return ctrl.Result{}, err
+				}
+			} else {
+				log.Info("Lumigo instance is being deleted, but instrumentation from resources in namespace will not be removed", "Injection.Enabled", injectionSpec.Enabled, "Injection.RemoveLumigoFromResourcesOnDeletion", injectionSpec.RemoveLumigoFromResourcesOnDeletion)
 			}
 
 			// remove our finalizer from the list and update it.
-			controllerutil.RemoveFinalizer(lumigoInstance, LumigoControllerFinalizer)
+			controllerutil.RemoveFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer)
 			if err := r.Update(ctx, lumigoInstance); err != nil {
 				return ctrl.Result{}, err
+			}
+		}
+
+		// It might be the instance is deleted because the Lumigo controller deployment is being deleted!
+		// If this is the case, remove the finalizer from the Lumigo controller deployment if there are
+		// no more Lumigo instances left
+		lumigoControllerDeployment, err := r.getLumigoControllerDeployment(ctx)
+		if err != nil {
+			log.Error(err, "cannot retrieve Lumigo controller's deployment to check whether it is being deleted")
+			return ctrl.Result{}, err
+		}
+
+		if !lumigoControllerDeployment.DeletionTimestamp.IsZero() {
+			// Lumigo controller deployment is being deleted! Remove its finalizer if
+			// there are no instances of Lumigo left that are supposed to remove the
+			// instrumentation upon deletion
+			allLumigoes := &operatorv1alpha1.LumigoList{}
+			if err := r.Client.List(ctx, allLumigoes); err != nil {
+				log.Error(err, "cannot retrieve Lumigo instances")
+				return ctrl.Result{}, err
+			}
+
+			pendingLumigoCount := 0
+			for _, lumigo := range allLumigoes.Items {
+				if isTruthy(lumigo.Spec.Tracing.Injection.Enabled, true) && isTruthy(lumigo.Spec.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion, true) {
+					pendingLumigoCount = pendingLumigoCount + 1
+				}
+			}
+
+			if pendingLumigoCount > 0 {
+				log.Info(fmt.Sprintf("still %d instances of Lumigo that need to remove instrumentation", pendingLumigoCount))
+			} else {
+				// No Lumigo instances left that need to remove the instrumentation,
+				// we can initiate the self-destruction of this deployment by removing
+				// the finalizer
+				controllerutil.RemoveFinalizer(lumigoControllerDeployment, operatorv1alpha1.LumigoControllerFinalizer)
+				log.Info("no more instances of Lumigo that need to remove instrumentation, removing controller finalizer")
 			}
 		}
 
@@ -184,9 +234,15 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return r.updateStatusIfNeeded(log, lumigoInstance, now, fmt.Errorf("the Lumigo token is not valid: %w", err), result)
 	}
 
+	injectionSpec := lumigoInstance.Spec.Tracing.Injection
 	// TODO Do only on creation of the Lumigo instance
-	if err := r.injectLumigoIntoResources(ctx, lumigoInstance, &log); err != nil {
-		log.Error(err, "cannot inject resources", "namespace", req.Namespace)
+	if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.InjectLumigoIntoExistingResourcesOnCreation, true) {
+		log.Info("Lumigo instance just created, injecting instrumentation into resources in namespace")
+		if err := r.injectLumigoIntoResources(ctx, lumigoInstance, &log); err != nil {
+			log.Error(err, "cannot inject resources", "namespace", req.Namespace)
+		}
+	} else {
+		log.Info("Lumigo instance is just created, but instrumentation from resources in namespace will not be injected", "Injection.Enabled", injectionSpec.Enabled, "Injection.InjectLumigoIntoExistingResourcesOnCreation", injectionSpec.InjectLumigoIntoExistingResourcesOnCreation)
 	}
 
 	// Clear errors if any, all is fine
@@ -296,6 +352,61 @@ func (r *LumigoReconciler) enqueueIfSecretReferencedByLumigo(obj client.Object) 
 					}})
 				}
 			}
+		}
+	}
+
+	return reconcileRequests
+}
+
+func (r *LumigoReconciler) enqueueIfLumigoControllerDeployment(obj client.Object) []reconcile.Request {
+	// If it is the Lumigo controller deployment and it is being deleted, request reconciliation for
+	// all Lumigo instances owned by it
+	reconcileRequests := []reconcile.Request{{}}
+
+	// TODO Validate it is a deployment
+
+	ctx := context.TODO()
+	namespace := obj.GetNamespace()
+	name := obj.GetName()
+
+	deployment := &appsv1.Deployment{}
+	if err := r.Client.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	}, deployment); err != nil {
+		r.Log.Error(fmt.Errorf("cannot retrieve deployment"), "namespace", namespace, "name", name)
+		// TODO Can we make this more resilient?
+		return reconcileRequests
+	}
+
+	if deployment.DeletionTimestamp.IsZero() {
+		// The deployment is not being deleted, nothing to do about it
+		return reconcileRequests
+	}
+
+	if deployment.Namespace == thisPodNamespacedName.Namespace {
+		// Oooook, this deployment is in the operator's namespace
+		// Are we getting deleted?
+		lumigoControllerDeployment, err := r.getLumigoControllerDeployment(ctx)
+		if err != nil {
+			r.Log.Error(err, "cannot retrieve Lumigo controller deployment")
+			// TODO Can we make this more resilient?
+			return reconcileRequests
+		}
+
+		if deployment.UID != lumigoControllerDeployment.UID {
+			// No, it's now our deployment being deleted
+			return reconcileRequests
+		}
+
+		// Our deployment is marked for deletion! Let's delete all Lumigo instances
+		// so that, those that are marked as needing to remove instrumentation on deletion,
+		// will do it
+		r.Log.Info("This Lumigo controller's deployment is being deleted; checking which Lumigo instances need to remove injection on delete")
+
+		if err := r.Client.DeleteAllOf(ctx, &operatorv1alpha1.Lumigo{}, &client.DeleteAllOfOptions{}); err != nil {
+			r.Log.Error(err, "cannot delete all Lumigo instances owned by this controller")
+			return reconcileRequests
 		}
 	}
 
@@ -666,4 +777,39 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namesp
 	}
 
 	return nil
+}
+
+func (r *LumigoReconciler) getLumigoControllerDeployment(ctx context.Context) (*appsv1.Deployment, error) {
+	thisPod := &corev1.Pod{}
+	if err := r.Client.Get(ctx, thisPodNamespacedName, thisPod); err != nil {
+		return nil, fmt.Errorf("cannot retrieve controller pod: %w", err)
+	}
+
+	ownerReplicaSet := &appsv1.ReplicaSet{}
+	if err := r.Client.Get(ctx, types.NamespacedName{
+		Namespace: thisPodNamespacedName.Namespace,
+		Name:      thisPod.OwnerReferences[0].Name,
+	}, ownerReplicaSet); err != nil {
+		return nil, fmt.Errorf("cannot retrieve owner replicatset of controller pod: %w", err)
+	}
+
+	ownerDeployment := &appsv1.Deployment{}
+	if err := r.Client.Get(ctx, types.NamespacedName{
+		Namespace: ownerReplicaSet.Namespace,
+		Name:      ownerReplicaSet.OwnerReferences[0].Name,
+	}, ownerDeployment); err != nil {
+		return nil, fmt.Errorf("cannot retrieve owner deployment of controller pod: %w", err)
+	}
+
+	return ownerDeployment, nil
+}
+
+func isTruthy(value *bool, defaultIfNil bool) bool {
+	v := defaultIfNil
+
+	if value != nil {
+		v = *value
+	}
+
+	return v
 }

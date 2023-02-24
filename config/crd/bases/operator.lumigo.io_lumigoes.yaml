@@ -64,11 +64,24 @@ spec:
                     properties:
                       enabled:
                         description: Whether Daemonsets, Deployments, ReplicaSets,
-                          StatefulSets, CronJobs and Jobs will be injected by Lumigo
-                          or not. If unspecified, defaults to `true`
+                          StatefulSets, CronJobs and Jobs that are created or updated
+                          after the creation of the Lumigo resource be injected. If
+                          unspecified, defaults to `true`
                         type: boolean
-                    required:
-                    - enabled
+                      injectLumigoIntoExistingResourcesOnCreation:
+                        description: Whether Daemonsets, Deployments, ReplicaSets,
+                          StatefulSets, CronJobs and Jobs that already exist when
+                          the Lumigo resource is created, will be updated with injection.
+                          If unspecified, defaults to `true`. It requires `Enabled`
+                          to be set to `true`.
+                        type: boolean
+                      removeLumigoFromResourcesOnDeletion:
+                        description: Whether Daemonsets, Deployments, ReplicaSets,
+                          StatefulSets, CronJobs and Jobs that are injected with Lumigo
+                          will be updated to remove the injection when the Lumigo
+                          resource is deleted. If unspecified, defaults to `true`.
+                          It requires `Enabled` to be set to `true`.
+                        type: boolean
                     type: object
                 required:
                 - injection

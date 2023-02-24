@@ -175,7 +175,7 @@ var _ = Context("Lumigo controller", func() {
 					Name: "lumigo-credentials",
 					Key:  "token",
 				},
-			}, true)
+			}, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
@@ -213,7 +213,7 @@ var _ = Context("Lumigo controller", func() {
 					Name: "lumigo-credentials",
 					Key:  expectedTokenKey,
 				},
-			}, true)
+			}, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
@@ -287,7 +287,7 @@ var _ = Context("Lumigo controller", func() {
 					Name: "lumigo-credentials",
 					Key:  expectedTokenKey,
 				},
-			}, true)
+			}, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
@@ -319,6 +319,110 @@ var _ = Context("Lumigo controller", func() {
 				Eventually(func() bool {
 					return hasActiveCondition(lumigo, corev1.ConditionTrue)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
+			})
+		})
+
+		It("should not undo injection when removing the Lumigo resource with .Tracing.Injection.RemoveLumigoFromResourcesOnDeletion set to false", func() {
+			lumigoSecretName := "lumigo-credentials"
+			expectedTokenKey := "token"
+
+			By("Inititalizing the secret", func() {
+				Expect(k8sClient.Create(ctx, &corev1.Secret{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Secret",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      lumigoSecretName,
+					},
+					Data: map[string][]byte{
+						expectedTokenKey: []byte("t_1234567890123456789AB"),
+					},
+				})).Should(Succeed())
+			})
+
+			deploymentName := "test-deployment"
+
+			By("Inititalizing the deployment", func() {
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      deploymentName,
+						Namespace: namespaceName,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"deployment": deploymentName,
+							},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"deployment": deploymentName,
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "myapp",
+										Image: "busybox",
+									},
+								},
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+			})
+
+			lumigoName := "lumigo1"
+			var lumigo *operatorv1alpha1.Lumigo
+			By("Initializing the Lumigo resource", func() {
+				// Instantiating Lumigo after the deployment, so that the former is instrumented without the webhook
+				lumigo = newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: lumigoSecretName,
+						Key:  expectedTokenKey,
+					},
+				}, true, true, false)
+				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
+
+				Eventually(func() bool {
+					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+				}, defaultTimeout, defaultInterval).Should(BeTrue())
+			})
+
+			By("Validating deployment got injected", func() {
+				deploymentAfter := &appsv1.Deployment{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Namespace: namespaceName,
+					Name:      deploymentName,
+				}, deploymentAfter)).To(Succeed())
+
+				Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer("")))
+			})
+
+			By("Deleting the Lumigo resource", func() {
+				Expect(k8sClient.Delete(ctx, lumigo)).Should(Succeed())
+
+				Eventually(func(g Gomega) {
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: namespaceName,
+						Name:      lumigoName,
+					}, &operatorv1alpha1.Lumigo{})).To(MatchError(ContainSubstring("not found")))
+				}).Should(Succeed())
+			})
+
+			By("Validating the deployment still has injection", func() {
+				deploymentAfter2 := &appsv1.Deployment{}
+
+				Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Namespace: namespaceName,
+					Name:      deploymentName,
+				}, deploymentAfter2)).To(Succeed())
+
+				Expect(deploymentAfter2.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer("")))
 			})
 		})
 
@@ -384,7 +488,7 @@ var _ = Context("Lumigo controller", func() {
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
 					},
-				}, true)
+				}, true, true, true)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func() bool {
@@ -448,10 +552,10 @@ var _ = Context("Lumigo controller", func() {
 				},
 			}
 
-			lumigo1 := newLumigo(namespaceName, "lumigo1", lumigoToken, true)
+			lumigo1 := newLumigo(namespaceName, "lumigo1", lumigoToken, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo1)).Should(Succeed())
 
-			lumigo2 := newLumigo(namespaceName, "lumigo2", lumigoToken, true)
+			lumigo2 := newLumigo(namespaceName, "lumigo2", lumigoToken, true, true, true)
 
 			By("adding a second Lumigo in the namespace", func() {
 				Expect(k8sClient.Create(ctx, lumigo2)).Should(Succeed())
@@ -501,7 +605,7 @@ func toNamespacedName(lumigo *operatorv1alpha1.Lumigo) *client.ObjectKey {
 	}
 }
 
-func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool) *operatorv1alpha1.Lumigo {
+func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool, injectLumigoIntoExistingResourcesOnCreation bool, removeLumigoFromResourcesOnDeletion bool) *operatorv1alpha1.Lumigo {
 	return &operatorv1alpha1.Lumigo{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Lumigo",
@@ -517,6 +621,8 @@ func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Crede
 			Tracing: operatorv1alpha1.TracingSpec{
 				Injection: operatorv1alpha1.InjectionSpec{
 					Enabled: &injectionEnabled,
+					InjectLumigoIntoExistingResourcesOnCreation: &injectLumigoIntoExistingResourcesOnCreation,
+					RemoveLumigoFromResourcesOnDeletion:         &removeLumigoFromResourcesOnDeletion,
 				},
 			},
 		},

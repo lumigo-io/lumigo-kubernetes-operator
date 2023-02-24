@@ -105,6 +105,10 @@ In the logs of the Lumigo operator, you will see a message like the following:
 1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/inject", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
 ```
 
+### Settings
+
+TODO
+
 ### Uninstall
 
 The removal of the Lumigo operator is performed by:
@@ -114,6 +118,7 @@ helm delete lumigo --namespace lumigo-system
 ```
 
 All the `Lumigo` resources you have created in your namespaces are going to be automatically deleted.
+In the namespaces where the `Lumigo` resource has both the `.Tracing.Injection.Enabled` and `.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion` set to `true`, all injected resources in the namespace will be modified to remove the instrumentation.
 
 ## TLS certificates
 

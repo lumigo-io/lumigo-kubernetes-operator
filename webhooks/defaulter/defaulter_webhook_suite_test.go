@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package validator
+package defaulter
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
@@ -111,9 +112,9 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = (&LumigoValidatorWebhookHandler{
+	err = (&LumigoDefaulterWebhookHandler{
 		LumigoOperatorVersion: "test",
-		Log:                   ctrl.Log.WithName("validator-webhook").WithName("Lumigo"),
+		Log:                   ctrl.Log.WithName("defaulter-webhook").WithName("Lumigo"),
 	}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -149,7 +150,7 @@ var _ = AfterSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 })
 
-var _ = Context("Lumigo validator webhook", func() {
+var _ = Context("Lumigo defaulter webhook", func() {
 
 	var namespaceName string
 
@@ -194,9 +195,81 @@ var _ = Context("Lumigo validator webhook", func() {
 		})
 	})
 
-	Context("with two Lumigo instances in the namespace", func() {
+	Context("when creating the first Lumigo instance in the namespace", func() {
 
-		It("should set both instances as not active and with an error", func() {
+		It("it sets defaults for Tracing.Injection.*", func() {
+			newLumigo := operatorv1alpha1.Lumigo{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Lumigo",
+					APIVersion: lumigoApiVersion,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespaceName,
+					Name:      "lumigo",
+					Labels:    map[string]string{},
+				},
+				Spec: operatorv1alpha1.LumigoSpec{
+					LumigoToken: operatorv1alpha1.Credentials{
+						SecretRef: operatorv1alpha1.KubernetesSecretRef{
+							Name: "doesnot",
+							Key:  "exist",
+						},
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, &newLumigo)).To(Succeed())
+
+			Expect(newLumigo.Spec.Tracing.Injection.Enabled).To(&beBoolPointer{expectedValue: true})
+			Expect(newLumigo.Spec.Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation).To(&beBoolPointer{expectedValue: true})
+			Expect(newLumigo.Spec.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion).To(&beBoolPointer{expectedValue: true})
+		})
+
+		It("it rejects instances with blank .LumigoToken.Spec.LumigoToken.SecretRef.Name", func() {
+			newLumigo := operatorv1alpha1.Lumigo{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Lumigo",
+					APIVersion: lumigoApiVersion,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespaceName,
+					Name:      "lumigo",
+					Labels:    map[string]string{},
+				},
+				Spec: operatorv1alpha1.LumigoSpec{},
+			}
+
+			Expect(k8sClient.Create(ctx, &newLumigo)).To(MatchError("admission webhook \"lumigodefaulter.kb.io\" denied the request: no reference to a Lumigo token ('.Spec.LumigoToken.SecretRef.Name' is blank)"))
+		})
+
+		It("it rejects instances with blank .LumigoToken.Spec.LumigoToken.SecretRef.Key", func() {
+			newLumigo := operatorv1alpha1.Lumigo{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Lumigo",
+					APIVersion: lumigoApiVersion,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespaceName,
+					Name:      "lumigo",
+					Labels:    map[string]string{},
+				},
+				Spec: operatorv1alpha1.LumigoSpec{
+					LumigoToken: operatorv1alpha1.Credentials{
+						SecretRef: operatorv1alpha1.KubernetesSecretRef{
+							Name: "lumigo-token",
+						},
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, &newLumigo)).To(MatchError("admission webhook \"lumigodefaulter.kb.io\" denied the request: invalid reference to a Lumigo token ('.Spec.LumigoToken.SecretRef.Key' is blank)"))
+		})
+
+	})
+
+	Context("with already one Lumigo instance in the namespace", func() {
+
+		It("should prevent a second instance from being created", func() {
 			Expect(k8sClient.Create(ctx, &corev1.Secret{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Secret",
@@ -224,11 +297,9 @@ var _ = Context("Lumigo validator webhook", func() {
 			By("adding a second Lumigo in the namespace", func() {
 				lumigo2 := newLumigo(namespaceName, "lumigo2", lumigoToken, true)
 				Expect(k8sClient.Create(ctx, lumigo2)).Should(MatchError(
-					Equal(fmt.Sprintf("admission webhook \"lumigovalidator.kb.io\" denied the request: There is already an instance of operator.lumigo.io/v1alpha1.Lumigo in the '%s' namespace", namespaceName)),
+					Equal(fmt.Sprintf("admission webhook \"lumigodefaulter.kb.io\" denied the request: There is already an instance of operator.lumigo.io/v1alpha1.Lumigo in the '%s' namespace", namespaceName)),
 				))
 			})
-
-			By("Test completed")
 		})
 
 	})
@@ -255,4 +326,29 @@ func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Crede
 			},
 		},
 	}
+}
+
+type beBoolPointer struct {
+	expectedValue bool
+}
+
+func (m *beBoolPointer) Match(actual interface{}) (success bool, err error) {
+	switch a := actual.(type) {
+	case *bool:
+		v := a
+		if v == nil {
+			return false, fmt.Errorf("the actual value is nil")
+		}
+		return *v == m.expectedValue, nil
+	default:
+		return false, fmt.Errorf("beBoolPointer matcher expects a *bool; got:\n%s", format.Object(actual, 1))
+	}
+}
+
+func (m *beBoolPointer) FailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("is not a pointer to the boolean '%t'", m.expectedValue)
+}
+
+func (m *beBoolPointer) NegatedFailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("is a pointer to the boolean '%t'", m.expectedValue)
 }

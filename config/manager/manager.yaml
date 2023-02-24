@@ -16,6 +16,8 @@ kind: Deployment
 metadata:
   name: controller-manager
   namespace: system
+  finalizers:
+  - operator.lumigo.io/controller-finalizer
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: deployment
@@ -71,6 +73,14 @@ spec:
         image: controller:latest
         name: manager
         env:
+          - name: LUMIGO_CONTROLLER_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: LUMIGO_CONTROLLER_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
           - name: TELEMETRY_PROXY_OTLP_SERVICE
             value: http://$(TELEMETRY_PROXY_SERVICE).$(TELEMETRY_PROXY_SERVICE_NAMESPACE).svc.cluster.local
           - name: LUMIGO_OPERATOR_VERSION
