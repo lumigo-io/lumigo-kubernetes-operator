@@ -10,12 +10,16 @@ RUN apk add curl jq
 
 ENV TARGETPLATFORM="${target_platform:-linux/amd64}"
 
+ADD telemetryproxy/VERSION.otelcontibcol /opt/VERSION.otelcontibcol
+
 # Values for TARGETPLATFORM are 'linux/amd64' and 'linux/arm64'; in the release names of the otelcollector,
 # the matching suffixes are 'linux_amd64' and 'linux_arm64', respectively
 RUN mkdir /dist; \
     export OTELCOL_BINARY_ASSET_NAME="otelcontribcol_${TARGETPLATFORM/\//_}" && \
     echo "Downloading 'otelcontribcol_${TARGETPLATFORM//\//_}'" && \
-    curl -s https://api.github.com/repos/lumigo-io/opentelemetry-collector-contrib/releases/tags/${lumigo_otel_collector_release}?draft=true | \
+    export version="${lumigo_otel_collector_release:-$(cat /opt/VERSION.otelcontibcol)}" && \
+    echo "Downloading version ${version} from https://github.com/lumigo-io/opentelemetry-collector-contrib" && \
+    curl -s https://api.github.com/repos/lumigo-io/opentelemetry-collector-contrib/releases/tags/${version}?draft=true | \
     jq -r ".assets[] | select(.name|match(\"${OTELCOL_BINARY_ASSET_NAME}\")) | .browser_download_url" | \
     xargs -I {} curl -s -L {} -o /dist/otelcontribcol; \
     chmod u+x /dist/otelcontribcol

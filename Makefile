@@ -95,7 +95,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
 	docker build -t ${CONTROLLER_IMG} -f Dockerfile.controller .
-	docker build -t ${PROXY_IMG} -f Dockerfile.proxy --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" .
+	docker build -t ${PROXY_IMG} -f Dockerfile.proxy .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
