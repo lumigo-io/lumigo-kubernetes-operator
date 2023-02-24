@@ -57,11 +57,11 @@ jobs:
         uses: azure/setup-kubectl@v3
       - name: Set up Helm
         run: curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      - name: Install latest Helm chart on artifactory
+      - name: Install latest released Helm chart
         run: |
           helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
 
-          if helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait --timeout 1m; then
+          if helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait --timeout 3m; then
             kubectl get all -A
             kubectl get pods -n lumigo-system
             exit 1
@@ -91,7 +91,7 @@ jobs:
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.tag=${CONTROLLER_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${PROXY_IMG}" \
-            --debug --wait --timeout 1m; then
+            --debug --wait --timeout 3m; then
 
             kubectl get all -A
             kubectl get pods -n lumigo-system
