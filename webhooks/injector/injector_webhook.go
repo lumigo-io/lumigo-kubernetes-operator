@@ -134,7 +134,7 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Errorf("cannot instantiate mutator: %w", err).Error())
 	}
 
-	if err = resourceAdaper.Mutate(mutator); err != nil {
+	if err = resourceAdaper.InjectLumigoInto(mutator); err != nil {
 		return admission.Allowed(fmt.Errorf("cannot inject Lumigo tracing in the pod spec %w", err).Error())
 	}
 
@@ -148,7 +148,7 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 
 type resourceAdapter interface {
 	GetNamespace() string
-	Mutate(mutation.Mutator) error
+	InjectLumigoInto(mutation.Mutator) error
 	Marshal() ([]byte, error)
 }
 
@@ -167,7 +167,7 @@ func (r *resourceAdapterImpl[T]) GetNamespace() string {
 	return r.getNamespace()
 }
 
-func (r *resourceAdapterImpl[T]) Mutate(mutator mutation.Mutator) error {
+func (r *resourceAdapterImpl[T]) InjectLumigoInto(mutator mutation.Mutator) error {
 	return r.mutate(mutator)
 }
 
@@ -189,7 +189,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 			return &resourceAdapterImpl[appsv1.DaemonSet]{
 				resource: resource,
 				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1DaemonSet(resource)
+					return mutator.InjectLumigoIntoAppsV1DaemonSet(resource)
 				},
 				getNamespace: func() string {
 					return resource.Namespace
@@ -210,7 +210,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 					return resource.Namespace
 				},
 				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1Deployment(resource)
+					return mutator.InjectLumigoIntoAppsV1Deployment(resource)
 				},
 			}, nil
 		}
@@ -228,7 +228,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 					return resource.Namespace
 				},
 				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1ReplicaSet(resource)
+					return mutator.InjectLumigoIntoAppsV1ReplicaSet(resource)
 				},
 			}, nil
 		}
@@ -246,7 +246,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 					return resource.Namespace
 				},
 				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1StatefulSet(resource)
+					return mutator.InjectLumigoIntoAppsV1StatefulSet(resource)
 				},
 			}, nil
 		}
@@ -264,7 +264,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 					return resource.Namespace
 				},
 				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateBatchV1CronJob(resource)
+					return mutator.InjectLumigoIntoBatchV1CronJob(resource)
 				},
 			}, nil
 		}
@@ -282,7 +282,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 					return resource.Namespace
 				},
 				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateBatchV1Job(resource)
+					return mutator.InjectLumigoIntoBatchV1Job(resource)
 				},
 			}, nil
 		}

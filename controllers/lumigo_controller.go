@@ -90,6 +90,7 @@ func (r *LumigoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=operator.lumigo.io,resources=lumigoes/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// TODO Aff finalizer to ensure we can untrace all resources in namespace on Lumigo instance removal
 	log := r.Log.WithValues("lumigo-instance", req.NamespacedName)
 	now := metav1.NewTime(time.Now())
 
@@ -99,6 +100,11 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if apierrors.IsNotFound(err) {
 			// Request object may have been deleted after the reconcile request has been issued,
 			// e.g., due to garbage collection.
+			log.Info("Lumigo instance deleted, removing instrumentation from namespace", "namespace", req.Namespace)
+			if err := r.removeLumigoFromResources(ctx, req.Namespace, &log); err != nil {
+				log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
+			}
+
 			return result, nil
 		}
 		// Error reading the object - requeue the request.
@@ -152,8 +158,8 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// TODO Do only on creation of the Lumigo instance
-	if err := r.mutateAutoTraceableResources(ctx, lumigoInstance, &log); err != nil {
-		log.Error(err, "cannot mutate non-autotraced resources", "namespace", req.Namespace)
+	if err := r.injectLumigoIntoResources(ctx, lumigoInstance, &log); err != nil {
+		log.Error(err, "cannot inject resources", "namespace", req.Namespace)
 	}
 
 	// Clear errors if any, all is fine
@@ -270,14 +276,10 @@ func (r *LumigoReconciler) enqueueIfSecretReferencedByLumigo(obj client.Object) 
 }
 
 func (r *LumigoReconciler) updateStatusIfNeeded(logger logr.Logger, instance *operatorv1alpha1.Lumigo, now metav1.Time, newErr error, result ctrl.Result) (ctrl.Result, error) {
-	// Updates the status of a Lumigo instance.
-	// Unfortunately updates do not seem reliable due to some mismatch between the results
-	// of apiequality.Semantic.DeepEqual() and Kubernetes' API (maybe due to bugs, maybe due
-	// to eventual consistency), which causes updates to be lost. To reduce the risk of losing updates,
-	// we reque the request after a grace period.
-
-	// TODO FIX ACTIVE CONDITION NOT CORRECTLY SET
-
+	// Updates the status of a Lumigo instance. Unfortunately updates do not seem reliable due
+	// to some mismatch between the results of apiequality.Semantic.DeepEqual() and Kubernetes'
+	// API (maybe due to bugs, maybe due to eventual consistency), which causes updates to be lost.
+	// To reduce the risk of losing updates, we reque the request after a grace period.
 	currentErrorCondition := conditions.GetLumigoConditionByType(&instance.Status, operatorv1alpha1.LumigoConditionTypeError)
 	if currentErrorCondition != nil {
 		var expectedMessage string
@@ -311,7 +313,7 @@ func (r *LumigoReconciler) updateStatusIfNeeded(logger logr.Logger, instance *op
 	return ctrl.Result{Requeue: true, RequeueAfter: defaultRequeuePeriod}, nil
 }
 
-func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lumigoInstance *operatorv1alpha1.Lumigo, log *logr.Logger) error {
+func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigoInstance *operatorv1alpha1.Lumigo, log *logr.Logger) error {
 	// TODO Make it less chatty, avoid unnecessary updates
 
 	mutator, err := mutation.NewMutator(log, &lumigoInstance.Spec.LumigoToken, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
@@ -339,14 +341,17 @@ func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lum
 	}
 
 	for _, daemonset := range daemonsets.Items {
-		origDaemonset := daemonset.DeepCopy()
-		err := mutator.MutateAppsV1DaemonSet(&daemonset)
-		if err != nil {
+		mutatedDaemonset := daemonset.DeepCopy()
+		if err := mutator.InjectLumigoIntoAppsV1DaemonSet(mutatedDaemonset); err != nil {
 			return fmt.Errorf("cannot prepare mutation of daemonset '%s': %w", daemonset.GetName(), err)
-		} else if reflect.DeepEqual(origDaemonset, &daemonset) {
-			// Nothing to do here
-		} else if err := r.Client.Update(ctx, &daemonset); err != nil {
-			return fmt.Errorf("cannot update mutated daemonset '%s': %w", daemonset.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedDaemonset, &daemonset) {
+			if err := r.Client.Update(ctx, mutatedDaemonset); err != nil {
+				return fmt.Errorf("cannot add instrumentation to daemonset '%s': %w", daemonset.GetName(), err)
+			}
+
+			log.Info("Added instrumentation to daemonset", "name", daemonset.Name)
 		}
 	}
 
@@ -360,14 +365,17 @@ func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lum
 	}
 
 	for _, deployment := range deployments.Items {
-		origDeployment := deployment.DeepCopy()
-		err := mutator.MutateAppsV1Deployment(&deployment)
-		if err != nil {
+		mutatedDeployment := deployment.DeepCopy()
+		if err := mutator.InjectLumigoIntoAppsV1Deployment(mutatedDeployment); err != nil {
 			return fmt.Errorf("cannot prepare mutation of deployment '%s': %w", deployment.GetName(), err)
-		} else if reflect.DeepEqual(origDeployment, &deployment) {
-			// Nothing to do here
-		} else if err := r.Client.Update(ctx, &deployment); err != nil {
-			return fmt.Errorf("cannot update mutated deployment '%s': %w", deployment.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedDeployment, &deployment) {
+			if err := r.Client.Update(ctx, mutatedDeployment); err != nil {
+				return fmt.Errorf("cannot add instrumentation to deployment '%s': %w", deployment.GetName(), err)
+			}
+
+			log.Info("Added instrumentation to deployment", "name", deployment.Name)
 		}
 	}
 
@@ -381,14 +389,17 @@ func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lum
 	}
 
 	for _, replicaset := range replicasets.Items {
-		origReplicaset := replicaset.DeepCopy()
-		err := mutator.MutateAppsV1ReplicaSet(&replicaset)
-		if err != nil {
+		mutatedReplicaset := replicaset.DeepCopy()
+		if err := mutator.InjectLumigoIntoAppsV1ReplicaSet(mutatedReplicaset); err != nil {
 			return fmt.Errorf("cannot prepare mutation of replicaset '%s': %w", replicaset.GetName(), err)
-		} else if reflect.DeepEqual(origReplicaset, &replicaset) {
-			// Nothing to do here
-		} else if err := r.Client.Update(ctx, &replicaset); err != nil {
-			return fmt.Errorf("cannot update mutated replicaset '%s': %w", replicaset.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedReplicaset, &replicaset) {
+			if err := r.Client.Update(ctx, mutatedReplicaset); err != nil {
+				return fmt.Errorf("cannot add instrumentation to replicaset '%s': %w", replicaset.GetName(), err)
+			}
+
+			log.Info("Added instrumentation to replicaset", "name", replicaset.Name)
 		}
 	}
 
@@ -402,14 +413,17 @@ func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lum
 	}
 
 	for _, statefulset := range statefulsets.Items {
-		origStatefulset := statefulset.DeepCopy()
-		err := mutator.MutateAppsV1StatefulSet(&statefulset)
-		if err != nil {
+		mutatedStatefulset := statefulset.DeepCopy()
+		if err := mutator.InjectLumigoIntoAppsV1StatefulSet(mutatedStatefulset); err != nil {
 			return fmt.Errorf("cannot prepare mutation of statefulset '%s': %w", statefulset.GetName(), err)
-		} else if reflect.DeepEqual(origStatefulset, &statefulset) {
-			// Nothing to do here
-		} else if err := r.Client.Update(ctx, &statefulset); err != nil {
-			return fmt.Errorf("cannot update mutated statefulset '%s': %w", statefulset.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedStatefulset, &statefulset) {
+			if err := r.Client.Update(ctx, mutatedStatefulset); err != nil {
+				return fmt.Errorf("cannot add instrumentation to statefulset '%s': %w", statefulset.GetName(), err)
+			}
+
+			log.Info("Added instrumentation to statefulset", "name", statefulset.Name)
 		}
 	}
 
@@ -423,14 +437,17 @@ func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lum
 	}
 
 	for _, cronjob := range cronjobs.Items {
-		origCronjob := cronjob.DeepCopy()
-		err := mutator.MutateBatchV1CronJob(&cronjob)
-		if err != nil {
+		mutatedCronjob := cronjob.DeepCopy()
+		if err := mutator.InjectLumigoIntoBatchV1CronJob(mutatedCronjob); err != nil {
 			return fmt.Errorf("cannot prepare mutation of cronjob '%s': %w", cronjob.GetName(), err)
-		} else if reflect.DeepEqual(origCronjob, &cronjob) {
-			// Nothing to do here
-		} else if err := r.Client.Update(ctx, &cronjob); err != nil {
-			return fmt.Errorf("cannot update mutated daemonset '%s': %w", cronjob.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedCronjob, &cronjob) {
+			if err := r.Client.Update(ctx, mutatedCronjob); err != nil {
+				return fmt.Errorf("cannot add instrumentation to cronjob '%s': %w", cronjob.GetName(), err)
+			}
+
+			log.Info("Added instrumentation to cronjob", "name", cronjob.Name)
 		}
 	}
 
@@ -444,14 +461,180 @@ func (r *LumigoReconciler) mutateAutoTraceableResources(ctx context.Context, lum
 	}
 
 	for _, job := range jobs.Items {
-		origJob := job.DeepCopy()
-		err := mutator.MutateBatchV1Job(&job)
-		if err != nil {
+		mutatedJob := job.DeepCopy()
+		if err := mutator.InjectLumigoIntoBatchV1Job(mutatedJob); err != nil {
 			return fmt.Errorf("cannot prepare mutation of job '%s': %w", job.GetName(), err)
-		} else if reflect.DeepEqual(origJob, &job) {
-			// Nothing to do here
-		} else if err := r.Client.Update(ctx, &job); err != nil {
-			return fmt.Errorf("cannot update mutated daemonset '%s': %w", job.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedJob, &job) {
+			if err := r.Client.Update(ctx, mutatedJob); err != nil {
+				return fmt.Errorf("cannot add instrumentation to job '%s': %w", job.GetName(), err)
+			}
+
+			log.Info("Added instrumentation to job", "name", job.Name)
+		}
+	}
+
+	return nil
+}
+
+func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namespace string, log *logr.Logger) error {
+	mutator, err := mutation.NewMutator(log, nil, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
+	if err != nil {
+		return fmt.Errorf("cannot instantiate mutator: %w", err)
+	}
+
+	// Ensure that all the resources that could be injected, are injected
+	// TODO What to do about upgrades from former controller versions?
+	lumigoAutotracedLabelSet, err := labels.NewRequirement(mutation.LumigoAutoTraceLabelKey, selection.Exists, []string{})
+	if err != nil {
+		return fmt.Errorf("cannot create label selector for autotraced objects: %w", err)
+	}
+
+	lumigoNotAutotracedLabelSelector := labels.NewSelector()
+	lumigoNotAutotracedLabelSelector.Add(*lumigoAutotracedLabelSet)
+
+	// Mutate daemonsets
+	daemonsets := &appsv1.DaemonSetList{}
+	if err := r.Client.List(ctx, daemonsets, &client.ListOptions{
+		LabelSelector: lumigoNotAutotracedLabelSelector,
+		Namespace:     namespace,
+	}); err != nil {
+		return fmt.Errorf("cannot list autotraced daemonsets: %w", err)
+	}
+
+	for _, daemonset := range daemonsets.Items {
+		mutatedDaemonset := daemonset.DeepCopy()
+		if err := mutator.RemoveLumigoFromAppsV1DaemonSet(mutatedDaemonset); err != nil {
+			return fmt.Errorf("cannot prepare mutation of daemonset '%s': %w", daemonset.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedDaemonset, &daemonset) {
+			if err := r.Client.Update(ctx, &daemonset); err != nil {
+				return fmt.Errorf("cannot remove instrumentation from daemonset '%s': %w", daemonset.GetName(), err)
+			}
+
+			log.Info("Removed instrumentation from daemonset", "name", daemonset.Name)
+		}
+	}
+
+	// Mutate deployments
+	deployments := &appsv1.DeploymentList{}
+	if err := r.Client.List(ctx, deployments, &client.ListOptions{
+		LabelSelector: lumigoNotAutotracedLabelSelector,
+		Namespace:     namespace,
+	}); err != nil {
+		return fmt.Errorf("cannot list autotraced deployments: %w", err)
+	}
+
+	for _, deployment := range deployments.Items {
+		mutatedDeployment := deployment.DeepCopy()
+		if err := mutator.RemoveLumigoFromAppsV1Deployment(mutatedDeployment); err != nil {
+			return fmt.Errorf("cannot prepare mutation of deployment '%s': %w", deployment.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedDeployment, deployment) {
+			if err := r.Client.Update(ctx, mutatedDeployment); err != nil {
+				return fmt.Errorf("cannot remove instrumentation from deployment '%s': %w", deployment.GetName(), err)
+			}
+
+			log.Info("Removed instrumentation from deployment", "name", deployment.Name, "d", mutatedDeployment)
+		}
+	}
+
+	// Mutate replicasets
+	replicasets := &appsv1.ReplicaSetList{}
+	if err := r.Client.List(ctx, replicasets, &client.ListOptions{
+		LabelSelector: lumigoNotAutotracedLabelSelector,
+		Namespace:     namespace,
+	}); err != nil {
+		return fmt.Errorf("cannot list autotraced replicasets: %w", err)
+	}
+
+	for _, replicaset := range replicasets.Items {
+		mutatedReplicaset := replicaset.DeepCopy()
+		if err := mutator.RemoveLumigoFromAppsV1ReplicaSet(mutatedReplicaset); err != nil {
+			return fmt.Errorf("cannot prepare mutation of replicaset '%s': %w", replicaset.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedReplicaset, &replicaset) {
+			if err := r.Client.Update(ctx, &replicaset); err != nil {
+				return fmt.Errorf("cannot remove instrumentation from replicaset '%s': %w", replicaset.GetName(), err)
+			}
+
+			log.Info("Removed instrumentation from replicaset", "name", replicaset.Name)
+		}
+	}
+
+	// Mutate statefulsets
+	statefulsets := &appsv1.StatefulSetList{}
+	if err := r.Client.List(ctx, statefulsets, &client.ListOptions{
+		LabelSelector: lumigoNotAutotracedLabelSelector,
+		Namespace:     namespace,
+	}); err != nil {
+		return fmt.Errorf("cannot list autotraced statefulsets: %w", err)
+	}
+
+	for _, statefulset := range statefulsets.Items {
+		mutatedStatefulset := statefulset.DeepCopy()
+		if err := mutator.RemoveLumigoFromAppsV1StatefulSet(mutatedStatefulset); err != nil {
+			return fmt.Errorf("cannot prepare mutation of statefulset '%s': %w", statefulset.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedStatefulset, &statefulset) {
+			if err := r.Client.Update(ctx, &statefulset); err != nil {
+				return fmt.Errorf("cannot remove instrumentation from statefulset '%s': %w", statefulset.GetName(), err)
+			}
+
+			log.Info("Removed instrumentation from statefulset", "name", statefulset.Name)
+		}
+	}
+
+	// Mutate cronjobs
+	cronjobs := &batchv1.CronJobList{}
+	if err := r.Client.List(ctx, cronjobs, &client.ListOptions{
+		LabelSelector: lumigoNotAutotracedLabelSelector,
+		Namespace:     namespace,
+	}); err != nil {
+		return fmt.Errorf("cannot list autotraced cronjobs: %w", err)
+	}
+
+	for _, cronjob := range cronjobs.Items {
+		mutatedCronjob := cronjob.DeepCopy()
+		if mutator.RemoveLumigoFromBatchV1CronJob(mutatedCronjob); err != nil {
+			return fmt.Errorf("cannot prepare mutation of cronjob '%s': %w", cronjob.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedCronjob, &cronjob) {
+			if err := r.Client.Update(ctx, &cronjob); err != nil {
+				return fmt.Errorf("cannot remove instrumentation from cronjob '%s': %w", cronjob.GetName(), err)
+			}
+
+			log.Info("Removed instrumentation from cronjob", "name", cronjob.Name)
+		}
+	}
+
+	// Mutate jobs
+	jobs := &batchv1.JobList{}
+	if err := r.Client.List(ctx, jobs, &client.ListOptions{
+		LabelSelector: lumigoNotAutotracedLabelSelector,
+		Namespace:     namespace,
+	}); err != nil {
+		return fmt.Errorf("cannot list autotraced jobs: %w", err)
+	}
+
+	for _, job := range jobs.Items {
+		mutatedJob := job.DeepCopy()
+		if err := mutator.RemoveLumigoFromBatchV1Job(mutatedJob); err != nil {
+			return fmt.Errorf("cannot prepare mutation of job '%s': %w", job.GetName(), err)
+		}
+
+		if !reflect.DeepEqual(mutatedJob, &job) {
+			if err := r.Client.Update(ctx, &job); err != nil {
+				return fmt.Errorf("cannot remove instrumentation from job '%s': %w", job.GetName(), err)
+			}
+
+			log.Info("Removed instrumentation from job", "name", job.Name)
 		}
 	}
 

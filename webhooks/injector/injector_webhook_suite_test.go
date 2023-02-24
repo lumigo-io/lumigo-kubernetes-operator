@@ -31,7 +31,6 @@ import (
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
-	. "github.com/lumigo-io/lumigo-kubernetes-operator/mutation/matchers"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/validator"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 
@@ -438,11 +437,10 @@ var _ = Context("Lumigo validator webhook", func() {
 				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion[0:7],
 				"deployment":                     name,
 			}))
-			Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(BeTheLumigoInjectorContainer(lumigoInjectorImage)))
+			Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer(lumigoInjectorImage)))
 			Expect(deploymentAfter.Spec.Template.Spec.Volumes).To(HaveLen(1))
-			Expect(deploymentAfter.Spec.Template.Spec.Containers).To(ContainElements(BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl)))
+			Expect(deploymentAfter.Spec.Template.Spec.Containers).To(ContainElements(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl)))
 		})
-
 	})
 
 	It("should not inject a minimal deployment with the lumigo.auto-trace label set to false", func() {

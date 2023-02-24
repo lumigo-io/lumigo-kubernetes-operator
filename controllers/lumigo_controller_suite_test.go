@@ -27,8 +27,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -200,8 +203,6 @@ var _ = Context("Lumigo controller", func() {
 					return hasActiveCondition(lumigo, corev1.ConditionTrue)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
-
-			By("Test completed")
 		})
 
 		It("has an error if the referenced secret does not have the expected key", func() {
@@ -262,8 +263,6 @@ var _ = Context("Lumigo controller", func() {
 					return hasActiveCondition(lumigo, corev1.ConditionTrue)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
-
-			By("Test completed")
 		})
 
 		It("has an error if the referenced secret has an invalid token", func() {
@@ -321,8 +320,106 @@ var _ = Context("Lumigo controller", func() {
 					return hasActiveCondition(lumigo, corev1.ConditionTrue)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
+		})
 
-			By("Test completed")
+		It("should undo injection when removing the Lumigo resource", func() {
+			lumigoSecretName := "lumigo-credentials"
+			expectedTokenKey := "token"
+
+			By("Inititalizing the secret", func() {
+				Expect(k8sClient.Create(ctx, &corev1.Secret{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Secret",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      lumigoSecretName,
+					},
+					Data: map[string][]byte{
+						expectedTokenKey: []byte("t_1234567890123456789AB"),
+					},
+				})).Should(Succeed())
+			})
+
+			deploymentName := "test-deployment"
+
+			By("Inititalizing the deployment", func() {
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      deploymentName,
+						Namespace: namespaceName,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"deployment": deploymentName,
+							},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"deployment": deploymentName,
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "myapp",
+										Image: "busybox",
+									},
+								},
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+			})
+
+			var lumigo *operatorv1alpha1.Lumigo
+			By("Initializing the Lumigo resource", func() {
+				// Instantiating Lumigo after the deployment, so that the former is instrumented without the webhook
+				lumigo = newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: lumigoSecretName,
+						Key:  expectedTokenKey,
+					},
+				}, true)
+				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
+
+				Eventually(func() bool {
+					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+				}, defaultTimeout, defaultInterval).Should(BeTrue())
+			})
+
+			By("Validating deployment got injected", func() {
+				deploymentAfter := &appsv1.Deployment{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Namespace: namespaceName,
+					Name:      deploymentName,
+				}, deploymentAfter)).To(Succeed())
+
+				Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer("")))
+			})
+
+			By("Deleting the Lumigo resource", func() {
+				Expect(k8sClient.Delete(ctx, lumigo)).Should(Succeed())
+			})
+
+			By("Validating the deployment has injection removed", func() {
+				Eventually(func(g Gomega) {
+					deploymentAfter2 := &appsv1.Deployment{}
+
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: namespaceName,
+						Name:      deploymentName,
+					}, deploymentAfter2)).To(Succeed())
+
+					g.Expect(deploymentAfter2.Spec.Template.Spec.InitContainers).To(BeEmpty())
+					g.Expect(deploymentAfter2.Spec.Template.Spec.Volumes).To(BeEmpty())
+					g.Expect(deploymentAfter2.Spec.Template.Spec.Containers).To(HaveLen(1))
+				}, defaultTimeout, defaultInterval).Should(Succeed())
+			})
 		})
 
 	})
@@ -377,8 +474,6 @@ var _ = Context("Lumigo controller", func() {
 					return hasActiveCondition(lumigo1, corev1.ConditionTrue)
 				}, 15*time.Second, defaultInterval).Should(BeTrue())
 			})
-
-			By("Test completed")
 		})
 
 	})

@@ -46,12 +46,18 @@ const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_
 
 type Mutator interface {
 	GetAutotraceLabelValue() string
-	MutateAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error
-	MutateAppsV1Deployment(deployment *appsv1.Deployment) error
-	MutateAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error
-	MutateAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error
-	MutateBatchV1CronJob(deployment *batchv1.CronJob) error
-	MutateBatchV1Job(deployment *batchv1.Job) error
+	InjectLumigoIntoAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error
+	InjectLumigoIntoAppsV1Deployment(deployment *appsv1.Deployment) error
+	InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error
+	InjectLumigoIntoAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error
+	InjectLumigoIntoBatchV1CronJob(deployment *batchv1.CronJob) error
+	InjectLumigoIntoBatchV1Job(deployment *batchv1.Job) error
+	RemoveLumigoFromAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error
+	RemoveLumigoFromAppsV1Deployment(deployment *appsv1.Deployment) error
+	RemoveLumigoFromAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error
+	RemoveLumigoFromAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error
+	RemoveLumigoFromBatchV1CronJob(deployment *batchv1.CronJob) error
+	RemoveLumigoFromBatchV1Job(deployment *batchv1.Job) error
 }
 
 type mutatorImpl struct {
@@ -82,12 +88,12 @@ func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, Lum
 	}, nil
 }
 
-func (m *mutatorImpl) MutateAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error {
-	if err := m.validateShouldMutate(daemonSet.ObjectMeta); err != nil {
+func (m *mutatorImpl) InjectLumigoIntoAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error {
+	if err := m.validateShouldInjectLumigoInto(daemonSet.ObjectMeta); err != nil {
 		return err
 	}
 
-	if err := m.mutatePodSpec(&daemonSet.Spec.Template.Spec); err != nil {
+	if err := m.injectLumigoIntoPodSpec(&daemonSet.Spec.Template.Spec); err != nil {
 		return err
 	}
 
@@ -106,12 +112,28 @@ func (m *mutatorImpl) MutateAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error {
 	return nil
 }
 
-func (m *mutatorImpl) MutateAppsV1Deployment(deployment *appsv1.Deployment) error {
-	if err := m.validateShouldMutate(deployment.ObjectMeta); err != nil {
+func (m *mutatorImpl) RemoveLumigoFromAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) error {
+	if err := m.removeLumigoFromPodSpec(&daemonSet.Spec.Template.Spec); err != nil {
 		return err
 	}
 
-	if err := m.mutatePodSpec(&deployment.Spec.Template.Spec); err != nil {
+	if daemonSet.ObjectMeta.Labels != nil {
+		delete(daemonSet.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	if daemonSet.Spec.Template.ObjectMeta.Labels != nil {
+		delete(daemonSet.Spec.Template.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *mutatorImpl) InjectLumigoIntoAppsV1Deployment(deployment *appsv1.Deployment) error {
+	if err := m.validateShouldInjectLumigoInto(deployment.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.injectLumigoIntoPodSpec(&deployment.Spec.Template.Spec); err != nil {
 		return err
 	}
 
@@ -130,12 +152,28 @@ func (m *mutatorImpl) MutateAppsV1Deployment(deployment *appsv1.Deployment) erro
 	return nil
 }
 
-func (m *mutatorImpl) MutateAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error {
-	if err := m.validateShouldMutate(replicaSet.ObjectMeta); err != nil {
+func (m *mutatorImpl) RemoveLumigoFromAppsV1Deployment(deployment *appsv1.Deployment) error {
+	if err := m.removeLumigoFromPodSpec(&deployment.Spec.Template.Spec); err != nil {
 		return err
 	}
 
-	if err := m.mutatePodSpec(&replicaSet.Spec.Template.Spec); err != nil {
+	if deployment.ObjectMeta.Labels != nil {
+		delete(deployment.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	if deployment.Spec.Template.ObjectMeta.Labels != nil {
+		delete(deployment.Spec.Template.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *mutatorImpl) InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error {
+	if err := m.validateShouldInjectLumigoInto(replicaSet.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.injectLumigoIntoPodSpec(&replicaSet.Spec.Template.Spec); err != nil {
 		return err
 	}
 
@@ -154,12 +192,28 @@ func (m *mutatorImpl) MutateAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) erro
 	return nil
 }
 
-func (m *mutatorImpl) MutateAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error {
-	if err := m.validateShouldMutate(statefulSet.ObjectMeta); err != nil {
+func (m *mutatorImpl) RemoveLumigoFromAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) error {
+	if err := m.removeLumigoFromPodSpec(&replicaSet.Spec.Template.Spec); err != nil {
 		return err
 	}
 
-	if err := m.mutatePodSpec(&statefulSet.Spec.Template.Spec); err != nil {
+	if replicaSet.ObjectMeta.Labels != nil {
+		delete(replicaSet.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	if replicaSet.Spec.Template.ObjectMeta.Labels != nil {
+		delete(replicaSet.Spec.Template.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *mutatorImpl) InjectLumigoIntoAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error {
+	if err := m.validateShouldInjectLumigoInto(statefulSet.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.injectLumigoIntoPodSpec(&statefulSet.Spec.Template.Spec); err != nil {
 		return err
 	}
 
@@ -178,12 +232,28 @@ func (m *mutatorImpl) MutateAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) e
 	return nil
 }
 
-func (m *mutatorImpl) MutateBatchV1CronJob(batchJob *batchv1.CronJob) error {
-	if err := m.validateShouldMutate(batchJob.ObjectMeta); err != nil {
+func (m *mutatorImpl) RemoveLumigoFromAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) error {
+	if err := m.removeLumigoFromPodSpec(&statefulSet.Spec.Template.Spec); err != nil {
 		return err
 	}
 
-	if err := m.mutatePodSpec(&batchJob.Spec.JobTemplate.Spec.Template.Spec); err != nil {
+	if statefulSet.ObjectMeta.Labels == nil {
+		delete(statefulSet.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	if statefulSet.Spec.Template.ObjectMeta.Labels == nil {
+		delete(statefulSet.Spec.Template.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *mutatorImpl) InjectLumigoIntoBatchV1CronJob(batchJob *batchv1.CronJob) error {
+	if err := m.validateShouldInjectLumigoInto(batchJob.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.injectLumigoIntoPodSpec(&batchJob.Spec.JobTemplate.Spec.Template.Spec); err != nil {
 		return err
 	}
 
@@ -202,12 +272,28 @@ func (m *mutatorImpl) MutateBatchV1CronJob(batchJob *batchv1.CronJob) error {
 	return nil
 }
 
-func (m *mutatorImpl) MutateBatchV1Job(job *batchv1.Job) error {
-	if err := m.validateShouldMutate(job.ObjectMeta); err != nil {
+func (m *mutatorImpl) RemoveLumigoFromBatchV1CronJob(batchJob *batchv1.CronJob) error {
+	if err := m.removeLumigoFromPodSpec(&batchJob.Spec.JobTemplate.Spec.Template.Spec); err != nil {
 		return err
 	}
 
-	if err := m.mutatePodSpec(&job.Spec.Template.Spec); err != nil {
+	if batchJob.ObjectMeta.Labels == nil {
+		delete(batchJob.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	if batchJob.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels == nil {
+		delete(batchJob.Spec.JobTemplate.Spec.Template.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *mutatorImpl) InjectLumigoIntoBatchV1Job(job *batchv1.Job) error {
+	if err := m.validateShouldInjectLumigoInto(job.ObjectMeta); err != nil {
+		return err
+	}
+
+	if err := m.injectLumigoIntoPodSpec(&job.Spec.Template.Spec); err != nil {
 		return err
 	}
 
@@ -226,7 +312,23 @@ func (m *mutatorImpl) MutateBatchV1Job(job *batchv1.Job) error {
 	return nil
 }
 
-func (m *mutatorImpl) validateShouldMutate(resourceMeta metav1.ObjectMeta) error {
+func (m *mutatorImpl) RemoveLumigoFromBatchV1Job(job *batchv1.Job) error {
+	if err := m.removeLumigoFromPodSpec(&job.Spec.Template.Spec); err != nil {
+		return err
+	}
+
+	if job.ObjectMeta.Labels == nil {
+		delete(job.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	if job.Spec.Template.ObjectMeta.Labels == nil {
+		delete(job.Spec.Template.ObjectMeta.Labels, LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *mutatorImpl) validateShouldInjectLumigoInto(resourceMeta metav1.ObjectMeta) error {
 	autoTraceLabelValue := resourceMeta.Labels[LumigoAutoTraceLabelKey]
 	if autoTraceLabelValue == "false" {
 		// Opt-out for this resource, skip injection
@@ -236,7 +338,7 @@ func (m *mutatorImpl) validateShouldMutate(resourceMeta metav1.ObjectMeta) error
 	return nil
 }
 
-func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
+func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 	lumigoInjectorVolume := &corev1.Volume{
 		Name: LumigoInjectorVolumeName,
 		VolumeSource: corev1.VolumeSource{
@@ -362,6 +464,56 @@ func (m *mutatorImpl) mutatePodSpec(podSpec *corev1.PodSpec) error {
 		patchedContainers = append(patchedContainers, container)
 	}
 	podSpec.Containers = patchedContainers
+
+	return nil
+}
+
+func (m *mutatorImpl) removeLumigoFromPodSpec(podSpec *corev1.PodSpec) error {
+	if podSpec.InitContainers != nil {
+		newInitContainers := []corev1.Container{}
+		for _, initContainer := range podSpec.InitContainers {
+			if isLumigoInjectorContainer, _ := BeTheLumigoInjectorContainer("").Match(initContainer); !isLumigoInjectorContainer {
+				newInitContainers = append(newInitContainers, initContainer)
+			}
+		}
+		podSpec.InitContainers = newInitContainers
+	}
+
+	if podSpec.Volumes != nil {
+		newVolumes := []corev1.Volume{}
+		for _, volume := range podSpec.Volumes {
+			if isLumigoInjectorVolume, _ := BeTheLumigoInjectorVolume().Match(volume); !isLumigoInjectorVolume {
+				newVolumes = append(newVolumes, volume)
+			}
+		}
+		podSpec.Volumes = newVolumes
+	}
+
+	envVarsToRemove := []string{LumigoTracerTokenEnvVarName, LumigoEndpointEnvVarName, LdPreloadEnvVarName}
+	newContainers := []corev1.Container{}
+	for _, container := range podSpec.Containers {
+		if container.VolumeMounts != nil {
+			newVolumeMounts := []corev1.VolumeMount{}
+			for _, volumeMount := range container.VolumeMounts {
+				if volumeMount.Name != LumigoInjectorVolumeName {
+					newVolumeMounts = append(newVolumeMounts, volumeMount)
+				}
+			}
+			container.VolumeMounts = newVolumeMounts
+		}
+
+		newEnvVar := []corev1.EnvVar{}
+		for _, envVar := range container.Env {
+			if !slices.Contains(envVarsToRemove, envVar.Name) {
+				newEnvVar = append(newEnvVar, envVar)
+			}
+		}
+
+		container.Env = newEnvVar
+
+		newContainers = append(newContainers, container)
+	}
+	podSpec.Containers = newContainers
 
 	return nil
 }
