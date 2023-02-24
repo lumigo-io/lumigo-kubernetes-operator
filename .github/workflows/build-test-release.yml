@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  unit-test:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
@@ -22,11 +22,85 @@ jobs:
         run: |
           make test
 
+  test-helm-upgrade:
+    runs-on: ubuntu-latest
+    needs:
+    - validate-release-increment
+    if: ${{ needs.validate-release-increment.outputs.perform-release == 'true' }}
+    services:
+      # Run a local registry
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    steps:
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          driver-opts: network=host  # Needed to read the local registry
+      - name: Set up regctl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+          sudo curl -L https://github.com/regclient/regclient/releases/download/v0.4.4/regctl-linux-amd64 -o /usr/bin/regctl
+          sudo chmod +x /usr/bin/regctl
+
+          # Configure local registry as insecure
+          /usr/bin/regctl registry set --tls disabled localhost:5000
+      - name: Install minikube
+        uses: medyagh/setup-minikube@v0.0.11
+        with:
+          start-args: --insecure-registry "host.docker.internal:5000"
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+      - name: Install tools
+        run: |
+          make install-tools
+      - name: Set up Helm
+        run: curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install latest Helm chart on artifactory
+        run: |
+          helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
+          helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --wait
+
+          kubectl get all --all
+      - name: Build local operator
+        env:
+          CONTROLLER_IMG: localhost:5000/controller:${{ github.sha }}
+          PROXY_IMG: localhost:5000/controller:${{ github.sha }}
+        run: |
+          make docker-buildx
+          helm upgrade --install lumigo charts/lumigo-operator \
+            --namespace lumigo-system --create-namespace \
+            --set "${CONTROLLER_IMG}" \
+            --set "${PROXY_IMG}"
+            --wait
+
+          kubectl get all --all
+
+  all-tests:
+    runs-on: ubuntu-latest
+    needs:
+    - unit-test
+    - test-helm-upgrade
+    steps:
+      - name: no-op
+        run: echo 'Noice'
+
   check-should-release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs:
-    - test
+    - all-tests
     steps:
       - name: Checkout
         uses: actions/checkout@v3
