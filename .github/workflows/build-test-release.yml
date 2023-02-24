@@ -24,9 +24,6 @@ jobs:
 
   test-helm-upgrade:
     runs-on: ubuntu-latest
-    needs:
-    - validate-release-increment
-    if: ${{ needs.validate-release-increment.outputs.perform-release == 'true' }}
     services:
       # Run a local registry
       registry:
