@@ -94,7 +94,7 @@ jobs:
     - test-helm-upgrade
     steps:
       - name: no-op
-        run: echo 'Noice'
+        run: echo '*tongue click* noice'
 
   check-should-release:
     if: github.ref == 'refs/heads/main'
