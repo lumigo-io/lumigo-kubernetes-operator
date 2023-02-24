@@ -64,8 +64,7 @@ jobs:
           helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --dry-run
 
           if ! helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait --timeout 3m; then
-            kubectl get all -A
-            kubectl get pods -n lumigo-system
+            kubectl describe all -n lumigo-system
             exit 1
           fi
 
@@ -105,8 +104,7 @@ jobs:
             --set "controllerManager.telemetryProxy.image.tag=${{ github.run_number }}" \
             --debug --wait --timeout 3m; then
 
-            kubectl get all -A
-            kubectl get pods -n lumigo-system
+            kubectl describe all -n lumigo-system
             exit 1
           fi
 
