@@ -84,21 +84,25 @@ jobs:
           file: Dockerfile.proxy
           tags: localhost:5000/telemetry-proxy:${{ github.run_number }}
           push: true
-      - name: Build local operator
+      - name: Deploy PR operator
         env:
-          CONTROLLER_IMG: localhost:5000/controller:${{ github.run_number }}
-          PROXY_IMG: localhost:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: localhost:5000/controller
+          PROXY_IMG: localhost:5000/telemetry-proxy
         run: |
           helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
-            --set "controllerManager.manager.image.tag=${CONTROLLER_IMG}" \
-            --set "controllerManager.telemetryProxy.image.tag=${PROXY_IMG}" \
+            --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_number }}" \
             --dry-run
 
           if ! helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
-            --set "controllerManager.manager.image.tag=${CONTROLLER_IMG}" \
-            --set "controllerManager.telemetryProxy.image.tag=${PROXY_IMG}" \
+            --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_number }}" \
             --debug --wait --timeout 3m; then
 
             kubectl get all -A
