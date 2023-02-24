@@ -84,8 +84,8 @@ jobs:
         run: |
           helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
-            --set "${CONTROLLER_IMG}" \
-            --set "${PROXY_IMG}"
+            --set "controllerManager.manager.image.tag=${CONTROLLER_IMG}" \
+            --set "controllerManager.telemetryProxy.image.tag=${PROXY_IMG}"
             --wait
 
           kubectl get all -A
