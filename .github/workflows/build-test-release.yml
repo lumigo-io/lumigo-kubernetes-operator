@@ -48,7 +48,9 @@ jobs:
       - name: Install minikube
         uses: medyagh/setup-minikube@v0.0.11
         with:
-          start-args: --insecure-registry "host.docker.internal:5000"
+          start-args: --insecure-registry "localhost:5000"
+          driver: docker
+          cni: bridge
       - name: Checkout
         uses: actions/checkout@v3
         with:
