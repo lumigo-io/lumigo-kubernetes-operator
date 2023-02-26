@@ -11,8 +11,8 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { IQueue, Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { App, Chart, Helm } from 'cdk8s';
 import { Deployment as KubeDeployment, Secret as KubeSecret } from 'cdk8s-plus-23';
-import { Lumigo } from '../imports/operator.lumigo.io';
 import { Construct } from 'constructs';
+import { Lumigo } from '../imports/operator.lumigo.io';
 
 export interface EksStackProps extends StackProps {
   readonly clusterName: string;
@@ -71,27 +71,37 @@ export class EksPythonSqsLambdaStack extends Stack {
 
     const projectRoot = getProjectRoot();
 
-    const lumigoOperatorImageAsset = new DockerImageAsset(this, 'LumigoOperator', {
+    const lumigoOperatorControllerImageAsset = new DockerImageAsset(this, 'LumigoOperator', {
       directory: projectRoot,
+      file: 'Dockerfile.controller',
+      platform: Platform.LINUX_AMD64,
+      exclude: ['tests'], // Avoid recursive inclusion in Docker build context
+    });
+    const lumigoOperatorTelemetryProxyImageAsset = new DockerImageAsset(this, 'LumigoOperator', {
+      directory: projectRoot,
+      file: 'Dockerfile.proxy',
       platform: Platform.LINUX_AMD64,
       exclude: ['tests'], // Avoid recursive inclusion in Docker build context
     });
 
     const lumigoOperatorChart = new Chart(new App(), `${props.clusterName}-lumigo-operator`, {});
     /* const lumigoOperatorHelmChart =*/ new Helm(lumigoOperatorChart, 'LumigoOperator', {
-      chart: join(projectRoot, 'deploy', 'helm'),
+      chart: join(projectRoot, 'charts', 'lumigo-operator'),
       releaseName: 'test',
       namespace: lumigoOperatorNamespace,
       helmFlags: ['--wait'],
       values: {
-        'controllerManager.manager.image.repository': lumigoOperatorImageAsset.repository.repositoryUri,
-        'controllerManager.manager.image.tag': lumigoOperatorImageAsset.imageTag,
-      }
+        'controllerManager.manager.image.repository': lumigoOperatorControllerImageAsset.repository.repositoryUri,
+        'controllerManager.manager.image.tag': lumigoOperatorControllerImageAsset.imageTag,
+        'controllerManager.telemetryProxy.image.repository': lumigoOperatorTelemetryProxyImageAsset.repository.repositoryUri,
+        'controllerManager.telemetryProxy.image.tag': lumigoOperatorTelemetryProxyImageAsset.imageTag,
+      },
     });
 
     // The EKS cluster's NodeInstanceRole needs to be granted pull from the ECR repo
     // https://docs.aws.amazon.com/AmazonECR/latest/userguide/ECR_on_EKS.html
-    lumigoOperatorImageAsset.repository.grantPull(cluster.defaultNodegroup!.role);
+    lumigoOperatorControllerImageAsset.repository.grantPull(cluster.defaultNodegroup!.role);
+    lumigoOperatorTelemetryProxyImageAsset.repository.grantPull(cluster.defaultNodegroup!.role);
 
     const lumigoOperatorChartManifest = cluster.addCdk8sChart('lumigo-operator', lumigoOperatorChart, {});
     lumigoOperatorChartManifest.node.addDependency(lumigoOperatorNamespaceManifest);
@@ -150,14 +160,14 @@ export class EksPythonSqsLambdaStack extends Stack {
           secretRef: {
             name: lumigoSecret.name,
             key: 'token',
-          }
+          },
         },
         tracing: {
           injection: {
-            enabled: true
-          }
-        }
-      }
+            enabled: true,
+          },
+        },
+      },
     });
 
     const testAppDeployment = new KubeDeployment(testAppChart, 'TestAppDeployment', {
@@ -167,24 +177,23 @@ export class EksPythonSqsLambdaStack extends Stack {
       },
       replicas: 2,
       containers: [{
-          image: testAppImageAsset.imageUri,
-          envVariables: {
-            'OTEL_SERVICE_NAME': {
-              value: 'SqsProducer',
-            },
-            'TARGET_QUEUE_URL': {
-              value: queue.queueUrl!,
-            },
-            'AWS_REGION': {
-              value: props.env?.region,
-            },
-            'OTEL_RESOURCE_ATTRIBUTES': {
-              value: `aws.eks.cluster.arn=${cluster.clusterArn}`,
-            },
+        image: testAppImageAsset.imageUri,
+        envVariables: {
+          OTEL_SERVICE_NAME: {
+            value: 'SqsProducer',
           },
-          ports: [{ number: 8080 }],
-        }
-      ]
+          TARGET_QUEUE_URL: {
+            value: queue.queueUrl!,
+          },
+          AWS_REGION: {
+            value: props.env?.region,
+          },
+          OTEL_RESOURCE_ATTRIBUTES: {
+            value: `aws.eks.cluster.arn=${cluster.clusterArn}`,
+          },
+        },
+        ports: [{ number: 8080 }],
+      }],
     });
     queue.grantSendMessages(testAppServiceAccount);
 
@@ -210,11 +219,19 @@ export class EksPythonSqsLambdaStack extends Stack {
     });
 
     new CfnOutput(this, 'lumigo_operator_controller_image_uri', {
-      value: lumigoOperatorImageAsset.imageUri,
+      value: lumigoOperatorControllerImageAsset.imageUri,
     });
 
     new CfnOutput(this, 'lumigo_operator_controller_image_tag', {
-      value: lumigoOperatorImageAsset.imageTag,
+      value: lumigoOperatorControllerImageAsset.imageTag,
+    });
+
+    new CfnOutput(this, 'lumigo_operator_telemetry_proxy_image_uri', {
+      value: lumigoOperatorTelemetryProxyImageAsset.imageUri,
+    });
+
+    new CfnOutput(this, 'lumigo_operator_telemetry_proxy_image_tag', {
+      value: lumigoOperatorTelemetryProxyImageAsset.imageTag,
     });
   }
 
