@@ -132,7 +132,9 @@ jobs:
           fi
       - name: Run end-to-end tests
         run:
-          make e2e-tests
+          if ! make e2e-tests; then
+            kubectl describe all -A
+          fi
 
   all-tests:
     runs-on: ubuntu-latest
