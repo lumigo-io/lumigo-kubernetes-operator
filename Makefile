@@ -90,7 +90,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	$(GOCMD) run ./main.go
 
 .PHONY: e2e-tests
-e2e-tests: test
+e2e-tests:
 	cd tests/end2end && $(GOCMD) test
 
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
