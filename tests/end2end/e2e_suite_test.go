@@ -274,7 +274,10 @@ var _ = Context("End-to-end tests", func() {
 					logs := buf.String()
 					g.Expect(logs).To(ContainSubstring("Loading the Lumigo OpenTelemetry distribution"))
 					g.Expect(logs).To(ContainSubstring(jobLogOutput))
-				}, defaultTimeout, defaultInterval).Should(Succeed())
+				},
+					// Relax timeout, this image will need to be pulled remotely
+					1*time.Minute,
+					defaultInterval).Should(Succeed())
 			})
 		})
 
