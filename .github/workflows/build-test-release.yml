@@ -134,6 +134,7 @@ jobs:
         run: |
           if ! make e2e-tests; then
             kubectl describe all -A
+            exit 1
           fi
 
   all-tests:

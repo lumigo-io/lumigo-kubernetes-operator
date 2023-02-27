@@ -162,7 +162,7 @@ var _ = Context("End-to-end tests", func() {
 					}, namespace)
 
 					return err != nil && apierrors.IsNotFound(err)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				}, 1*time.Minute, defaultInterval).Should(BeTrue())
 			})
 		})
 
