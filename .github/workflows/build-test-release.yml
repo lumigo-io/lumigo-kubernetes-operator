@@ -35,13 +35,24 @@ jobs:
       # a service, which means that on the worker node there is a registry on localhost:5000.
       # However, Minikube cannot pull images from *that* localhost, because it's own localhost
       # is something else, so we need to reference the registry via the IP of the worker machine,
-      # and configure `minikube` and `docker push` to treat that registry as insecure (i.e., talking
-      # HTTP instead of HTTPS).
+      # and configure `minikube` to treat that registry as insecure (i.e., talking HTTP instead
+      # of HTTPS). But the fun does not end here: since we cannot use localhost in the image name,
+      # the `docker/build-push-action@v3` cannot apparently be told to consider the repo as insecure!
+      # So we need to output images to file, and then push them to the local repo via regctl.
       - name: Look up host ip
         id: hostip
         run: |
           ip a
           echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
+      - name: Set up regctl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+          sudo curl -L https://github.com/regclient/regclient/releases/download/v0.4.4/regctl-linux-amd64 -o /usr/bin/regctl
+          sudo chmod +x /usr/bin/regctl
+
+          # Configure local registry as insecure
+          /usr/bin/regctl registry set --tls disabled "${{ steps.hostip.outputs.ip }}:5000"
       - name: Install minikube
         uses: medyagh/setup-minikube@v0.0.11
         with:
@@ -68,14 +79,28 @@ jobs:
           fi
 
           kubectl get all -A
-      - name: Build images and push them to local repo
+      - name: Build controller image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          file: Dockerfile.controller
+          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          outputs: type=oci,dest=controller-image.tar
+      - name: Build telemetry-proxy image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          file: Dockerfile.proxy
+          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          outputs: type=oci,dest=telemetry-proxy-image.tar
+      - name: Push container images to local repository
         env:
-          DOCKER_OPTS: --insecure-registries "${{ steps.hostip.outputs.ip }}:5000"
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
-          make docker-build docker-push
-      - name: Deploy PR operator
+          regctl image import "${CONTROLLER_IMG}" controller-image.tar
+          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar
+      - name: Deploy locally-built operator
         env:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
