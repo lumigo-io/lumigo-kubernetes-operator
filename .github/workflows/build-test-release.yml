@@ -85,7 +85,7 @@ jobs:
         with:
           start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
           driver: docker
-          cni: bridge
+          # cni: bridge
       - name: Checkout
         uses: actions/checkout@v3
         with:
