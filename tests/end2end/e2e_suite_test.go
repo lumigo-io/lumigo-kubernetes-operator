@@ -36,13 +36,14 @@ import (
 )
 
 var (
-	ctx             context.Context
-	k8sClient       client.Client
-	clientset       *kubernetes.Clientset
-	lumigoToken     string
-	lumigoNamespace = "lumigo-system"
-	defaultTimeout  = 10 * time.Second
-	defaultInterval = 100 * time.Millisecond
+	ctx              context.Context
+	k8sClient        client.Client
+	clientset        *kubernetes.Clientset
+	lumigoToken      string
+	lumigoNamespace  = "lumigo-system"
+	defaultTimeout   = 10 * time.Second
+	defaultInterval  = 100 * time.Millisecond
+	deleteNamespaces bool
 )
 
 // These tests assume:
@@ -57,6 +58,9 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	deleteNamespacesString, isSet := os.LookupEnv("DELETE_TEST_NAMESPACES")
+	deleteNamespaces = !isSet || (deleteNamespacesString == "true")
+
 	ctx = context.TODO()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
@@ -143,27 +147,29 @@ var _ = Context("End-to-end tests", func() {
 		})
 
 		AfterEach(func() {
-			By("Cleaning up test namespace", func() {
-				namespace := &corev1.Namespace{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Namespace",
-						APIVersion: "v1",
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name: namespaceName,
-					},
-				}
+			if deleteNamespaces {
+				By("Cleaning up test namespace", func() {
+					namespace := &corev1.Namespace{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "Namespace",
+							APIVersion: "v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: namespaceName,
+						},
+					}
 
-				Expect(k8sClient.Delete(ctx, namespace)).Should(Succeed())
+					Expect(k8sClient.Delete(ctx, namespace)).Should(Succeed())
 
-				Eventually(func() bool {
-					err := k8sClient.Get(context.Background(), types.NamespacedName{
-						Name: namespace.Name,
-					}, namespace)
+					Eventually(func() bool {
+						err := k8sClient.Get(context.Background(), types.NamespacedName{
+							Name: namespace.Name,
+						}, namespace)
 
-					return err != nil && apierrors.IsNotFound(err)
-				}, 1*time.Minute, defaultInterval).Should(BeTrue())
-			})
+						return err != nil && apierrors.IsNotFound(err)
+					}, 1*time.Minute, defaultInterval).Should(BeTrue())
+				})
+			}
 		})
 
 		It("trace a Python job created after the Lumigo resource is created", func() {
