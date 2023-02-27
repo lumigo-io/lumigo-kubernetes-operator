@@ -307,6 +307,85 @@ var _ = Context("Lumigo controller", func() {
 			})
 		})
 
+		It("should not injection existing resources when creating the Lumigo resource with .Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation set to false", func() {
+			lumigoSecretName := "lumigo-credentials"
+			expectedTokenKey := "token"
+
+			By("Inititalizing the secret", func() {
+				Expect(k8sClient.Create(ctx, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      lumigoSecretName,
+					},
+					Data: map[string][]byte{
+						expectedTokenKey: []byte("t_1234567890123456789AB"),
+					},
+				})).Should(Succeed())
+			})
+
+			deploymentName := "test-deployment"
+
+			By("Inititalizing the deployment", func() {
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      deploymentName,
+						Namespace: namespaceName,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"deployment": deploymentName,
+							},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"deployment": deploymentName,
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "myapp",
+										Image: "busybox",
+									},
+								},
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+			})
+
+			lumigoName := "lumigo1"
+			var lumigo *operatorv1alpha1.Lumigo
+			By("Initializing the Lumigo resource", func() {
+				// Instantiating Lumigo after the deployment, so that the former is instrumented without the webhook
+				lumigo = newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: lumigoSecretName,
+						Key:  expectedTokenKey,
+					},
+				}, true, false, false)
+				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
+
+				Eventually(func() bool {
+					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+				}, defaultTimeout, defaultInterval).Should(BeTrue())
+			})
+
+			By("Validating deployment did not get injected", func() {
+				deployment := &appsv1.Deployment{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{
+					Namespace: namespaceName,
+					Name:      deploymentName,
+				}, deployment)).To(Succeed())
+
+				Expect(deployment).NotTo(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+			})
+
+		})
+
 		It("should not undo injection when removing the Lumigo resource with .Tracing.Injection.RemoveLumigoFromResourcesOnDeletion set to false", func() {
 			lumigoSecretName := "lumigo-credentials"
 			expectedTokenKey := "token"

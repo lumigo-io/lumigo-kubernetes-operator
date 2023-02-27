@@ -27,7 +27,17 @@ type beInstrumentedWithLumigo struct {
 	lumigoEndpointUrl     string
 }
 
-func (m *beInstrumentedWithLumigo) Match(actual interface{}) (success bool, err error) {
+func (m *beInstrumentedWithLumigo) Match(actual interface{}) (bool, error) {
+	success, err := m.doMatch(actual)
+
+	if !success {
+		return success, nil
+	}
+
+	return success, err
+}
+
+func (m *beInstrumentedWithLumigo) doMatch(actual interface{}) (bool, error) {
 	switch a := actual.(type) {
 	case *appsv1.DaemonSet:
 		if areAllContainerInstrumented, err := m.areAllContainersInstrumentedWithLumigo(&a.Spec.Template.Spec.Containers); !areAllContainerInstrumented || err != nil {
@@ -277,7 +287,13 @@ func (m *beInstrumentedWithLumigo) isContainerInstrumentedWithLumigo(container *
 }
 
 func (m *beInstrumentedWithLumigo) FailureMessage(actual interface{}) (message string) {
-	return "is not instrumented with the Lumigo injector"
+	_, err := m.doMatch(actual)
+
+	if err != nil {
+		return fmt.Errorf("is not instrumented with the Lumigo injector: %w", err).Error()
+	} else {
+		return "is not instrumented with the Lumigo injector"
+	}
 }
 
 func (m *beInstrumentedWithLumigo) NegatedFailureMessage(actual interface{}) (message string) {
