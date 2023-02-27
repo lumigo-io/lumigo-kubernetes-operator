@@ -71,8 +71,8 @@ jobs:
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
         run: |
           set -eux
           regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
