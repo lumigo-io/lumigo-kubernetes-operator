@@ -4,35 +4,219 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func BeInstrumentedWithLumigo(lumigoOperatorVersion string, lumigoInjectorImage string, lumigoEndpointUrl string) types.GomegaMatcher {
 	return &beInstrumentedWithLumigo{
-		operatorVersion:   lumigoOperatorVersion,
-		injectorImage:     lumigoInjectorImage,
-		lumigoEndpointUrl: lumigoEndpointUrl,
+		lumigoOperatorVersion: lumigoOperatorVersion,
+		lumigoInjectorImage:   lumigoInjectorImage,
+		lumigoEndpointUrl:     lumigoEndpointUrl,
 	}
 }
 
 type beInstrumentedWithLumigo struct {
-	operatorVersion   string
-	injectorImage     string
-	lumigoEndpointUrl string
+	lumigoOperatorVersion string
+	lumigoInjectorImage   string
+	lumigoEndpointUrl     string
 }
 
 func (m *beInstrumentedWithLumigo) Match(actual interface{}) (success bool, err error) {
-	var container corev1.Container
-
 	switch a := actual.(type) {
-	case corev1.Container:
-		container = a
+	case *appsv1.DaemonSet:
+		if areAllContainerInstrumented, err := m.areAllContainersInstrumentedWithLumigo(&a.Spec.Template.Spec.Containers); !areAllContainerInstrumented || err != nil {
+			return areAllContainerInstrumented, err
+		}
+
+		if hasInjectorContainer, err := m.containsLumigoInjectorInitContainer(&a.Spec.Template.Spec.InitContainers); hasInjectorContainer || err != nil {
+			return hasInjectorContainer, err
+		}
+
+		if hasInjectorVolume, err := m.containsLumigoInjectorVolume(&a.Spec.Template.Spec.Volumes); !hasInjectorVolume || err != nil {
+			return hasInjectorVolume, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.Spec.Template.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		return true, nil
+	case *appsv1.Deployment:
+		if areAllContainerInstrumented, err := m.areAllContainersInstrumentedWithLumigo(&a.Spec.Template.Spec.Containers); !areAllContainerInstrumented || err != nil {
+			return areAllContainerInstrumented, err
+		}
+
+		if hasInjectorContainer, err := m.containsLumigoInjectorInitContainer(&a.Spec.Template.Spec.InitContainers); hasInjectorContainer || err != nil {
+			return hasInjectorContainer, err
+		}
+
+		if hasInjectorVolume, err := m.containsLumigoInjectorVolume(&a.Spec.Template.Spec.Volumes); !hasInjectorVolume || err != nil {
+			return hasInjectorVolume, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.Spec.Template.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		return true, nil
+	case *appsv1.ReplicaSet:
+		if areAllContainerInstrumented, err := m.areAllContainersInstrumentedWithLumigo(&a.Spec.Template.Spec.Containers); !areAllContainerInstrumented || err != nil {
+			return areAllContainerInstrumented, err
+		}
+
+		if hasInjectorContainer, err := m.containsLumigoInjectorInitContainer(&a.Spec.Template.Spec.InitContainers); hasInjectorContainer || err != nil {
+			return hasInjectorContainer, err
+		}
+
+		if hasInjectorVolume, err := m.containsLumigoInjectorVolume(&a.Spec.Template.Spec.Volumes); !hasInjectorVolume || err != nil {
+			return hasInjectorVolume, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.Spec.Template.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		return true, nil
+	case *appsv1.StatefulSet:
+		if areAllContainerInstrumented, err := m.areAllContainersInstrumentedWithLumigo(&a.Spec.Template.Spec.Containers); !areAllContainerInstrumented || err != nil {
+			return areAllContainerInstrumented, err
+		}
+
+		if hasInjectorContainer, err := m.containsLumigoInjectorInitContainer(&a.Spec.Template.Spec.InitContainers); hasInjectorContainer || err != nil {
+			return hasInjectorContainer, err
+		}
+
+		if hasInjectorVolume, err := m.containsLumigoInjectorVolume(&a.Spec.Template.Spec.Volumes); !hasInjectorVolume || err != nil {
+			return hasInjectorVolume, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.Spec.Template.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		return true, nil
+	case *batchv1.CronJob:
+		if areAllContainerInstrumented, err := m.areAllContainersInstrumentedWithLumigo(&a.Spec.JobTemplate.Spec.Template.Spec.Containers); !areAllContainerInstrumented || err != nil {
+			return areAllContainerInstrumented, err
+		}
+
+		if hasInjectorContainer, err := m.containsLumigoInjectorInitContainer(&a.Spec.JobTemplate.Spec.Template.Spec.InitContainers); hasInjectorContainer || err != nil {
+			return hasInjectorContainer, err
+		}
+
+		if hasInjectorVolume, err := m.containsLumigoInjectorVolume(&a.Spec.JobTemplate.Spec.Template.Spec.Volumes); !hasInjectorVolume || err != nil {
+			return hasInjectorVolume, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.Spec.JobTemplate.Spec.Template.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		return true, nil
+	case *batchv1.Job:
+		if areAllContainerInstrumented, err := m.areAllContainersInstrumentedWithLumigo(&a.Spec.Template.Spec.Containers); !areAllContainerInstrumented || err != nil {
+			return areAllContainerInstrumented, err
+		}
+
+		if hasInjectorContainer, err := m.containsLumigoInjectorInitContainer(&a.Spec.Template.Spec.InitContainers); hasInjectorContainer || err != nil {
+			return hasInjectorContainer, err
+		}
+
+		if hasInjectorVolume, err := m.containsLumigoInjectorVolume(&a.Spec.Template.Spec.Volumes); !hasInjectorVolume || err != nil {
+			return hasInjectorVolume, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		if err := m.hasTheAutoTraceLabelSet(&a.Spec.Template.ObjectMeta); err != nil {
+			return false, err
+		}
+
+		return true, nil
 	default:
-		return false, fmt.Errorf("BeInstrumentedWithLumigo matcher expects a *corev1.Container; got:\n%s", format.Object(actual, 1))
+		return false, fmt.Errorf("BeInstrumentedWithLumigo matcher expects one of: *appsv1.DaemonSet, *appsv1.Deployment, *appsv1.ReplicaSet, *appsv1.StatefulSet, *batchv1.CronJob or *batchv1.Job; got:\n%s", format.Object(actual, 1))
+	}
+}
+
+func (m *beInstrumentedWithLumigo) hasTheAutoTraceLabelSet(objectMeta *metav1.ObjectMeta) error {
+	version := m.lumigoOperatorVersion
+	if len(version) > 8 {
+		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
 	}
 
+	expectedAutoTraceLabelValue := "lumigo-operator.v" + version
+
+	podTemplateHasAutoTraceLabels, err := gomega.HaveKeyWithValue(LumigoAutoTraceLabelKey, expectedAutoTraceLabelValue).Match(objectMeta)
+	if err != nil {
+		return fmt.Errorf("cannot lookup '%s' label: %w", LumigoAutoTraceLabelKey, err)
+	}
+	if !podTemplateHasAutoTraceLabels {
+		return fmt.Errorf("'%s' label not found", LumigoAutoTraceLabelKey)
+	}
+
+	return nil
+}
+
+func (m *beInstrumentedWithLumigo) containsLumigoInjectorInitContainer(containers *[]corev1.Container) (bool, error) {
+	for _, container := range *containers {
+		if isTheInjectorContainer, err := BeTheLumigoInjectorContainer(m.lumigoInjectorImage).Match(container); isTheInjectorContainer && err == nil {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("no Lumigo injector container found")
+}
+
+func (m *beInstrumentedWithLumigo) containsLumigoInjectorVolume(volumes *[]corev1.Volume) (bool, error) {
+	for _, volume := range *volumes {
+		if isTheInjectorVolume, err := BeTheLumigoInjectorVolume().Match(volume); isTheInjectorVolume && err == nil {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("no Lumigo injector volume found")
+}
+
+func (m *beInstrumentedWithLumigo) areAllContainersInstrumentedWithLumigo(containers *[]corev1.Container) (bool, error) {
+	for i, container := range *containers {
+		isContainerInstrumented, err := m.isContainerInstrumentedWithLumigo(&container)
+		if !isContainerInstrumented || err != nil {
+			return isContainerInstrumented, fmt.Errorf("container[%v] is not instrumented with Lumigo: %w", i, err)
+		}
+	}
+
+	return true, nil
+}
+
+func (m *beInstrumentedWithLumigo) isContainerInstrumentedWithLumigo(container *corev1.Container) (bool, error) {
 	ldPreloadEnvVarFound := false
 	lumigoTracerTokenEnvVarFound := false
 	lumigoEndpointEnvVarFound := false

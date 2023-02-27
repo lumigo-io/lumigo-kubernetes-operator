@@ -48,16 +48,17 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var (
-	cfg             *rest.Config
-	k8sClient       client.Client
-	testEnv         *envtest.Environment
-	ctx             context.Context
-	cancel          context.CancelFunc
-	defaultTimeout  = 20 * time.Second
-	defaultInterval = 100 * time.Millisecond
+	cfg                          *rest.Config
+	k8sClient                    client.Client
+	testEnv                      *envtest.Environment
+	ctx                          context.Context
+	cancel                       context.CancelFunc
+	defaultTimeout               = 20 * time.Second
+	defaultInterval              = 100 * time.Millisecond
+	lumigoOperatorVersion        = "test"
+	lumigoInjectorImage          = "localhost:5000/lumigo-injector:latest"
+	telemetryProxyOtlpServiceUrl = "http://localhost:4318"
 )
-
-var lumigoApiVersion = fmt.Sprintf("%s/%s", operatorv1alpha1.GroupVersion.Group, operatorv1alpha1.GroupVersion.Version)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -99,9 +100,9 @@ var _ = BeforeSuite(func() {
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
 		Log:                          ctrl.Log.WithName("controllers").WithName("Lumigo"),
-		LumigoOperatorVersion:        "test",
-		LumigoInjectorImage:          "localhost:5000/lumigo-injector:latest",
-		TelemetryProxyOtlpServiceUrl: "http://localhost:4318",
+		LumigoOperatorVersion:        lumigoOperatorVersion,
+		LumigoInjectorImage:          lumigoInjectorImage,
+		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpServiceUrl,
 	}).SetupWithManager(mgr); err != nil {
 		Expect(err).ToNot(HaveOccurred())
 	}
@@ -186,10 +187,6 @@ var _ = Context("Lumigo controller", func() {
 
 			By("the Lumigo instance recovers when the secret is created", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      "lumigo-credentials",
@@ -224,10 +221,6 @@ var _ = Context("Lumigo controller", func() {
 
 			By("the Lumigo instance recovers when the secret is created with the wrong key", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      "lumigo-credentials",
@@ -244,10 +237,6 @@ var _ = Context("Lumigo controller", func() {
 
 			By("the Lumigo instance recovers when the secret is updated with the right key", func() {
 				updatedSecret := &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      "lumigo-credentials",
@@ -301,10 +290,6 @@ var _ = Context("Lumigo controller", func() {
 
 			By("the Lumigo instance recovers when the secret is updated with the a valid token", func() {
 				updatedSecret := &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      "lumigo-credentials",
@@ -328,10 +313,6 @@ var _ = Context("Lumigo controller", func() {
 
 			By("Inititalizing the secret", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      lumigoSecretName,
@@ -394,13 +375,13 @@ var _ = Context("Lumigo controller", func() {
 			})
 
 			By("Validating deployment got injected", func() {
-				deploymentAfter := &appsv1.Deployment{}
+				deployment := &appsv1.Deployment{}
 				Expect(k8sClient.Get(ctx, types.NamespacedName{
 					Namespace: namespaceName,
 					Name:      deploymentName,
-				}, deploymentAfter)).To(Succeed())
+				}, deployment)).To(Succeed())
 
-				Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer("")))
+				Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
 			})
 
 			By("Deleting the Lumigo resource", func() {
@@ -415,14 +396,13 @@ var _ = Context("Lumigo controller", func() {
 			})
 
 			By("Validating the deployment still has injection", func() {
-				deploymentAfter2 := &appsv1.Deployment{}
-
+				deployment := &appsv1.Deployment{}
 				Expect(k8sClient.Get(ctx, types.NamespacedName{
 					Namespace: namespaceName,
 					Name:      deploymentName,
-				}, deploymentAfter2)).To(Succeed())
+				}, deployment)).To(Succeed())
 
-				Expect(deploymentAfter2.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer("")))
+				Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
 			})
 		})
 
@@ -432,10 +412,6 @@ var _ = Context("Lumigo controller", func() {
 
 			By("Inititalizing the secret", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      lumigoSecretName,
@@ -503,7 +479,7 @@ var _ = Context("Lumigo controller", func() {
 					Name:      deploymentName,
 				}, deploymentAfter)).To(Succeed())
 
-				Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer("")))
+				Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
 			})
 
 			By("Deleting the Lumigo resource", func() {
@@ -532,10 +508,6 @@ var _ = Context("Lumigo controller", func() {
 
 		It("should set both instances as not active and with an error", func() {
 			Expect(k8sClient.Create(ctx, &corev1.Secret{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Secret",
-					APIVersion: "v1",
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespaceName,
 					Name:      "lumigo-credentials",
@@ -607,10 +579,6 @@ func toNamespacedName(lumigo *operatorv1alpha1.Lumigo) *client.ObjectKey {
 
 func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool, injectLumigoIntoExistingResourcesOnCreation bool, removeLumigoFromResourcesOnDeletion bool) *operatorv1alpha1.Lumigo {
 	return &operatorv1alpha1.Lumigo{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Lumigo",
-			APIVersion: lumigoApiVersion,
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,

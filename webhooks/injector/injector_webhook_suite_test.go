@@ -430,16 +430,8 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			Expect(deploymentAfter.ObjectMeta.Labels).To(BeEquivalentTo(map[string]string{
-				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion[0:7],
-			}))
-			Expect(deploymentAfter.Spec.Template.ObjectMeta.Labels).To(BeEquivalentTo(map[string]string{
-				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion[0:7],
-				"deployment":                     name,
-			}))
-			Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(mutation.BeTheLumigoInjectorContainer(lumigoInjectorImage)))
-			Expect(deploymentAfter.Spec.Template.Spec.Volumes).To(HaveLen(1))
-			Expect(deploymentAfter.Spec.Template.Spec.Containers).To(ContainElements(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl)))
+			GinkgoWriter.Println(deploymentAfter)
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
 		})
 	})
 
