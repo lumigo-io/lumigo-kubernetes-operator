@@ -89,6 +89,10 @@ build: generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	$(GOCMD) run ./main.go
 
+.PHONY: e2e-tests
+e2e-tests: test
+	cd tests/end2end && $(GOCMD) test
+
 # If you wish built the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/

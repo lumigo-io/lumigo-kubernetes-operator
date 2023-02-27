@@ -310,8 +310,8 @@ var _ = Context("Lumigo controller", func() {
 						Namespace: namespaceName,
 						Name:      "lumigo-credentials",
 					},
-					Data: map[string][]byte{
-						expectedTokenKey: []byte("t_1234567890123456789AB"),
+					StringData: map[string]string{
+						expectedTokenKey: "t_1234567890123456789AB",
 					},
 				}
 

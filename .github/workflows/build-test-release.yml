@@ -53,6 +53,29 @@ jobs:
 
           # Configure local registry as insecure
           /usr/bin/regctl registry set --tls disabled "${{ steps.hostip.outputs.ip }}:5000"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build controller image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          file: Dockerfile.controller
+          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          outputs: type=oci,dest=controller-image.tar
+      - name: Build telemetry-proxy image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          file: Dockerfile.proxy
+          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          outputs: type=oci,dest=telemetry-proxy-image.tar
+      - name: Push container images to local repository
+        env:
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
+        run: |
+          regctl image import "${CONTROLLER_IMG}" controller-image.tar
+          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar
       - name: Install minikube
         uses: medyagh/setup-minikube@v0.0.11
         with:
@@ -79,27 +102,6 @@ jobs:
           fi
 
           kubectl get all -A
-      - name: Build controller image and save it to file
-        uses: docker/build-push-action@v3
-        with:
-          platforms: linux/amd64
-          file: Dockerfile.controller
-          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          outputs: type=oci,dest=controller-image.tar
-      - name: Build telemetry-proxy image and save it to file
-        uses: docker/build-push-action@v3
-        with:
-          platforms: linux/amd64
-          file: Dockerfile.proxy
-          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
-          outputs: type=oci,dest=telemetry-proxy-image.tar
-      - name: Push container images to local repository
-        env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
-        run: |
-          regctl image import "${CONTROLLER_IMG}" controller-image.tar
-          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar
       - name: Deploy locally-built operator
         env:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
@@ -124,6 +126,9 @@ jobs:
             kubectl describe all -n lumigo-system
             exit 1
           fi
+      - name: Run end-to-end tests
+        run:
+          make e2e-tests
 
   all-tests:
     runs-on: ubuntu-latest
