@@ -31,6 +31,12 @@ jobs:
         ports:
           - 5000:5000
     steps:
+      # The networking setup of this job is... complex. We run a local registry as
+      # a service, which means that on the worker node there is a registry on localhost:5000.
+      # However, Minikube cannot pull images from *that* localhost, because it's own localhost
+      # is something else, so we need to reference the registry via the IP of the worker machine,
+      # and configure `minikube` and `docker push` to treat that registry as insecure (i.e., talking
+      # HTTP instead of HTTPS).
       - name: Look up host ip
         id: hostip
         run: |
@@ -62,24 +68,11 @@ jobs:
           fi
 
           kubectl get all -A
-      - name: Build controller and push to local repo
-        uses: docker/build-push-action@v3
+      - name: Build images and push them to local repo
         env:
           DOCKER_OPTS: --insecure-registries "${{ steps.hostip.outputs.ip }}:5000"
-        with:
-          platforms: linux/amd64
-          file: Dockerfile.controller
-          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          push: true
-      - name: Build telemetry-proxy and push to local repo
-        uses: docker/build-push-action@v3
-        env:
-          DOCKER_OPTS: --insecure-registries "${{ steps.hostip.outputs.ip }}:5000"
-        with:
-          platforms: linux/amd64
-          file: Dockerfile.proxy
-          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
-          push: true
+        run: |
+          make docker-build docker-push
       - name: Deploy PR operator
         env:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
