@@ -74,8 +74,8 @@ jobs:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
-          regctl image import "${CONTROLLER_IMG}" controller-image.tar
-          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar
+          regctl image import "${CONTROLLER_IMG}" controller-image.tar -v debug
+          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar -v debug
       - name: Install minikube
         uses: medyagh/setup-minikube@v0.0.11
         with:
