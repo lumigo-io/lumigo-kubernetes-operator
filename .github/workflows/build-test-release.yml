@@ -71,6 +71,8 @@ jobs:
       - name: Build images and push them to local repo
         env:
           DOCKER_OPTS: --insecure-registries "${{ steps.hostip.outputs.ip }}:5000"
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
           make docker-build docker-push
       - name: Deploy PR operator
