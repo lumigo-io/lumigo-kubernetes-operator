@@ -17,17 +17,25 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/tools/cache"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -54,19 +62,36 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var uninstall bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&uninstall, "uninstall", false,
+		"Whether the execution of this manager is actually aimed at initiating the uninstallation procedure.")
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	logger := zap.New(zap.UseFlagOptions(&opts))
+	ctrl.SetLogger(logger)
 
+	if !uninstall {
+		setupLog.Info("starting manager")
+		if err := startManager(metricsAddr, probeAddr, enableLeaderElection); err != nil {
+			logger.Error(err, "Manager failed")
+			os.Exit(1)
+		}
+	} else if err := uninstallHook(); err != nil {
+		setupLog.Error(err, "Unistallation hook failed")
+		os.Exit(1)
+	}
+}
+
+func startManager(metricsAddr string, probeAddr string, enableLeaderElection bool) error {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -87,8 +112,7 @@ func main() {
 		// LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return fmt.Errorf("unable to start manager: %w", err)
 	}
 
 	logger := ctrl.Log.WithName("controllers").WithName("Lumigo")
@@ -100,16 +124,14 @@ func main() {
 
 	lumigoEndpoint, isSet := os.LookupEnv("TELEMETRY_PROXY_OTLP_SERVICE")
 	if !isSet {
-		setupLog.Error(err, "unable to create controller: environment variable 'TELEMETRY_PROXY_OTLP_SERVICE' is not set", "controller", "Lumigo")
-		os.Exit(1)
+		return fmt.Errorf("unable to create controller: environment variable 'TELEMETRY_PROXY_OTLP_SERVICE' is not set")
 	}
 
 	telemetryProxyOtlpService := lumigoEndpoint + "/v1/traces" // TODO: Fix it when the distros use the Lumigo endpoint as root
 
 	lumigoInjectorImage, isSet := os.LookupEnv("LUMIGO_INJECTOR_IMAGE")
 	if !isSet {
-		setupLog.Error(err, "unable to create controller: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set", "controller", "Lumigo")
-		os.Exit(1)
+		return fmt.Errorf("unable to create controller: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set")
 	}
 
 	if err = (&controllers.LumigoReconciler{
@@ -120,8 +142,7 @@ func main() {
 		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
 		Log:                          logger,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Lumigo")
-		os.Exit(1)
+		return fmt.Errorf("unable to create controller: %w", err)
 	}
 
 	if err = (&injector.LumigoInjectorWebhookHandler{
@@ -130,32 +151,114 @@ func main() {
 		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
 		Log:                          logger,
 	}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create injector webhook", "webhook", "lumigo-injector")
-		os.Exit(1)
+		return fmt.Errorf("unable to create injector webhook: %w", err)
 	}
 
 	if err = (&defaulter.LumigoDefaulterWebhookHandler{
 		LumigoOperatorVersion: lumigoOperatorVersion,
 		Log:                   logger,
 	}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create defaulter-webhook", "webhook", "lumigo-defaulter")
-		os.Exit(1)
+		return fmt.Errorf("unable to create defaulter webhook: %w", err)
 	}
 
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
+		return fmt.Errorf("unable to set up health check: %w", err)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+		return fmt.Errorf("unable to set up ready check: %w", err)
 	}
 
-	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		return fmt.Errorf("problem running manager: %w", err)
 	}
+
+	return nil
+}
+
+func uninstallHook() error {
+	logger := ctrl.Log.WithName("uninstaller").WithName("Lumigo")
+
+	config := ctrl.GetConfigOrDie()
+	s := runtime.NewScheme()
+	operatorv1alpha1.AddToScheme(s)
+
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("cannot initialize client: %w", err)
+	}
+
+	Client, err := client.NewWithWatch(config, client.Options{
+		Scheme: s,
+	})
+
+	if err != nil {
+		return fmt.Errorf("cannot initialize client: %w", err)
+	}
+
+	ctx := context.TODO()
+	lumigoes := &operatorv1alpha1.LumigoList{}
+	if err := Client.List(ctx, lumigoes); err != nil {
+		return fmt.Errorf("an error occurred while listing existing Lumigo resources: %w", err)
+	}
+
+	if len(lumigoes.Items) == 0 {
+		logger.Info("No Lumigo resources to delete")
+		return nil
+	}
+
+	logger.Info("Deleting all Lumigo resources", "lumigo-count", len(lumigoes.Items))
+
+	lumigoesLeft := make([]operatorv1alpha1.Lumigo, len(lumigoes.Items))
+	copy(lumigoesLeft, lumigoes.Items)
+
+	resource := operatorv1alpha1.GroupVersion.WithResource("lumigoes")
+	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(dynamicClient, 0 /* TODO */, "" /* all namespaces */, nil)
+
+	deletionCompletedChannel := make(chan error)
+	stopInformerChannel := make(chan struct{})
+
+	informer := factory.ForResource(resource).Informer()
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			logger.Info(fmt.Sprintf("Unexpected 'add' event for Lumigo resources: %+v", obj))
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			logger.Info(fmt.Sprintf("Unexpected 'update' event for Lumigo resources: %+v", newObj))
+		},
+		DeleteFunc: func(obj interface{}) {
+			deletedLumigo := obj.(unstructured.Unstructured)
+			for i, l := range lumigoesLeft {
+				if l.Namespace == deletedLumigo.GetNamespace() && l.Name == deletedLumigo.GetName() {
+					lumigoesLeft = append(lumigoesLeft[:i], lumigoesLeft[i+1:]...)
+				}
+			}
+
+			if len(lumigoesLeft) == 0 {
+				close(stopInformerChannel)
+			}
+		},
+	})
+
+	go func() {
+		/*
+		 * Informer.Run blocks until stopInformerChannel is closed,
+		 * which we will close when there are no more Lumigo resources left.
+		 */
+		logger.Info("Informer started")
+		informer.Run(stopInformerChannel)
+		logger.Info("Informer stopped")
+		deletionCompletedChannel <- nil
+	}()
+
+	for _, lumigo := range lumigoes.Items {
+		if err := Client.Delete(ctx, &lumigo); err != nil {
+			logger.Error(err, "An error occurred while deleting a Lumigo resource", "namespace", lumigo.Namespace, "name", lumigo.Name, "lumigo", lumigo)
+		} else {
+			logger.Info("Triggered Lumigo resource deletion", "namespace", lumigo.Namespace, "name", lumigo.Name)
+		}
+	}
+
+	return <-deletionCompletedChannel
 }

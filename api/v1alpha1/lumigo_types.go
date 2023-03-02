@@ -24,8 +24,7 @@ import (
 // IMPORTANT: Run "make" to regenerate code after modifying this file
 
 const (
-	LumigoResourceFinalizer   = "operator.lumigo.io/lumigo-finalizer"
-	LumigoControllerFinalizer = "operator.lumigo.io/controller-finalizer"
+	LumigoResourceFinalizer = "operator.lumigo.io/lumigo-finalizer"
 )
 
 // Lumigo is the Schema for the lumigoes API

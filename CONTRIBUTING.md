@@ -103,6 +103,15 @@ $ minikube delete
 $ minikube start --insecure-registry "host.docker.internal:5000"
 ```
 
+#### Various Helm stuff
+
+**upgrade --install fails with "no deployed releases":** running `helm upgrade --install` should precisely avoid these situations, making `helm` behave like an `upsert`, right?
+   However, sometimes dirty state left by failed uninstall procedures prevents Helm from being able to upsert, and to fix it, you run:
+   ```sh
+   kubectl delete secrets --all -n lumigo-system
+   ```
+   See [How to fix Helm's "Upgrade Failed: has no deployed releases" error ](https://dev.to/mxglt/how-to-fix-helms-upgrade-failed-has-no-deployed-releases-error-5cbn) for more info.
+
 ## Helm chart
 
 The first version of the [Helm chart](./deploy/helm/) has been generated with [helmify](https://github.com/arttor/helmify) by running `kustomize build config/default | helmify deploy/helm`.

@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
 	//+kubebuilder:scaffold:imports
 )
@@ -181,7 +182,7 @@ var _ = Context("Lumigo controller", func() {
 
 			By("the Lumigo instance goes in an erroneous state", func() {
 				Eventually(func() bool {
-					return hasErrorCondition(lumigo, fmt.Sprintf("the Lumigo token is not valid: cannot retrieve secret '%s/lumigo-credentials'", namespaceName))
+					return hasErrorCondition(lumigo, fmt.Sprintf("invalid Lumigo token secret reference: cannot retrieve secret '%s/lumigo-credentials'", namespaceName))
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 
@@ -197,7 +198,7 @@ var _ = Context("Lumigo controller", func() {
 				})).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+					return isActive(lumigo)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 		})
@@ -215,7 +216,7 @@ var _ = Context("Lumigo controller", func() {
 
 			By("the Lumigo instance goes in an erroneous state", func() {
 				Eventually(func() bool {
-					return hasErrorCondition(lumigo, fmt.Sprintf("the Lumigo token is not valid: cannot retrieve secret '%s/lumigo-credentials'", namespaceName))
+					return hasErrorCondition(lumigo, fmt.Sprintf("invalid Lumigo token secret reference: cannot retrieve secret '%s/lumigo-credentials'", namespaceName))
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 
@@ -231,7 +232,7 @@ var _ = Context("Lumigo controller", func() {
 				})).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasErrorCondition(lumigo, fmt.Sprintf("the Lumigo token is not valid: the secret '%s/%s' does not have the key '%s'", namespaceName, "lumigo-credentials", expectedTokenKey))
+					return hasErrorCondition(lumigo, fmt.Sprintf("invalid Lumigo token secret reference: the secret '%s/%s' does not have the key '%s'", namespaceName, "lumigo-credentials", expectedTokenKey))
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 
@@ -249,7 +250,7 @@ var _ = Context("Lumigo controller", func() {
 				Expect(k8sClient.Update(ctx, updatedSecret)).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+					return isActive(lumigo)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 		})
@@ -282,7 +283,7 @@ var _ = Context("Lumigo controller", func() {
 			By("the Lumigo instance goes in an erroneous state", func() {
 				Eventually(func() bool {
 					return hasErrorCondition(lumigo, fmt.Sprintf(
-						"the Lumigo token is not valid: the value of the field '%s' of the secret '%s/%s' does not match the expected structure of Lumigo tokens: "+
+						"invalid Lumigo token secret reference: the value of the field '%s' of the secret '%s/%s' does not match the expected structure of Lumigo tokens: "+
 							"it should be `t_` followed by of 21 alphanumeric characters; see https://docs.lumigo.io/docs/lumigo-tokens "+
 							"for instructions on how to retrieve your Lumigo token", expectedTokenKey, namespaceName, "lumigo-credentials"))
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
@@ -302,7 +303,7 @@ var _ = Context("Lumigo controller", func() {
 				Expect(k8sClient.Update(ctx, updatedSecret)).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+					return isActive(lumigo)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 		})
@@ -370,7 +371,7 @@ var _ = Context("Lumigo controller", func() {
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+					return isActive(lumigo)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 
@@ -449,7 +450,7 @@ var _ = Context("Lumigo controller", func() {
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+					return isActive(lumigo)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 
@@ -547,7 +548,7 @@ var _ = Context("Lumigo controller", func() {
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasActiveCondition(lumigo, corev1.ConditionTrue)
+					return isActive(lumigo)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 
@@ -604,7 +605,16 @@ var _ = Context("Lumigo controller", func() {
 			}
 
 			lumigo1 := newLumigo(namespaceName, "lumigo1", lumigoToken, true, true, true)
+			lumigo1NamespacesName := types.NamespacedName{
+				Namespace: lumigo1.Namespace,
+				Name:      lumigo1.Name,
+			}
 			Expect(k8sClient.Create(ctx, lumigo1)).Should(Succeed())
+			Eventually(func(g Gomega) {
+				updatedLumigo := &operatorv1alpha1.Lumigo{}
+				g.Expect(k8sClient.Get(ctx, lumigo1NamespacesName, updatedLumigo)).To(Succeed())
+				g.Expect(conditions.IsActive(updatedLumigo)).To(BeTrue())
+			}, defaultTimeout, defaultInterval).Should(Succeed())
 
 			lumigo2 := newLumigo(namespaceName, "lumigo2", lumigoToken, true, true, true)
 
@@ -613,12 +623,12 @@ var _ = Context("Lumigo controller", func() {
 
 				By("checking the status of the original lumigo resource")
 				Eventually(func() bool {
-					return hasErrorCondition(lumigo1, "multiple Lumigo instances in this namespace")
+					return isActive(lumigo1)
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 
 				By("checking the status of the new lumigo resource")
 				Eventually(func() bool {
-					return hasErrorCondition(lumigo2, "multiple Lumigo instances in this namespace")
+					return hasErrorCondition(lumigo2, "other Lumigo instances in this namespace")
 				}, defaultTimeout, defaultInterval).Should(BeTrue())
 			})
 
@@ -626,7 +636,7 @@ var _ = Context("Lumigo controller", func() {
 				Expect(k8sClient.Delete(ctx, lumigo2)).Should(Succeed())
 
 				Eventually(func() bool {
-					return hasActiveCondition(lumigo1, corev1.ConditionTrue)
+					return isActive(lumigo1)
 				}, 15*time.Second, defaultInterval).Should(BeTrue())
 			})
 		})
@@ -637,23 +647,18 @@ var _ = Context("Lumigo controller", func() {
 
 func hasErrorCondition(lumigo *operatorv1alpha1.Lumigo, message string) bool {
 	updatedLumigo := &operatorv1alpha1.Lumigo{}
-	if err := k8sClient.Get(context.Background(), *toNamespacedName(lumigo), updatedLumigo); err != nil {
+	if err := k8sClient.Get(context.Background(), toObjectKey(lumigo), updatedLumigo); err != nil {
 		fmt.Fprint(GinkgoWriter, err)
 		return false
 	}
 
-	if errorCondition := findErrorCondition(updatedLumigo); errorCondition != nil {
-		return errorCondition.Status == corev1.ConditionTrue && errorCondition.Message == message
+	if hasError, errorMessage := conditions.HasError(updatedLumigo); hasError {
+		isSatisfied := errorMessage == message
+		GinkgoWriter.Println(fmt.Sprintf("expected: '%s'; actual: '%s'; satisfied? %v", message, errorMessage, isSatisfied))
+		return isSatisfied
 	}
 
 	return false
-}
-
-func toNamespacedName(lumigo *operatorv1alpha1.Lumigo) *client.ObjectKey {
-	return &client.ObjectKey{
-		Namespace: lumigo.Namespace,
-		Name:      lumigo.Name,
-	}
 }
 
 func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool, injectLumigoIntoExistingResourcesOnCreation bool, removeLumigoFromResourcesOnDeletion bool) *operatorv1alpha1.Lumigo {
@@ -676,28 +681,19 @@ func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Crede
 	}
 }
 
-func hasActiveCondition(lumigo *operatorv1alpha1.Lumigo, conditionStatus corev1.ConditionStatus) bool {
+func isActive(lumigo *operatorv1alpha1.Lumigo) bool {
 	updatedLumigo := &operatorv1alpha1.Lumigo{}
-	if err := k8sClient.Get(context.Background(), *toNamespacedName(lumigo), updatedLumigo); err != nil {
-		fmt.Fprint(GinkgoWriter, err)
+	if err := k8sClient.Get(context.Background(), toObjectKey(lumigo), updatedLumigo); err != nil {
+		GinkgoWriter.Println(err)
 		return false
 	}
 
-	activeCondition := findConditionByType(updatedLumigo, operatorv1alpha1.LumigoConditionTypeActive)
-
-	return activeCondition != nil && activeCondition.Status == conditionStatus
+	return conditions.IsActive(updatedLumigo)
 }
 
-func findErrorCondition(lumigo *operatorv1alpha1.Lumigo) *operatorv1alpha1.LumigoCondition {
-	return findConditionByType(lumigo, operatorv1alpha1.LumigoConditionTypeError)
-}
-
-func findConditionByType(lumigo *operatorv1alpha1.Lumigo, conditionType operatorv1alpha1.LumigoConditionType) *operatorv1alpha1.LumigoCondition {
-	for _, condition := range lumigo.Status.Conditions {
-		if condition.Type == conditionType {
-			return &condition
-		}
+func toObjectKey(lumigo *operatorv1alpha1.Lumigo) client.ObjectKey {
+	return client.ObjectKey{
+		Namespace: lumigo.Namespace,
+		Name:      lumigo.Name,
 	}
-
-	return nil
 }

@@ -25,7 +25,8 @@ import (
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 )
 
-func GetLumigoConditionByType(status *operatorv1alpha1.LumigoStatus, t operatorv1alpha1.LumigoConditionType) *operatorv1alpha1.LumigoCondition {
+func GetLumigoConditionByType(lumigo *operatorv1alpha1.Lumigo, t operatorv1alpha1.LumigoConditionType) *operatorv1alpha1.LumigoCondition {
+	status := &lumigo.Status
 	if index := getConditionIndexByType(status, t); index > -1 {
 		return &status.Conditions[index]
 	}
@@ -33,29 +34,74 @@ func GetLumigoConditionByType(status *operatorv1alpha1.LumigoStatus, t operatorv
 	return nil
 }
 
-func UpdateLumigoConditions(status *operatorv1alpha1.LumigoStatus, t operatorv1alpha1.LumigoConditionType, now metav1.Time, conditionStatus corev1.ConditionStatus, desc string) {
+func SetActiveAndErrorConditions(lumigo *operatorv1alpha1.Lumigo, now metav1.Time, err error) {
+	if err != nil {
+		updateLumigoConditions(lumigo, operatorv1alpha1.LumigoConditionTypeError, now, corev1.ConditionTrue, fmt.Sprintf("%v", err))
+		SetErrorAndActiveConditions(lumigo, now, err)
+	} else {
+		// Clear the error status
+		ClearErrorCondition(lumigo, now)
+		SetActiveCondition(lumigo, now, true)
+	}
+}
+
+func SetActiveCondition(lumigo *operatorv1alpha1.Lumigo, now metav1.Time, isActive bool) {
+	var message string
+	if isActive {
+		message = "Lumigo is ready"
+	} else {
+		message = "Lumigo not ready"
+	}
+
+	SetActiveConditionWithMessage(lumigo, now, isActive, message)
+}
+
+func SetActiveConditionWithMessage(lumigo *operatorv1alpha1.Lumigo, now metav1.Time, isActive bool, message string) {
+	if isActive {
+		updateLumigoConditions(lumigo, operatorv1alpha1.LumigoConditionTypeActive, now, corev1.ConditionTrue, message)
+	} else {
+		updateLumigoConditions(lumigo, operatorv1alpha1.LumigoConditionTypeActive, now, corev1.ConditionFalse, message)
+	}
+}
+
+func SetErrorAndActiveConditions(lumigo *operatorv1alpha1.Lumigo, now metav1.Time, err error) {
+	SetActiveConditionWithMessage(lumigo, now, false, fmt.Sprintf("This Lumigo has an error, see the '%s' condition", operatorv1alpha1.LumigoConditionTypeError))
+	updateLumigoConditions(lumigo, operatorv1alpha1.LumigoConditionTypeError, now, corev1.ConditionTrue, fmt.Sprintf("%v", err))
+}
+
+func ClearErrorCondition(lumigo *operatorv1alpha1.Lumigo, now metav1.Time) {
+	updateLumigoConditions(lumigo, operatorv1alpha1.LumigoConditionTypeError, now, corev1.ConditionFalse, "")
+}
+
+func IsActive(lumigo *operatorv1alpha1.Lumigo) bool {
+	if activeCondition := GetLumigoConditionByType(lumigo, operatorv1alpha1.LumigoConditionTypeActive); activeCondition != nil {
+		return activeCondition.Status == corev1.ConditionTrue
+	}
+
+	return false
+}
+
+func HasError(lumigo *operatorv1alpha1.Lumigo) (bool, string) {
+	if errorCondition := GetLumigoConditionByType(lumigo, operatorv1alpha1.LumigoConditionTypeError); errorCondition != nil {
+		return errorCondition.Status == corev1.ConditionTrue, errorCondition.Message
+	}
+
+	return false, ""
+}
+
+func updateLumigoConditions(lumigo *operatorv1alpha1.Lumigo, t operatorv1alpha1.LumigoConditionType, now metav1.Time, conditionStatus corev1.ConditionStatus, desc string) {
+	status := &lumigo.Status
 	conditionIndex := getConditionIndexByType(status, t)
 
 	if conditionIndex > -1 {
-		SetLumigoCondition(&status.Conditions[conditionIndex], now, conditionStatus, desc)
+		setLumigoCondition(&status.Conditions[conditionIndex], now, conditionStatus, desc)
 	} else if conditionStatus == corev1.ConditionTrue {
 		// No condition exists of the given type
-		status.Conditions = append(status.Conditions, NewLumigoCondition(t, conditionStatus, now, "", desc))
+		status.Conditions = append(status.Conditions, newLumigoCondition(t, conditionStatus, now, "", desc))
 	}
 }
 
-func SetErrorActiveConditions(status *operatorv1alpha1.LumigoStatus, now metav1.Time, err error) {
-	if err != nil {
-		UpdateLumigoConditions(status, operatorv1alpha1.LumigoConditionTypeError, now, corev1.ConditionTrue, fmt.Sprintf("%v", err))
-		UpdateLumigoConditions(status, operatorv1alpha1.LumigoConditionTypeActive, now, corev1.ConditionFalse, "Lumigo has an error")
-	} else {
-		// Clear the error status
-		UpdateLumigoConditions(status, operatorv1alpha1.LumigoConditionTypeError, now, corev1.ConditionFalse, "")
-		UpdateLumigoConditions(status, operatorv1alpha1.LumigoConditionTypeActive, now, corev1.ConditionTrue, "Lumigo is ready")
-	}
-}
-
-func SetLumigoCondition(condition *operatorv1alpha1.LumigoCondition, now metav1.Time, conditionStatus corev1.ConditionStatus, message string) {
+func setLumigoCondition(condition *operatorv1alpha1.LumigoCondition, now metav1.Time, conditionStatus corev1.ConditionStatus, message string) {
 	if condition.Status != conditionStatus {
 		condition.LastTransitionTime = now
 		condition.Status = conditionStatus
@@ -64,7 +110,7 @@ func SetLumigoCondition(condition *operatorv1alpha1.LumigoCondition, now metav1.
 	condition.Message = message
 }
 
-func NewLumigoCondition(conditionType operatorv1alpha1.LumigoConditionType, conditionStatus corev1.ConditionStatus, now metav1.Time, reason, message string) operatorv1alpha1.LumigoCondition {
+func newLumigoCondition(conditionType operatorv1alpha1.LumigoConditionType, conditionStatus corev1.ConditionStatus, now metav1.Time, reason, message string) operatorv1alpha1.LumigoCondition {
 	return operatorv1alpha1.LumigoCondition{
 		Type:               conditionType,
 		Status:             conditionStatus,

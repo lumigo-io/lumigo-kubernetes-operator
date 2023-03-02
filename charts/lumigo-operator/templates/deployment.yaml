@@ -2,8 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "helm.fullname" . }}-controller-manager
-  finalizers:
-  - operator.lumigo.io/controller-finalizer
   labels:
     app.kubernetes.io/component: manager
     app.kubernetes.io/created-by: lumigo

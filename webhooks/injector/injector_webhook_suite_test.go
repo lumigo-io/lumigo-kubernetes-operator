@@ -430,7 +430,6 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			GinkgoWriter.Println(deploymentAfter)
 			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
 		})
 	})

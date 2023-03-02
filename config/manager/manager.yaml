@@ -16,8 +16,6 @@ kind: Deployment
 metadata:
   name: controller-manager
   namespace: system
-  finalizers:
-  - operator.lumigo.io/controller-finalizer
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: deployment

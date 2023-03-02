@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "helm.fullname" . }}-uninstall-hook
+  labels:
+    app.kubernetes.io/component: manager
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: controller-manager
+    lumigo.auto-trace: 'false' # We do not need the operator to inject itself
+  {{- include "helm.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded # we skip hook-failed so that we can look up logs if it fails
+spec:
+  completions: 1
+  backoffLimit: 2
+  template:
+    metadata:
+      name: "{{ .Release.Name }}"
+      labels:
+        lumigo.auto-trace: 'false' # We do not need the operator to inject itself
+        control-plane: controller-manager
+      {{- include "helm.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      activeDeadlineSeconds: 120 # Unfortunately, as of v3.11, Helm does not expose to templates its own timeout
+      containers:
+      - name: uninstall-hook
+        image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+        command: ["/manager", "--uninstall"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1234
+      serviceAccountName: {{ include "helm.fullname" . }}-controller-manager
