@@ -171,3 +171,14 @@ In namespaces with the Lumigo resource having `spec.tracing.injection.enabled` a
 
 The Lumigo operator injector webhook uses a self-signed certificate that is automatically generate during the [installation of the Helm chart](#installing-the-lumigo-operator).
 The generated certificate has a 365 days expiration, and a new certificate will be generated every time you upgrade Lumigo operator's helm chart.
+
+## Events
+
+The Lumigo operator will add events to the resources it instruments with the following reasons and in the following cases:
+
+| Reason | Created on resource types | Under which conditions |
+|--------|---------------------|------------------------|
+| `LumigoAddedInstrumentation` | `apps/v1.Deployment`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob` | If a Lumigo resources is created in the namespace, and the resource is instrumented with Lumigo as a result |
+| `LumigoCannotAddInstrumentation` | `apps/v1.Deployment`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob` | If a Lumigo resources is created in the namespace, and the resource _should_ be instrumented by Lumigo as a result, but an error occurs |
+| `LumigoRemovedInstrumentation` | `apps/v1.Deployment`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob` | If a Lumigo resources is deleted from the namespace, and the resource has the Lumigo instrumented removed as a result |
+| `LumigoCannotRemoveInstrumentation` | `apps/v1.Deployment`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob` | If a Lumigo resources is deleted from the namespace, and the resource _should have_ the Lumigo instrumented removed as a result, but an error occurs |

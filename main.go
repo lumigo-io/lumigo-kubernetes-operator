@@ -136,6 +136,7 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 
 	if err = (&controllers.LumigoReconciler{
 		Client:                       mgr.GetClient(),
+		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-controller.v%s", lumigoOperatorVersion)),
 		Scheme:                       mgr.GetScheme(),
 		LumigoOperatorVersion:        lumigoOperatorVersion,
 		LumigoInjectorImage:          lumigoInjectorImage,

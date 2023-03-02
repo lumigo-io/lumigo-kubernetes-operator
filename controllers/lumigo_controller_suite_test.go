@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -51,6 +52,7 @@ import (
 var (
 	cfg                          *rest.Config
 	k8sClient                    client.Client
+	clientset                    *kubernetes.Clientset
 	testEnv                      *envtest.Environment
 	ctx                          context.Context
 	cancel                       context.CancelFunc
@@ -91,6 +93,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
+	clientset, err = kubernetes.NewForConfig(cfg)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(clientset).NotTo(BeNil())
+
 	// Start controller
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
@@ -99,6 +105,7 @@ var _ = BeforeSuite(func() {
 
 	if err := (&LumigoReconciler{
 		Client:                       mgr.GetClient(),
+		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-controller.v%s", lumigoOperatorVersion)),
 		Scheme:                       mgr.GetScheme(),
 		Log:                          ctrl.Log.WithName("controllers").WithName("Lumigo"),
 		LumigoOperatorVersion:        lumigoOperatorVersion,
@@ -578,6 +585,19 @@ var _ = Context("Lumigo controller", func() {
 					g.Expect(deploymentAfter2.Spec.Template.Spec.InitContainers).To(BeEmpty())
 					g.Expect(deploymentAfter2.Spec.Template.Spec.Volumes).To(BeEmpty())
 					g.Expect(deploymentAfter2.Spec.Template.Spec.Containers).To(HaveLen(1))
+
+					eventList, err := clientset.CoreV1().Events(namespaceName).List(ctx, metav1.ListOptions{})
+					g.Expect(err).NotTo(HaveOccurred())
+
+					var addedLumigoInstrumentationEvent corev1.Event
+					for _, event := range eventList.Items {
+						if event.Reason == string(operatorv1alpha1.LumigoEventReasonAddedInstrumentation) {
+							addedLumigoInstrumentationEvent = event
+							break
+						}
+					}
+					g.Expect(addedLumigoInstrumentationEvent).NotTo(BeNil())
+					g.Expect(addedLumigoInstrumentationEvent.Source.Component).To(HavePrefix("lumigo-controller.v"))
 				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 		})

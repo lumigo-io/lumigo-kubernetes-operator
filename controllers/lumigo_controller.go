@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -55,6 +56,7 @@ const (
 // LumigoReconciler reconciles a Lumigo object
 type LumigoReconciler struct {
 	client.Client
+	record.EventRecorder
 	Scheme                       *runtime.Scheme
 	Log                          logr.Logger
 	LumigoOperatorVersion        string
@@ -123,7 +125,7 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			if conditions.IsActive(lumigoInstance) {
 				log.Info("Lumigo instance is being deleted, removing instrumentation from resources in namespace")
 				if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.RemoveLumigoFromResourcesOnDeletion, true) {
-					if err := r.removeLumigoFromResources(ctx, req.Namespace, &log); err != nil {
+					if err := r.removeLumigoFromResources(ctx, lumigoInstance, &log); err != nil {
 						log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
 						return ctrl.Result{}, err
 					}
@@ -311,8 +313,6 @@ func (r *LumigoReconciler) updateStatusIfNeeded(ctx context.Context, logger logr
 }
 
 func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigoInstance *operatorv1alpha1.Lumigo, log *logr.Logger) error {
-	// TODO Make it less chatty, avoid unnecessary updates
-
 	mutator, err := mutation.NewMutator(log, &lumigoInstance.Spec.LumigoToken, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
@@ -351,7 +351,9 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 		}
 
 		if !reflect.DeepEqual(mutatedDaemonset, &daemonset) {
+			r.recordAddedInstrumentationEvent(lumigoInstance, &daemonset)
 			if err := r.Client.Update(ctx, mutatedDaemonset); err != nil {
+				r.recordCannotAddInstrumentationEvent(lumigoInstance, &daemonset, err)
 				return fmt.Errorf("cannot add instrumentation to daemonset '%s': %w", daemonset.GetName(), err)
 			}
 
@@ -382,7 +384,9 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 		}
 
 		if !reflect.DeepEqual(mutatedDeployment, &deployment) {
+			r.recordAddedInstrumentationEvent(lumigoInstance, &deployment)
 			if err := r.Client.Update(ctx, mutatedDeployment); err != nil {
+				r.recordCannotAddInstrumentationEvent(lumigoInstance, &deployment, err)
 				return fmt.Errorf("cannot add instrumentation to deployment '%s': %w", deployment.GetName(), err)
 			}
 
@@ -413,7 +417,9 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 		}
 
 		if !reflect.DeepEqual(mutatedReplicaset, &replicaset) {
+			r.recordAddedInstrumentationEvent(lumigoInstance, &replicaset)
 			if err := r.Client.Update(ctx, mutatedReplicaset); err != nil {
+				r.recordCannotAddInstrumentationEvent(lumigoInstance, &replicaset, err)
 				return fmt.Errorf("cannot add instrumentation to replicaset '%s': %w", replicaset.GetName(), err)
 			}
 
@@ -444,7 +450,9 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 		}
 
 		if !reflect.DeepEqual(mutatedStatefulset, &statefulset) {
+			r.recordAddedInstrumentationEvent(lumigoInstance, &statefulset)
 			if err := r.Client.Update(ctx, mutatedStatefulset); err != nil {
+				r.recordCannotAddInstrumentationEvent(lumigoInstance, &statefulset, err)
 				return fmt.Errorf("cannot add instrumentation to statefulset '%s': %w", statefulset.GetName(), err)
 			}
 
@@ -475,7 +483,9 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 		}
 
 		if !reflect.DeepEqual(mutatedCronjob, &cronjob) {
+			r.recordAddedInstrumentationEvent(lumigoInstance, &cronjob)
 			if err := r.Client.Update(ctx, mutatedCronjob); err != nil {
+				r.recordCannotAddInstrumentationEvent(lumigoInstance, &cronjob, err)
 				return fmt.Errorf("cannot add instrumentation to cronjob '%s': %w", cronjob.GetName(), err)
 			}
 
@@ -493,13 +503,15 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	}
 
 	for _, job := range jobs.Items {
+		r.recordCannotAddInstrumentationEvent(lumigoInstance, &job, fmt.Errorf("the PodSpec of batchv1.Job resources is immutable once the job has been created"))
 		log.Info("Cannot instrumentation job: jobs are immutable once created", "namespace", job.Namespace, "name", job.Name)
 	}
 
 	return nil
 }
 
-func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namespace string, log *logr.Logger) error {
+func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigoInstance *operatorv1alpha1.Lumigo, log *logr.Logger) error {
+	namespace := lumigoInstance.Namespace
 	mutator, err := mutation.NewMutator(log, nil, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
@@ -538,7 +550,9 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namesp
 		if !reflect.DeepEqual(mutatedDaemonset, &daemonset) {
 			addAutoTraceSkipNextInjectorLabel(&mutatedDaemonset.ObjectMeta)
 
+			r.recordRemovedInstrumentationEvent(lumigoInstance, &daemonset)
 			if err := r.Client.Update(ctx, mutatedDaemonset); err != nil {
+				r.recordCannotRemoveInstrumentationEvent(lumigoInstance, &daemonset, err)
 				return fmt.Errorf("cannot remove instrumentation from daemonset '%s': %w", mutatedDaemonset.Name, err)
 			}
 
@@ -571,7 +585,9 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namesp
 		if !reflect.DeepEqual(mutatedDeployment, &deployment) {
 			addAutoTraceSkipNextInjectorLabel(&mutatedDeployment.ObjectMeta)
 
+			r.recordRemovedInstrumentationEvent(lumigoInstance, &deployment)
 			if err := r.Client.Update(ctx, mutatedDeployment); err != nil {
+				r.recordCannotRemoveInstrumentationEvent(lumigoInstance, &deployment, err)
 				return fmt.Errorf("cannot remove instrumentation from deployment '%s': %w", mutatedDeployment.Name, err)
 			}
 
@@ -604,7 +620,9 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namesp
 		if !reflect.DeepEqual(mutatedReplicaset, &replicaset) {
 			addAutoTraceSkipNextInjectorLabel(&mutatedReplicaset.ObjectMeta)
 
-			if err := r.Client.Update(ctx, &replicaset); err != nil {
+			r.recordRemovedInstrumentationEvent(lumigoInstance, &replicaset)
+			if err := r.Client.Update(ctx, mutatedReplicaset); err != nil {
+				r.recordCannotRemoveInstrumentationEvent(lumigoInstance, &replicaset, err)
 				return fmt.Errorf("cannot remove instrumentation from replicaset '%s': %w", mutatedReplicaset.Name, err)
 			}
 
@@ -637,11 +655,13 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namesp
 		if !reflect.DeepEqual(mutatedStatefulset, &statefulset) {
 			addAutoTraceSkipNextInjectorLabel(&mutatedStatefulset.ObjectMeta)
 
+			r.recordRemovedInstrumentationEvent(lumigoInstance, &statefulset)
 			if err := r.Client.Update(ctx, mutatedStatefulset); err != nil {
+				r.recordCannotRemoveInstrumentationEvent(lumigoInstance, &statefulset, err)
 				return fmt.Errorf("cannot remove instrumentation from statefulset '%s': %w", mutatedStatefulset.Name, err)
 			}
 
-			log.Info("Removed instrumentation from statefulset", "namespace", mutatedStatefulset.Namespace, "name", mutatedStatefulset.Name, "old", statefulset, "new", mutatedStatefulset)
+			log.Info("Removed instrumentation from statefulset", "namespace", mutatedStatefulset.Namespace, "name", mutatedStatefulset.Name)
 		}
 	}
 
@@ -670,7 +690,9 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namesp
 		if !reflect.DeepEqual(mutatedCronjob, &cronjob) {
 			addAutoTraceSkipNextInjectorLabel(&mutatedCronjob.ObjectMeta)
 
+			r.recordRemovedInstrumentationEvent(lumigoInstance, &cronjob)
 			if err := r.Client.Update(ctx, mutatedCronjob); err != nil {
+				r.recordCannotRemoveInstrumentationEvent(lumigoInstance, &cronjob, err)
 				return fmt.Errorf("cannot remove instrumentation from cronjob '%s': %w", mutatedCronjob.Name, err)
 			}
 
@@ -688,10 +710,47 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, namesp
 	}
 
 	for _, job := range jobs.Items {
+		r.recordCannotRemoveInstrumentationEvent(lumigoInstance, &job, fmt.Errorf("the PodSpec of batchv1.Job resources is immutable once the job has been created"))
 		log.Info("Cannot remove instrumentation from job: jobs are immutable once created", "namespace", job.Namespace, "name", job.Name)
 	}
 
 	return nil
+}
+
+func (r *LumigoReconciler) recordAddedInstrumentationEvent(lumigoInstance *operatorv1alpha1.Lumigo, resource runtime.Object) {
+	r.EventRecorder.Event(
+		resource,
+		corev1.EventTypeNormal,
+		string(operatorv1alpha1.LumigoEventReasonAddedInstrumentation),
+		fmt.Sprintf("Adding Lumigo instrumentation, triggered by the creation of the '%s' Lumigo resource", lumigoInstance.Name),
+	)
+}
+
+func (r *LumigoReconciler) recordRemovedInstrumentationEvent(lumigoInstance *operatorv1alpha1.Lumigo, resource runtime.Object) {
+	r.EventRecorder.Event(
+		resource,
+		corev1.EventTypeNormal,
+		string(operatorv1alpha1.LumigoEventReasonRemovedInstrumentation),
+		fmt.Sprintf("Removing Lumigo instrumentation, triggered by the deletion of the '%s' Lumigo resource", lumigoInstance.Name),
+	)
+}
+
+func (r *LumigoReconciler) recordCannotAddInstrumentationEvent(lumigoInstance *operatorv1alpha1.Lumigo, resource runtime.Object, err error) {
+	r.EventRecorder.Event(
+		resource,
+		corev1.EventTypeWarning,
+		string(operatorv1alpha1.LumigoEventReasonCannotAddInstrumentation),
+		fmt.Sprintf("Cannot add Lumigo instrumentation, triggered by the creation of the '%s' Lumigo resource: %s", lumigoInstance.Name, err.Error()),
+	)
+}
+
+func (r *LumigoReconciler) recordCannotRemoveInstrumentationEvent(lumigoInstance *operatorv1alpha1.Lumigo, resource runtime.Object, err error) {
+	r.EventRecorder.Event(
+		resource,
+		corev1.EventTypeWarning,
+		string(operatorv1alpha1.LumigoEventReasonCannotRemoveInstrumentation),
+		fmt.Sprintf("Cannot remove Lumigo instrumentation, triggered by the deletion of the '%s' Lumigo resource: %s", lumigoInstance.Name, err.Error()),
+	)
 }
 
 func addAutoTraceSkipNextInjectorLabel(objectMeta *metav1.ObjectMeta) {

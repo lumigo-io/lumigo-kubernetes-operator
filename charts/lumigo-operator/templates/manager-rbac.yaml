@@ -35,6 +35,14 @@ rules:
   - ""
   resources:
   - events
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - namespaces
   - namespaces/status
   - nodes
