@@ -78,10 +78,10 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ include "helm.fullname" . }}-manager-rolebinding
   labels:
+  {{- include "helm.labels" . | nindent 4 }}
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
-  {{- include "helm.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

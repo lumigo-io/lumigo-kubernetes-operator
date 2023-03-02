@@ -3,10 +3,10 @@ kind: ClusterRole
 metadata:
   name: {{ include "helm.fullname" . }}-metrics-reader
   labels:
+  {{- include "helm.labels" . | nindent 4 }}
     app.kubernetes.io/component: kube-rbac-proxy
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
-  {{- include "helm.labels" . | nindent 4 }}
 rules:
 - nonResourceURLs:
   - /metrics
