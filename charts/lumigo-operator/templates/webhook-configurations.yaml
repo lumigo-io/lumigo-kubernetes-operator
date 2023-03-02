@@ -58,9 +58,9 @@ webhooks:
   timeoutSeconds: 5
 ---
 apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingWebhookConfiguration
+kind: MutatingWebhookConfiguration
 metadata:
-  name: {{ include "helm.fullname" . }}-validator-webhook-configuration
+  name: {{ include "helm.fullname" . }}-defaulter-webhook-configuration
   labels:
   {{- include "helm.labels" . | nindent 4 }}
 webhooks:
@@ -72,9 +72,9 @@ webhooks:
     service:
       name: '{{ include "helm.fullname" . }}-webhooks-service'
       namespace: '{{ .Release.Namespace }}'
-      path: /v1alpha1/validate
+      path: /v1alpha1/mutate
   failurePolicy: Fail
-  name: lumigovalidator.kb.io
+  name: lumigodefaulter.kb.io
   rules:
   - apiGroups:
     - operator.lumigo.io
@@ -82,6 +82,7 @@ webhooks:
     - v1alpha1
     operations:
     - CREATE
+    - UPDATE
     resources:
     - lumigoes
   sideEffects: None

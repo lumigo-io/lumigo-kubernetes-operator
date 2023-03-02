@@ -36,13 +36,14 @@ import (
 )
 
 var (
-	ctx             context.Context
-	k8sClient       client.Client
-	clientset       *kubernetes.Clientset
-	lumigoToken     string
-	lumigoNamespace = "lumigo-system"
-	defaultTimeout  = 10 * time.Second
-	defaultInterval = 100 * time.Millisecond
+	ctx              context.Context
+	k8sClient        client.Client
+	clientset        *kubernetes.Clientset
+	lumigoToken      string
+	lumigoNamespace  = "lumigo-system"
+	defaultTimeout   = 10 * time.Second
+	defaultInterval  = 100 * time.Millisecond
+	deleteNamespaces bool
 )
 
 // These tests assume:
@@ -57,6 +58,9 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	deleteNamespacesString, isSet := os.LookupEnv("DELETE_TEST_NAMESPACES")
+	deleteNamespaces = !isSet || (deleteNamespacesString == "true")
+
 	ctx = context.TODO()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
@@ -143,27 +147,29 @@ var _ = Context("End-to-end tests", func() {
 		})
 
 		AfterEach(func() {
-			By("Cleaning up test namespace", func() {
-				namespace := &corev1.Namespace{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Namespace",
-						APIVersion: "v1",
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name: namespaceName,
-					},
-				}
+			if deleteNamespaces {
+				By("Cleaning up test namespace", func() {
+					namespace := &corev1.Namespace{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "Namespace",
+							APIVersion: "v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: namespaceName,
+						},
+					}
 
-				Expect(k8sClient.Delete(ctx, namespace)).Should(Succeed())
+					Expect(k8sClient.Delete(ctx, namespace)).Should(Succeed())
 
-				Eventually(func() bool {
-					err := k8sClient.Get(context.Background(), types.NamespacedName{
-						Name: namespace.Name,
-					}, namespace)
+					Eventually(func() bool {
+						err := k8sClient.Get(context.Background(), types.NamespacedName{
+							Name: namespace.Name,
+						}, namespace)
 
-					return err != nil && apierrors.IsNotFound(err)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
-			})
+						return err != nil && apierrors.IsNotFound(err)
+					}, 1*time.Minute, defaultInterval).Should(BeTrue())
+				})
+			}
 		})
 
 		It("trace a Python job created after the Lumigo resource is created", func() {
@@ -171,7 +177,7 @@ var _ = Context("End-to-end tests", func() {
 			lumigoTokenKey := "token"
 			testImage := "python"
 
-			jobLogOutput := "IT'S ALIIIIIIVE!"
+			logOutput := "IT'S ALIIIIIIVE!"
 
 			By("Creating the LumigoToken secret", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
@@ -222,7 +228,7 @@ var _ = Context("End-to-end tests", func() {
 			})
 
 			jobName := "testjob"
-			By("Creating the application job", func() {
+			By("Creating the job", func() {
 				var completions int32 = 1
 				job := &batchv1.Job{
 					ObjectMeta: metav1.ObjectMeta{
@@ -234,7 +240,8 @@ var _ = Context("End-to-end tests", func() {
 						Template: corev1.PodTemplateSpec{
 							ObjectMeta: metav1.ObjectMeta{
 								Labels: map[string]string{
-									"app": "myapp",
+									"app":  "myapp",
+									"type": "job",
 								},
 							},
 							Spec: corev1.PodSpec{
@@ -243,7 +250,7 @@ var _ = Context("End-to-end tests", func() {
 									{
 										Name:    "myapp",
 										Image:   testImage,
-										Command: []string{"python", "-c", fmt.Sprintf("print(\"%s\")", jobLogOutput)},
+										Command: []string{"python", "-c", fmt.Sprintf("print(\"%s\")", logOutput)},
 									},
 								},
 							},
@@ -253,11 +260,22 @@ var _ = Context("End-to-end tests", func() {
 				Expect(k8sClient.Create(ctx, job)).Should(Succeed())
 			})
 
-			By("Checking that the Application deployment is injected", func() {
+			By("Checking wether the job is injected", func() {
+				appReq, err := labels.NewRequirement("app", selection.Equals, []string{"myapp"})
+				Expect(err).NotTo(HaveOccurred())
+
+				typeReq, err := labels.NewRequirement("type", selection.Equals, []string{"job"})
+				Expect(err).NotTo(HaveOccurred())
+
+				jobPodSelector := labels.NewSelector()
+				jobPodSelector.Add(*appReq)
+				jobPodSelector.Add(*typeReq)
+
 				Eventually(func(g Gomega) {
 					pods := &corev1.PodList{}
 					g.Expect(k8sClient.List(ctx, pods, &client.ListOptions{
-						Namespace: namespaceName,
+						Namespace:     namespaceName,
+						LabelSelector: jobPodSelector,
 					})).To(Succeed())
 					g.Expect(pods.Items).To(HaveLen(1))
 
@@ -273,7 +291,273 @@ var _ = Context("End-to-end tests", func() {
 
 					logs := buf.String()
 					g.Expect(logs).To(ContainSubstring("Loading the Lumigo OpenTelemetry distribution"))
-					g.Expect(logs).To(ContainSubstring(jobLogOutput))
+					g.Expect(logs).To(ContainSubstring(logOutput))
+				},
+					// Relax timeout, this image will need to be pulled remotely
+					1*time.Minute,
+					defaultInterval).Should(Succeed())
+			})
+		})
+
+		It("trace a Python deployment created after the Lumigo resource is created", func() {
+			lumigoTokenName := "lumigo-credentials"
+			lumigoTokenKey := "token"
+			testImage := "python"
+
+			logOutput := "IT'S ALIIIIIIVE!"
+
+			By("Creating the LumigoToken secret", func() {
+				Expect(k8sClient.Create(ctx, &corev1.Secret{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Secret",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      lumigoTokenName,
+					},
+					StringData: map[string]string{
+						lumigoTokenKey: lumigoToken,
+					},
+				})).Should(Succeed())
+			})
+
+			By("Creating the Lumigo instance", func() {
+				lumigo1 := newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: lumigoTokenName,
+						Key:  lumigoTokenKey,
+					},
+				}, true)
+				Expect(k8sClient.Create(ctx, lumigo1)).Should(Succeed())
+
+				lumigoNamespacedName := types.NamespacedName{
+					Namespace: namespaceName,
+					Name:      lumigo1.Name,
+				}
+				Eventually(func(g Gomega) {
+					lumigo := &operatorv1alpha1.Lumigo{}
+					g.Expect(k8sClient.Get(ctx, lumigoNamespacedName, lumigo)).To(Succeed())
+
+					activityCondition := &operatorv1alpha1.LumigoCondition{}
+					g.Expect(lumigo.Status.Conditions).Should(
+						ContainElement(
+							MatchesLumigoCondition(
+								&operatorv1alpha1.LumigoCondition{
+									Type:   "Active",
+									Status: "True",
+								},
+							),
+							activityCondition,
+						),
+					)
+				}, defaultTimeout, defaultInterval).Should(Succeed())
+			})
+
+			deploymentName := "testdeployment"
+
+			By("Creating the deployment", func() {
+				var replicas int32 = 1
+				deployment := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      deploymentName,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"app":  "myapp",
+								"type": "deployment",
+							},
+						},
+						Replicas: &replicas,
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"app":  "myapp",
+									"type": "deployment",
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:    "myapp",
+										Image:   testImage,
+										Command: []string{"python", "-c", fmt.Sprintf("while True: print(\"%s\"); import time; time.sleep(5)", logOutput)},
+									},
+								},
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+			})
+
+			By("Checking that the deployment is injected", func() {
+				appReq, err := labels.NewRequirement("app", selection.Equals, []string{"myapp"})
+				Expect(err).NotTo(HaveOccurred())
+
+				typeReq, err := labels.NewRequirement("type", selection.Equals, []string{"deployment"})
+				Expect(err).NotTo(HaveOccurred())
+
+				deploymentPodSelector := labels.NewSelector()
+				deploymentPodSelector.Add(*appReq)
+				deploymentPodSelector.Add(*typeReq)
+
+				Eventually(func(g Gomega) {
+					pods := &corev1.PodList{}
+					g.Expect(k8sClient.List(ctx, pods, &client.ListOptions{
+						Namespace:     namespaceName,
+						LabelSelector: deploymentPodSelector,
+					})).To(Succeed())
+					g.Expect(pods.Items).To(HaveLen(1))
+
+					request := clientset.CoreV1().Pods(namespaceName).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{})
+					podLogs, err := request.Stream(ctx)
+					g.Expect(err).NotTo(HaveOccurred())
+
+					defer podLogs.Close()
+
+					buf := new(bytes.Buffer)
+					_, err = io.Copy(buf, podLogs)
+					g.Expect(err).NotTo(HaveOccurred())
+
+					logs := buf.String()
+					g.Expect(logs).To(ContainSubstring("Loading the Lumigo OpenTelemetry distribution"))
+					// g.Expect(logs).To(ContainSubstring(logOutput))
+				},
+					// Relax timeout, this image will need to be pulled remotely
+					1*time.Minute,
+					defaultInterval).Should(Succeed())
+			})
+		})
+
+		It("trace a Python statefulset created after the Lumigo resource is created", func() {
+			lumigoTokenName := "lumigo-credentials"
+			lumigoTokenKey := "token"
+			testImage := "python"
+
+			logOutput := "IT'S ALIIIIIIVE!"
+
+			By("Creating the LumigoToken secret", func() {
+				Expect(k8sClient.Create(ctx, &corev1.Secret{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Secret",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      lumigoTokenName,
+					},
+					StringData: map[string]string{
+						lumigoTokenKey: lumigoToken,
+					},
+				})).Should(Succeed())
+			})
+
+			By("Creating the Lumigo instance", func() {
+				lumigo1 := newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: lumigoTokenName,
+						Key:  lumigoTokenKey,
+					},
+				}, true)
+				Expect(k8sClient.Create(ctx, lumigo1)).Should(Succeed())
+
+				lumigoNamespacedName := types.NamespacedName{
+					Namespace: namespaceName,
+					Name:      lumigo1.Name,
+				}
+				Eventually(func(g Gomega) {
+					lumigo := &operatorv1alpha1.Lumigo{}
+					g.Expect(k8sClient.Get(ctx, lumigoNamespacedName, lumigo)).To(Succeed())
+
+					activityCondition := &operatorv1alpha1.LumigoCondition{}
+					g.Expect(lumigo.Status.Conditions).Should(
+						ContainElement(
+							MatchesLumigoCondition(
+								&operatorv1alpha1.LumigoCondition{
+									Type:   "Active",
+									Status: "True",
+								},
+							),
+							activityCondition,
+						),
+					)
+				}, defaultTimeout, defaultInterval).Should(Succeed())
+			})
+
+			deploymentName := "teststatefulset"
+
+			By("Creating the statefulset", func() {
+				var replicas int32 = 1
+				statefulset := &appsv1.StatefulSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      deploymentName,
+					},
+					Spec: appsv1.StatefulSetSpec{
+						Replicas: &replicas,
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"app":  "myapp",
+								"type": "statefulset",
+							},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"app":  "myapp",
+									"type": "statefulset",
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:    "myapp",
+										Image:   testImage,
+										Command: []string{"python", "-c", fmt.Sprintf("while True: print(\"%s\"); import time; time.sleep(5)", logOutput)},
+									},
+								},
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, statefulset)).Should(Succeed())
+			})
+
+			By("Checking that the statefulset is injected", func() {
+				appReq, err := labels.NewRequirement("app", selection.Equals, []string{"myapp"})
+				Expect(err).NotTo(HaveOccurred())
+
+				typeReq, err := labels.NewRequirement("type", selection.Equals, []string{"deployment"})
+				Expect(err).NotTo(HaveOccurred())
+
+				statefulsetPodSelector := labels.NewSelector()
+				statefulsetPodSelector.Add(*appReq)
+				statefulsetPodSelector.Add(*typeReq)
+
+				Eventually(func(g Gomega) {
+					pods := &corev1.PodList{}
+					g.Expect(k8sClient.List(ctx, pods, &client.ListOptions{
+						Namespace:     namespaceName,
+						LabelSelector: statefulsetPodSelector,
+					})).To(Succeed())
+					g.Expect(pods.Items).To(HaveLen(1))
+
+					request := clientset.CoreV1().Pods(namespaceName).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{})
+					podLogs, err := request.Stream(ctx)
+					g.Expect(err).NotTo(HaveOccurred())
+
+					defer podLogs.Close()
+
+					buf := new(bytes.Buffer)
+					_, err = io.Copy(buf, podLogs)
+					g.Expect(err).NotTo(HaveOccurred())
+
+					logs := buf.String()
+					g.Expect(logs).To(ContainSubstring("Loading the Lumigo OpenTelemetry distribution"))
+					// g.Expect(logs).To(ContainSubstring(logOutput))
 				},
 					// Relax timeout, this image will need to be pulled remotely
 					1*time.Minute,

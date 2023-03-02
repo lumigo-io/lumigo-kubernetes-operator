@@ -31,8 +31,7 @@ import (
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
-	. "github.com/lumigo-io/lumigo-kubernetes-operator/mutation/matchers"
-	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/validator"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/defaulter"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 
 	//+kubebuilder:scaffold:imports
@@ -164,12 +163,12 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	// We need the validator webhook as well to be able to create Lumigo objects
+	// We need the defaulter webhook as well to be able to create Lumigo objects
 	// To remove this dependency, we would need to split config/webhooks in two
 	// folders, one per webhook
-	err = (&validator.LumigoValidatorWebhookHandler{
+	err = (&defaulter.LumigoDefaulterWebhookHandler{
 		LumigoOperatorVersion: lumigoOperatorVersion,
-		Log:                   ctrl.Log.WithName("validator-webhook").WithName("Lumigo"),
+		Log:                   ctrl.Log.WithName("defaulter-webhook").WithName("Lumigo"),
 	}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -213,7 +212,7 @@ var _ = AfterSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 })
 
-var _ = Context("Lumigo validator webhook", func() {
+var _ = Context("Lumigo defaulter webhook", func() {
 
 	var namespaceName string
 
@@ -431,18 +430,8 @@ var _ = Context("Lumigo validator webhook", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			Expect(deploymentAfter.ObjectMeta.Labels).To(BeEquivalentTo(map[string]string{
-				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion[0:7],
-			}))
-			Expect(deploymentAfter.Spec.Template.ObjectMeta.Labels).To(BeEquivalentTo(map[string]string{
-				mutation.LumigoAutoTraceLabelKey: "lumigo-operator.v" + lumigoOperatorVersion[0:7],
-				"deployment":                     name,
-			}))
-			Expect(deploymentAfter.Spec.Template.Spec.InitContainers).To(ContainElements(BeTheLumigoInjectorContainer(lumigoInjectorImage)))
-			Expect(deploymentAfter.Spec.Template.Spec.Volumes).To(HaveLen(1))
-			Expect(deploymentAfter.Spec.Template.Spec.Containers).To(ContainElements(BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl)))
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
 		})
-
 	})
 
 	It("should not inject a minimal deployment with the lumigo.auto-trace label set to false", func() {

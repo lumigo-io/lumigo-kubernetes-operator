@@ -29,6 +29,8 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 
 ### Enabling automatic tracing
 
+#### Supported resource types
+
 The Lumigo operator automatically adds distributed tracing to pods created via:
 
 * Deployments ([`apps/v1.Deployment`](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/))
@@ -105,6 +107,54 @@ In the logs of the Lumigo operator, you will see a message like the following:
 1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/inject", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
 ```
 
+### Settings
+
+#### Inject existing resources
+
+By default, when detecting a new Lumigo resource in a namespace, the Lumigo controller will instrument existing resources of the [supported types](#supported-resource-types).
+The injection will cause new pods to be created for daemonsets, deployments, replicasets, statefulsets and jobs; cronjobs will spawn injected pods at the next iteration.
+To turn off the automatic injection of existing resources, create the Lumigo resource as follows
+
+```yaml
+apiVersion: operator.lumigo.io/v1alpha1
+kind: Lumigo
+metadata:
+  labels:
+    app.kubernetes.io/name: lumigo
+    app.kubernetes.io/instance: lumigo
+    app.kubernetes.io/part-of: lumigo-operator
+  name: lumigo
+spec:
+  lumigoToken: ...
+  tracing:
+    injection:
+      injectLumigoIntoExistingResourcesOnCreation: false # Default: true
+```
+
+#### Remove injection from existing resources
+
+By default, when detecting the deletion of the Lumigo resource in a namespace, the Lumigo controller will remove instrumentation from existing resources of the [supported types](#supported-resource-types).
+The injection will cause new pods to be created for daemonsets, deployments, replicasets, statefulsets and jobs; cronjobs will spawn non-injected pods at the next iteration.
+To turn off the automatic removal of injection from existing resources, create the Lumigo resource as follows
+
+```yaml
+apiVersion: operator.lumigo.io/v1alpha1
+kind: Lumigo
+metadata:
+  labels:
+    app.kubernetes.io/name: lumigo
+    app.kubernetes.io/instance: lumigo
+    app.kubernetes.io/part-of: lumigo-operator
+  name: lumigo
+spec:
+  lumigoToken: ...
+  tracing:
+    injection:
+      removeLumigoFromResourcesOnDeletion: false # Default: true
+```
+
+**Note:** The removal of injection from existing resources does not occur on uninstallation of the Lumigo operator, as the role-based access control is has likely already been deleted.
+
 ### Uninstall
 
 The removal of the Lumigo operator is performed by:
@@ -113,7 +163,9 @@ The removal of the Lumigo operator is performed by:
 helm delete lumigo --namespace lumigo-system
 ```
 
-All the `Lumigo` resources you have created in your namespaces are going to be automatically deleted.
+In namespaces with the Lumigo resource having `spec.tracing.injection.enabled` and `spec.tracing.injection.removeLumigoFromResourcesOnDeletion` both set to `true`, [supported resources](#supported-resource-types) that have been injected by the Lumigo operator will be updated to remove the injection, with the following caveat:
+
+**Note:** The removal of injection from existing resources does not apply to `batchv1.Job` resources, as their `corev1.PodSpec` is immutable after the `batchv1.Job` resource has been created.
 
 ## TLS certificates
 

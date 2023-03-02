@@ -25,7 +25,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -118,15 +117,15 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 	}
 
 	lumigo := lumigos.Items[0]
+
 	// Check if tracer injection is enabled (so the injection _should_ be performed)
 	enabled := lumigo.Spec.Tracing.Injection.Enabled
 	if enabled != nil && !*enabled {
 		return admission.Allowed(fmt.Sprintf("Tracing injection is disabled in the '%s' namespace; resource will not be mutated", namespace))
 	}
 
-	if err := h.validateMutationShouldOccur(&lumigo); err != nil {
-		// If we find a reason why the mutation should not occur, pass that as reason why the admission is allowed without modifications
-		return admission.Allowed(err.Error())
+	if !conditions.IsActive(&lumigo) {
+		return admission.Allowed(fmt.Sprintf("The Lumigo object in the '%s' namespace is not active; resource will not be mutated", namespace))
 	}
 
 	mutator, err := mutation.NewMutator(&log, &lumigo.Spec.LumigoToken, h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl)
@@ -134,7 +133,10 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Errorf("cannot instantiate mutator: %w", err).Error())
 	}
 
-	if err = resourceAdaper.Mutate(mutator); err != nil {
+	if objectMeta := resourceAdaper.GetObjectMeta(); objectMeta.Labels[mutation.LumigoAutoTraceLabelKey] == mutation.LumigoAutoTraceLabelSkipNextInjectorValue {
+		h.Log.Info(fmt.Sprintf("Skipping injection: '%s' label set to '%s'", mutation.LumigoAutoTraceLabelKey, mutation.LumigoAutoTraceLabelSkipNextInjectorValue))
+		delete(objectMeta.Labels, mutation.LumigoAutoTraceLabelKey)
+	} else if err = resourceAdaper.InjectLumigoInto(mutator); err != nil {
 		return admission.Allowed(fmt.Errorf("cannot inject Lumigo tracing in the pod spec %w", err).Error())
 	}
 
@@ -147,8 +149,9 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 }
 
 type resourceAdapter interface {
+	GetObjectMeta() *metav1.ObjectMeta
 	GetNamespace() string
-	Mutate(mutation.Mutator) error
+	InjectLumigoInto(mutation.Mutator) error
 	Marshal() ([]byte, error)
 }
 
@@ -158,17 +161,21 @@ type supportedResourceTypes interface {
 
 // Inline implementation of resourceAdapter inspired by https://stackoverflow.com/a/43420100/6188451
 type resourceAdapterImpl[T supportedResourceTypes] struct {
-	resource     *T
-	mutate       func(mutation.Mutator) error
-	getNamespace func() string
+	resource      *T
+	getNamespace  func() string
+	getObjectMeta func() *metav1.ObjectMeta
 }
 
 func (r *resourceAdapterImpl[T]) GetNamespace() string {
 	return r.getNamespace()
 }
 
-func (r *resourceAdapterImpl[T]) Mutate(mutator mutation.Mutator) error {
-	return r.mutate(mutator)
+func (r *resourceAdapterImpl[T]) GetObjectMeta() *metav1.ObjectMeta {
+	return r.getObjectMeta()
+}
+
+func (r *resourceAdapterImpl[T]) InjectLumigoInto(mutator mutation.Mutator) error {
+	return mutator.InjectLumigoInto(r.resource)
 }
 
 func (r *resourceAdapterImpl[T]) Marshal() ([]byte, error) {
@@ -188,11 +195,11 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 
 			return &resourceAdapterImpl[appsv1.DaemonSet]{
 				resource: resource,
-				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1DaemonSet(resource)
-				},
 				getNamespace: func() string {
 					return resource.Namespace
+				},
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
 			}, nil
 		}
@@ -209,8 +216,8 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1Deployment(resource)
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
 			}, nil
 		}
@@ -227,8 +234,8 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1ReplicaSet(resource)
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
 			}, nil
 		}
@@ -245,8 +252,8 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateAppsV1StatefulSet(resource)
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
 			}, nil
 		}
@@ -263,8 +270,8 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateBatchV1CronJob(resource)
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
 			}, nil
 		}
@@ -281,8 +288,8 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getNamespace: func() string {
 					return resource.Namespace
 				},
-				mutate: func(mutator mutation.Mutator) error {
-					return mutator.MutateBatchV1Job(resource)
+				getObjectMeta: func() *metav1.ObjectMeta {
+					return &resource.ObjectMeta
 				},
 			}, nil
 		}
@@ -292,21 +299,4 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 		}
 	}
 
-}
-
-func (h *LumigoInjectorWebhookHandler) validateMutationShouldOccur(lumigo *operatorv1alpha1.Lumigo) error {
-	namespace := lumigo.ObjectMeta.Namespace
-
-	status := &lumigo.Status
-
-	// Check if the Lumigo status is active (so the injection _could_ be performed)
-	if activeCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeActive); activeCondition == nil || activeCondition.Status != corev1.ConditionTrue {
-		return fmt.Errorf("the Lumigo object in the '%s' namespace is not active; resource will not be mutated", namespace)
-	}
-
-	if errorCondition := conditions.GetLumigoConditionByType(status, operatorv1alpha1.LumigoConditionTypeError); errorCondition != nil && errorCondition.Status == corev1.ConditionTrue {
-		return fmt.Errorf("the Lumigo object in the '%s' namespace is in an erroneous status; resource will not be mutated", namespace)
-	}
-
-	return nil
 }

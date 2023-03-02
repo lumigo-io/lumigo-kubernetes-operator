@@ -131,8 +131,13 @@ jobs:
             exit 1
           fi
       - name: Run end-to-end tests
-        run:
-          make e2e-tests
+        env:
+          DELETE_TEST_NAMESPACES: "false"
+        run: |
+          if ! make e2e-tests; then
+            kubectl describe all -A
+            exit 1
+          fi
 
   all-tests:
     runs-on: ubuntu-latest

@@ -23,6 +23,10 @@ import (
 
 // IMPORTANT: Run "make" to regenerate code after modifying this file
 
+const (
+	LumigoResourceFinalizer = "operator.lumigo.io/lumigo-finalizer"
+)
+
 // Lumigo is the Schema for the lumigoes API
 // +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:object:root=true
@@ -74,8 +78,24 @@ type TracingSpec struct {
 
 type InjectionSpec struct {
 	// Whether Daemonsets, Deployments, ReplicaSets, StatefulSets, CronJobs and Jobs
-	// will be injected by Lumigo or not. If unspecified, defaults to `true`
+	// that are created or updated after the creation of the Lumigo resource be injected.
+	// If unspecified, defaults to `true`
+	// +kubebuilder:validation:Optional
 	Enabled *bool `json:"enabled"` // Using a pointer to support cases where the value is not set (and it counts as enabled)
+
+	// Whether Daemonsets, Deployments, ReplicaSets, StatefulSets, CronJobs and Jobs
+	// that already exist when the Lumigo resource is created, will be updated with
+	// injection.
+	// If unspecified, defaults to `true`. It requires `Enabled` to be set to `true`.
+	// +kubebuilder:validation:Optional
+	InjectLumigoIntoExistingResourcesOnCreation *bool `json:"injectLumigoIntoExistingResourcesOnCreation,omitempty"`
+
+	// Whether Daemonsets, Deployments, ReplicaSets, StatefulSets, CronJobs and Jobs
+	// that are injected with Lumigo will be updated to remove the injection when the
+	// Lumigo resource is deleted.
+	// If unspecified, defaults to `true`. It requires `Enabled` to be set to `true`.
+	// +kubebuilder:validation:Optional
+	RemoveLumigoFromResourcesOnDeletion *bool `json:"removeLumigoFromResourcesOnDeletion,omitempty"`
 }
 
 // LumigoStatus defines the observed state of Lumigo
