@@ -3,10 +3,10 @@ kind: ClusterRole
 metadata:
   name: {{ include "helm.fullname" . }}-proxy-role
   labels:
+  {{- include "helm.labels" . | nindent 4 }}
     app.kubernetes.io/component: kube-rbac-proxy
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
-  {{- include "helm.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -26,10 +26,10 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ include "helm.fullname" . }}-proxy-rolebinding
   labels:
+  {{- include "helm.labels" . | nindent 4 }}
     app.kubernetes.io/component: kube-rbac-proxy
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
-  {{- include "helm.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

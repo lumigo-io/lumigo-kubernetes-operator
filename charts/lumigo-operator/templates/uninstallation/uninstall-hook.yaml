@@ -3,12 +3,12 @@ kind: Job
 metadata:
   name: {{ include "helm.fullname" . }}-uninstall-hook
   labels:
+  {{- include "helm.labels" . | nindent 4 }}
     app.kubernetes.io/component: manager
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
     control-plane: controller-manager
     lumigo.auto-trace: 'false' # We do not need the operator to inject itself
-  {{- include "helm.labels" . | nindent 4 }}
   annotations:
     helm.sh/hook: pre-delete
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded # we skip hook-failed so that we can look up logs if it fails
@@ -19,9 +19,9 @@ spec:
     metadata:
       name: "{{ .Release.Name }}"
       labels:
+      {{- include "helm.selectorLabels" . | nindent 8 }}
         lumigo.auto-trace: 'false' # We do not need the operator to inject itself
         control-plane: controller-manager
-      {{- include "helm.selectorLabels" . | nindent 8 }}
     spec:
       restartPolicy: Never
       activeDeadlineSeconds: 120 # Unfortunately, as of v3.11, Helm does not expose to templates its own timeout
