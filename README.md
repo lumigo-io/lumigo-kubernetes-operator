@@ -133,7 +133,7 @@ spec:
 
 #### Remove injection from existing resources
 
-By default, when detecting the deletion of a new Lumigo resource in a namespace, the Lumigo controller will remove instrumentation from existing resources of the [supported types](#supported-resource-types).
+By default, when detecting the deletion of the Lumigo resource in a namespace, the Lumigo controller will remove instrumentation from existing resources of the [supported types](#supported-resource-types).
 The injection will cause new pods to be created for daemonsets, deployments, replicasets, statefulsets and jobs; cronjobs will spawn non-injected pods at the next iteration.
 To turn off the automatic removal of injection from existing resources, create the Lumigo resource as follows
 
