@@ -5,6 +5,7 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   labels:
+  {{- include "helm.labels" . | nindent 4 }}
 spec:
   group: operator.lumigo.io
   names:
@@ -35,9 +36,8 @@ spec:
             description: LumigoSpec defines the desired state of Lumigo
             properties:
               lumigoToken:
-                description: 'The Lumigo token to be used to authenticate against
-                  Lumigo. For info on how to retrieve your Lumigo token, refer to:
-                  https://docs.lumigo.io/docs/lumigo-tokens'
+                description: 'The Lumigo token to be used to authenticate against Lumigo.
+                  For info on how to retrieve your Lumigo token, refer to: https://docs.lumigo.io/docs/lumigo-tokens'
                 properties:
                   secretRef:
                     description: Reference to a Kubernetes secret that contains the
@@ -62,24 +62,9 @@ spec:
                   injection:
                     properties:
                       enabled:
-                        description: Whether Daemonsets, Deployments, ReplicaSets,
-                          StatefulSets, CronJobs and Jobs that are created or updated
-                          after the creation of the Lumigo resource be injected. If
-                          unspecified, defaults to `true`
-                        type: boolean
-                      injectLumigoIntoExistingResourcesOnCreation:
-                        description: Whether Daemonsets, Deployments, ReplicaSets,
-                          StatefulSets, CronJobs and Jobs that already exist when
-                          the Lumigo resource is created, will be updated with injection.
-                          If unspecified, defaults to `true`. It requires `Enabled`
-                          to be set to `true`.
-                        type: boolean
-                      removeLumigoFromResourcesOnDeletion:
-                        description: Whether Daemonsets, Deployments, ReplicaSets,
-                          StatefulSets, CronJobs and Jobs that are injected with Lumigo
-                          will be updated to remove the injection when the Lumigo
-                          resource is deleted. If unspecified, defaults to `true`.
-                          It requires `Enabled` to be set to `true`.
+                        description: Whether Daemonsets, Deployments, ReplicaSets, StatefulSets,
+                          CronJobs and Jobs will be injected by Lumigo or not. If unspecified,
+                          defaults to `true`
                         type: boolean
                     required:
                     - enabled
@@ -123,3 +108,9 @@ spec:
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
