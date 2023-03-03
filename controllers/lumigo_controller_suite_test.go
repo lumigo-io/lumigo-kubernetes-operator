@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -103,9 +104,17 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
+	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+	Expect(err).ToNot(HaveOccurred())
+
+	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
+	Expect(err).ToNot(HaveOccurred())
+
 	if err := (&LumigoReconciler{
 		Client:                       mgr.GetClient(),
-		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-controller.v%s", lumigoOperatorVersion)),
+		Clientset:                    clientset,
+		DynamicClient:                dynamicClient,
+		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s", lumigoOperatorVersion)),
 		Scheme:                       mgr.GetScheme(),
 		Log:                          ctrl.Log.WithName("controllers").WithName("Lumigo"),
 		LumigoOperatorVersion:        lumigoOperatorVersion,
@@ -597,7 +606,7 @@ var _ = Context("Lumigo controller", func() {
 						}
 					}
 					g.Expect(addedLumigoInstrumentationEvent).NotTo(BeNil())
-					g.Expect(addedLumigoInstrumentationEvent.Source.Component).To(HavePrefix("lumigo-controller.v"))
+					g.Expect(addedLumigoInstrumentationEvent.Source.Component).To(HavePrefix("lumigo-operator.v"))
 				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 		})

@@ -173,6 +173,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	err = (&LumigoInjectorWebhookHandler{
+		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s", lumigoOperatorVersion)),
 		LumigoOperatorVersion:        lumigoOperatorVersion,
 		LumigoInjectorImage:          lumigoInjectorImage,
 		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpServiceUrl,

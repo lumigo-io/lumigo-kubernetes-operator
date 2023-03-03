@@ -27,6 +27,7 @@ import (
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/cache"
 
@@ -134,9 +135,21 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 		return fmt.Errorf("unable to create controller: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set")
 	}
 
+	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return fmt.Errorf("cannot create the clientset client for the controller")
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return fmt.Errorf("cannot create the dynamic client for the controller")
+	}
+
 	if err = (&controllers.LumigoReconciler{
 		Client:                       mgr.GetClient(),
-		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-controller.v%s", lumigoOperatorVersion)),
+		Clientset:                    clientset,
+		DynamicClient:                dynamicClient,
+		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/controller", lumigoOperatorVersion)),
 		Scheme:                       mgr.GetScheme(),
 		LumigoOperatorVersion:        lumigoOperatorVersion,
 		LumigoInjectorImage:          lumigoInjectorImage,
@@ -147,6 +160,7 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	}
 
 	if err = (&injector.LumigoInjectorWebhookHandler{
+		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/injector-webhook", lumigoOperatorVersion)),
 		LumigoOperatorVersion:        lumigoOperatorVersion,
 		LumigoInjectorImage:          lumigoInjectorImage,
 		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
