@@ -634,6 +634,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 			}
 
 			log.Info("Removed instrumentation from daemonset", "namespace", mutatedDaemonset.Namespace, "name", mutatedDaemonset.Name)
+		} else {
+			log.Info("Removal of instrumentation from daemonset unexpectedly resulted in no resource changes", "daemonset", daemonset)
 		}
 	}
 
@@ -670,6 +672,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 			}
 
 			log.Info("Removed instrumentation from deployment", "namespace", mutatedDeployment.Namespace, "name", mutatedDeployment.Name)
+		} else {
+			log.Info("Removal of instrumentation from deployment unexpectedly resulted in no changes", "deployment", deployment)
 		}
 	}
 
@@ -706,6 +710,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 			}
 
 			log.Info("Removed instrumentation from replicaset", "namespace", mutatedReplicaset.Namespace, "name", mutatedReplicaset.Name)
+		} else {
+			log.Info("Removal of instrumentation from replicaset unexpectedly resulted in no changes", "replicaset", replicaset)
 		}
 	}
 
@@ -742,6 +748,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 			}
 
 			log.Info("Removed instrumentation from statefulset", "namespace", mutatedStatefulset.Namespace, "name", mutatedStatefulset.Name)
+		} else {
+			log.Info("Removal of instrumentation from statefulset unexpectedly resulted in no changes", "statefulset", statefulset)
 		}
 	}
 
@@ -778,6 +786,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 			}
 
 			log.Info("Removed instrumentation from cronjob", "namespace", mutatedCronjob.Namespace, "name", mutatedCronjob.Name)
+		} else {
+			log.Info("Removal of instrumentation from cronjob unexpectedly resulted in no changes", "cronjob", cronjob)
 		}
 	}
 
