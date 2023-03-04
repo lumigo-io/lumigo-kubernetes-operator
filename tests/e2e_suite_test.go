@@ -788,14 +788,6 @@ func (m *haveLumigoEventMatcher) NegatedFailureMessage(actual interface{}) (mess
 	return fmt.Sprintf("has an event with reason '%s'", m.reason)
 }
 
-// eventList, err := clientset.CoreV1().Events(namespaceName).List(ctx, metav1.ListOptions{})
-// g.Expect(err).NotTo(HaveOccurred())
-
-// var addedLumigoInstrumentationEvent corev1.Event
-
-// g.Expect(addedLumigoInstrumentationEvent).NotTo(BeNil())
-// g.Expect(addedLumigoInstrumentationEvent.Source.Component).To(HavePrefix("lumigo-operator.v"))
-
 func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool) *operatorv1alpha1.Lumigo {
 	return &operatorv1alpha1.Lumigo{
 		ObjectMeta: metav1.ObjectMeta{
