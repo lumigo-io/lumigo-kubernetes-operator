@@ -157,10 +157,12 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Errorf("cannot marshal object %w", err).Error())
 	}
 
-	if injectionOccurred && !hadAlreadyInstrumentation {
-		operatorv1alpha1.RecordAddedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
-	} else {
-		operatorv1alpha1.RecordUpdatedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
+	if injectionOccurred {
+		if !hadAlreadyInstrumentation {
+			operatorv1alpha1.RecordAddedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
+		} else {
+			operatorv1alpha1.RecordUpdatedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
+		}
 	}
 
 	return admission.PatchResponseFromRaw(request.Object.Raw, marshalled)
