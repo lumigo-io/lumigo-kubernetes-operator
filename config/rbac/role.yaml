@@ -32,9 +32,18 @@ rules:
   - patch
   - update
 - apiGroups:
-  - "" # Core API group
+  - ""
   resources:
   - events
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - "" # Core API group
+  resources:
   - namespaces
   - namespaces/status
   - nodes
@@ -62,6 +71,7 @@ rules:
   - get
   - list
   - watch
+  - update
 - apiGroups:
   - batch
   resources:
@@ -71,3 +81,5 @@ rules:
   - get
   - list
   - watch
+  - update
+

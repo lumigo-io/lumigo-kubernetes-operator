@@ -297,6 +297,19 @@ var _ = Context("End-to-end tests", func() {
 					1*time.Minute,
 					defaultInterval).Should(Succeed())
 			})
+
+			By("Checking that the job has the added-instrumentation Lumigo event", func() {
+				Eventually(func(g Gomega) {
+					job := &batchv1.Job{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: namespaceName,
+							Name:      jobName,
+						},
+					}
+					g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(job), job)).To(Succeed())
+					g.Expect(job).To(HaveLumigoEvent(operatorv1alpha1.LumigoEventReasonAddedInstrumentation))
+				}, defaultTimeout, defaultInterval).Should(Succeed())
+			})
 		})
 
 		It("trace a Python deployment created after the Lumigo resource is created", func() {
@@ -430,6 +443,19 @@ var _ = Context("End-to-end tests", func() {
 					1*time.Minute,
 					defaultInterval).Should(Succeed())
 			})
+
+			By("Checking that the deployment has the added-instrumentation Lumigo event", func() {
+				Eventually(func(g Gomega) {
+					deployment := &appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: namespaceName,
+							Name:      deploymentName,
+						},
+					}
+					g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(deployment), deployment)).To(Succeed())
+					g.Expect(deployment).To(HaveLumigoEvent(operatorv1alpha1.LumigoEventReasonAddedInstrumentation))
+				}, defaultTimeout, defaultInterval).Should(Succeed())
+			})
 		})
 
 		It("trace a Python statefulset created after the Lumigo resource is created", func() {
@@ -487,14 +513,14 @@ var _ = Context("End-to-end tests", func() {
 				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 
-			deploymentName := "teststatefulset"
+			statefulSetName := "teststatefulset"
 
 			By("Creating the statefulset", func() {
 				var replicas int32 = 1
 				statefulset := &appsv1.StatefulSet{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
-						Name:      deploymentName,
+						Name:      statefulSetName,
 					},
 					Spec: appsv1.StatefulSetSpec{
 						Replicas: &replicas,
@@ -562,6 +588,19 @@ var _ = Context("End-to-end tests", func() {
 					// Relax timeout, this image will need to be pulled remotely
 					1*time.Minute,
 					defaultInterval).Should(Succeed())
+
+				By("Checking that the statefulset has the added-instrumentation Lumigo event", func() {
+					Eventually(func(g Gomega) {
+						statefulSet := &appsv1.StatefulSet{
+							ObjectMeta: metav1.ObjectMeta{
+								Namespace: namespaceName,
+								Name:      statefulSetName,
+							},
+						}
+						g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(statefulSet), statefulSet)).To(Succeed())
+						g.Expect(statefulSet).To(HaveLumigoEvent(operatorv1alpha1.LumigoEventReasonAddedInstrumentation))
+					}, defaultTimeout, defaultInterval).Should(Succeed())
+				})
 			})
 		})
 
@@ -644,16 +683,16 @@ func (m *matchesLumigoCondition) NegatedFailureMessage(actual interface{}) (mess
 }
 
 func MatchesDeploymentCondition(condition *appsv1.DeploymentCondition) gtypes.GomegaMatcher {
-	return &matchesDeploymentCondition{
+	return &matchesDeploymentConditionMatcher{
 		condition: condition,
 	}
 }
 
-type matchesDeploymentCondition struct {
+type matchesDeploymentConditionMatcher struct {
 	condition *appsv1.DeploymentCondition
 }
 
-func (m *matchesDeploymentCondition) Match(actual interface{}) (success bool, err error) {
+func (m *matchesDeploymentConditionMatcher) Match(actual interface{}) (success bool, err error) {
 	var actualCondition appsv1.DeploymentCondition
 
 	switch a := actual.(type) {
@@ -682,12 +721,71 @@ func (m *matchesDeploymentCondition) Match(actual interface{}) (success bool, er
 	return true, nil
 }
 
-func (m *matchesDeploymentCondition) FailureMessage(actual interface{}) (message string) {
+func (m *matchesDeploymentConditionMatcher) FailureMessage(actual interface{}) (message string) {
 	return fmt.Sprintf("does not match the DeploymentCondition %+v", m.condition)
 }
 
-func (m *matchesDeploymentCondition) NegatedFailureMessage(actual interface{}) (message string) {
+func (m *matchesDeploymentConditionMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return fmt.Sprintf("matches the DeploymentCondition %+v", m.condition)
+}
+
+func HaveLumigoEvent(reason operatorv1alpha1.LumigoEventReason) gtypes.GomegaMatcher {
+	return &haveLumigoEventMatcher{
+		reason: reason,
+	}
+}
+
+type haveLumigoEventMatcher struct {
+	reason operatorv1alpha1.LumigoEventReason
+}
+
+func (m *haveLumigoEventMatcher) Match(actual interface{}) (success bool, err error) {
+	var namespace string
+	var name string
+
+	switch a := actual.(type) {
+	case *appsv1.DaemonSet:
+		namespace = a.Namespace
+		name = a.Name
+	case *appsv1.Deployment:
+		namespace = a.Namespace
+		name = a.Name
+	case *appsv1.ReplicaSet:
+		namespace = a.Namespace
+		name = a.Name
+	case *appsv1.StatefulSet:
+		namespace = a.Namespace
+		name = a.Name
+	case *batchv1.CronJob:
+		namespace = a.Namespace
+		name = a.Name
+	case *batchv1.Job:
+		namespace = a.Namespace
+		name = a.Name
+	default:
+		return false, fmt.Errorf("HasLumigoEvent matcher expects one of *appsv1.DaemonSet, *appsv1.Deployment, *appsv1.ReplicaSet, *appsv1.StatefulSet, *batchv1.CronJob or *batchv1.Job; got:\n%s", format.Object(actual, 1))
+	}
+
+	eventList, err := clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	for _, event := range eventList.Items {
+		if event.InvolvedObject.Name == name && event.InvolvedObject.Namespace == namespace && event.Reason == string(m.reason) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (m *haveLumigoEventMatcher) FailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("does not have an event with reason '%s'", m.reason)
+}
+
+func (m *haveLumigoEventMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("has an event with reason '%s'", m.reason)
 }
 
 func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool) *operatorv1alpha1.Lumigo {

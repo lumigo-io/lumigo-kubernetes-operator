@@ -21,13 +21,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -44,8 +47,9 @@ var (
 )
 
 type LumigoInjectorWebhookHandler struct {
-	client                       client.Client
-	decoder                      *admission.Decoder
+	client.Client
+	record.EventRecorder
+	*admission.Decoder
 	LumigoOperatorVersion        string
 	LumigoInjectorImage          string
 	TelemetryProxyOtlpServiceUrl string
@@ -68,13 +72,13 @@ func (h *LumigoInjectorWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager)
 
 // The client is automatically injected by the Webhook machinery
 func (h *LumigoInjectorWebhookHandler) InjectClient(c client.Client) error {
-	h.client = c
+	h.Client = c
 	return nil
 }
 
 // The decoder is automatically injected by the Webhook machinery
 func (h *LumigoInjectorWebhookHandler) InjectDecoder(d *admission.Decoder) error {
-	h.decoder = d
+	h.Decoder = d
 	return nil
 }
 
@@ -100,7 +104,7 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 
 	// Check if we have a Lumigo instance in the object's namespace
 	lumigos := &operatorv1alpha1.LumigoList{}
-	if err := h.client.List(ctx, lumigos, &client.ListOptions{
+	if err := h.Client.List(ctx, lumigos, &client.ListOptions{
 		Namespace: namespace,
 	}); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -133,10 +137,18 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Errorf("cannot instantiate mutator: %w", err).Error())
 	}
 
-	if objectMeta := resourceAdaper.GetObjectMeta(); objectMeta.Labels[mutation.LumigoAutoTraceLabelKey] == mutation.LumigoAutoTraceLabelSkipNextInjectorValue {
+	objectMeta := resourceAdaper.GetObjectMeta()
+	hadAlreadyInstrumentation := strings.HasPrefix(objectMeta.Labels[mutation.LumigoAutoTraceLabelKey], mutation.LumigoAutoTraceLabelVersionPrefixValue)
+	injectionOccurred := false
+	if objectMeta.Labels[mutation.LumigoAutoTraceLabelKey] == mutation.LumigoAutoTraceLabelSkipNextInjectorValue {
 		h.Log.Info(fmt.Sprintf("Skipping injection: '%s' label set to '%s'", mutation.LumigoAutoTraceLabelKey, mutation.LumigoAutoTraceLabelSkipNextInjectorValue))
 		delete(objectMeta.Labels, mutation.LumigoAutoTraceLabelKey)
-	} else if err = resourceAdaper.InjectLumigoInto(mutator); err != nil {
+	} else if injectionOccurred, err = resourceAdaper.InjectLumigoInto(mutator); err != nil {
+		if !hadAlreadyInstrumentation {
+			operatorv1alpha1.RecordCannotAddInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name), err)
+		} else {
+			operatorv1alpha1.RecordCannotUpdateInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name), err)
+		}
 		return admission.Allowed(fmt.Errorf("cannot inject Lumigo tracing in the pod spec %w", err).Error())
 	}
 
@@ -145,40 +157,49 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Errorf("cannot marshal object %w", err).Error())
 	}
 
+	if injectionOccurred {
+		if !hadAlreadyInstrumentation {
+			operatorv1alpha1.RecordAddedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
+		} else {
+			operatorv1alpha1.RecordUpdatedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
+		}
+	}
+
 	return admission.PatchResponseFromRaw(request.Object.Raw, marshalled)
 }
 
 type resourceAdapter interface {
+	GetResource() runtime.Object
 	GetObjectMeta() *metav1.ObjectMeta
 	GetNamespace() string
-	InjectLumigoInto(mutation.Mutator) error
+	InjectLumigoInto(mutation.Mutator) (bool, error)
 	Marshal() ([]byte, error)
 }
 
-type supportedResourceTypes interface {
-	appsv1.DaemonSet | appsv1.Deployment | appsv1.ReplicaSet | appsv1.StatefulSet | batchv1.CronJob | batchv1.Job
-}
-
 // Inline implementation of resourceAdapter inspired by https://stackoverflow.com/a/43420100/6188451
-type resourceAdapterImpl[T supportedResourceTypes] struct {
-	resource      *T
+type resourceAdapterImpl struct {
+	resource      runtime.Object
 	getNamespace  func() string
 	getObjectMeta func() *metav1.ObjectMeta
 }
 
-func (r *resourceAdapterImpl[T]) GetNamespace() string {
+func (r *resourceAdapterImpl) GetResource() runtime.Object {
+	return r.resource
+}
+
+func (r *resourceAdapterImpl) GetNamespace() string {
 	return r.getNamespace()
 }
 
-func (r *resourceAdapterImpl[T]) GetObjectMeta() *metav1.ObjectMeta {
+func (r *resourceAdapterImpl) GetObjectMeta() *metav1.ObjectMeta {
 	return r.getObjectMeta()
 }
 
-func (r *resourceAdapterImpl[T]) InjectLumigoInto(mutator mutation.Mutator) error {
+func (r *resourceAdapterImpl) InjectLumigoInto(mutator mutation.Mutator) (bool, error) {
 	return mutator.InjectLumigoInto(r.resource)
 }
 
-func (r *resourceAdapterImpl[T]) Marshal() ([]byte, error) {
+func (r *resourceAdapterImpl) Marshal() ([]byte, error) {
 	return json.Marshal(r.resource)
 }
 
@@ -193,7 +214,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				return nil, fmt.Errorf("cannot parse resource into a %s: %w", sGVK, err)
 			}
 
-			return &resourceAdapterImpl[appsv1.DaemonSet]{
+			return &resourceAdapterImpl{
 				resource: resource,
 				getNamespace: func() string {
 					return resource.Namespace
@@ -211,7 +232,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				return nil, fmt.Errorf("cannot parse resource into a %s: %w", sGVK, err)
 			}
 
-			return &resourceAdapterImpl[appsv1.Deployment]{
+			return &resourceAdapterImpl{
 				resource: resource,
 				getNamespace: func() string {
 					return resource.Namespace
@@ -229,7 +250,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				return nil, fmt.Errorf("cannot parse resource into a %s: %w", sGVK, err)
 			}
 
-			return &resourceAdapterImpl[appsv1.ReplicaSet]{
+			return &resourceAdapterImpl{
 				resource: resource,
 				getNamespace: func() string {
 					return resource.Namespace
@@ -247,7 +268,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				return nil, fmt.Errorf("cannot parse resource into a %s: %w", sGVK, err)
 			}
 
-			return &resourceAdapterImpl[appsv1.StatefulSet]{
+			return &resourceAdapterImpl{
 				resource: resource,
 				getNamespace: func() string {
 					return resource.Namespace
@@ -265,7 +286,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				return nil, fmt.Errorf("cannot parse resource into a %s: %w", sGVK, err)
 			}
 
-			return &resourceAdapterImpl[batchv1.CronJob]{
+			return &resourceAdapterImpl{
 				resource: resource,
 				getNamespace: func() string {
 					return resource.Namespace
@@ -283,7 +304,7 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				return nil, fmt.Errorf("cannot parse resource into a %s: %w", sGVK, err)
 			}
 
-			return &resourceAdapterImpl[batchv1.Job]{
+			return &resourceAdapterImpl{
 				resource: resource,
 				getNamespace: func() string {
 					return resource.Namespace

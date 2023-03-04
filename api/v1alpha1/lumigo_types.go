@@ -119,6 +119,17 @@ const (
 	LumigoConditionTypeError  LumigoConditionType = "Error"
 )
 
+type LumigoEventReason string
+
+const (
+	LumigoEventReasonAddedInstrumentation        LumigoEventReason = "LumigoAddedInstrumentation"
+	LumigoEventReasonRemovedInstrumentation      LumigoEventReason = "LumigoRemovedInstrumentation"
+	LumigoEventReasonUpdatedInstrumentation      LumigoEventReason = "LumigoUpdatedInstrumentation"
+	LumigoEventReasonCannotAddInstrumentation    LumigoEventReason = "LumigoCannotAddInstrumentation"
+	LumigoEventReasonCannotRemoveInstrumentation LumigoEventReason = "LumigoCannotRemoveInstrumentation"
+	LumigoEventReasonCannotUpdateInstrumentation LumigoEventReason = "LumigoCannotUpdateInstrumentation"
+)
+
 func init() {
 	SchemeBuilder.Register(&Lumigo{}, &LumigoList{})
 }
