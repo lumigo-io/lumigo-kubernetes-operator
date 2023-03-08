@@ -22,7 +22,8 @@ RUN mkdir /dist; \
     curl -s https://api.github.com/repos/lumigo-io/opentelemetry-collector-contrib/releases/tags/${version}?draft=true | \
     jq -r ".assets[] | select(.name|match(\"${OTELCOL_BINARY_ASSET_NAME}\")) | .browser_download_url" | \
     xargs -I {} curl -s -L {} -o /dist/otelcontribcol; \
-    chmod u+x /dist/otelcontribcol
+    chmod u+x /dist/otelcontribcol; \
+    ls -al /dist/*
 
 FROM alpine
 
@@ -31,9 +32,9 @@ RUN apk add ca-certificates
 # Update OtelCollector config on namespace file change
 RUN apk add bash procps gomplate
 
-COPY --from=downloader --chown=1234:1234 /dist/otelcontribcol /lumigo/bin/otelcol
 ADD --chown=1234:1234 ./telemetryproxy/etc/config.yaml.tpl /lumigo/etc/otelcol-config.yaml.tpl
 ADD --chown=1234:1234 ./telemetryproxy/bin/*.sh /lumigo/bin/
+COPY --from=downloader --chown=1234:1234 /dist/otelcontribcol /lumigo/bin/otelcol
 
 ENTRYPOINT ["/bin/bash"]
 CMD ["/lumigo/bin/entrypoint.sh"]
