@@ -16,5 +16,5 @@ chmod u+x /dist/otelcontribcol
 
 ls -al /dist/otelcontribcol
 
-/dist/otelcontribcol version
+/dist/otelcontribcol --version
 /dist/otelcontribcol components
