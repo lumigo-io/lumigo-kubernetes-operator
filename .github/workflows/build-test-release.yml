@@ -224,8 +224,8 @@ jobs:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
         run: |
-          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
-          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
+          yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"manager\")).image = \"${CONTROLLER_IMG}\"" config/manager/manager.yaml
+          yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"telemetry-proxy\")).image = \"${PROXY_IMG}\"" config/manager/manager.yaml
           kubectl create namespace lumigo-system
           kubectl apply -k config/default -n lumigo-system
       - name: Run end-to-end tests
