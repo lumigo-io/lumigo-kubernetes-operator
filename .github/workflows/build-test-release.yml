@@ -136,6 +136,8 @@ jobs:
         run: |
           if ! make e2e-tests; then
             kubectl describe all -A
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
             exit 1
           fi
 
@@ -219,8 +221,8 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
       - name: Deploy locally-built operator
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
         run: |
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
@@ -232,6 +234,8 @@ jobs:
         run: |
           if ! make e2e-tests; then
             kubectl describe all -A
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
             exit 1
           fi
 
