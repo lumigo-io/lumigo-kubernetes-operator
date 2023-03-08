@@ -212,6 +212,7 @@ jobs:
       - name: Install Cert Manager
         run: |
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.yaml
+          sleep 1m # Give time for the Webhook to start
       - name: Deploy locally-built operator
         env:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
