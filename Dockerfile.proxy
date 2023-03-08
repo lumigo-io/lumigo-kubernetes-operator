@@ -25,7 +25,7 @@ RUN mkdir /dist; \
     chmod u+x /dist/otelcontribcol; \
     ls -al /dist/*; \
     /dist/otelcontribcol version; \
-    /dist/otelcontribcol components;
+    /dist/otelcontribcol components
 
 FROM alpine
 
