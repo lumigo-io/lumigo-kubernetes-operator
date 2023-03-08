@@ -213,11 +213,17 @@ jobs:
         run: |
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.yaml
           sleep 1m # Give time for the Webhook to start
+      - name: Set up yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
       - name: Deploy locally-built operator
         env:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
+          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
+          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
           kubectl create namespace lumigo-system
           kubectl apply -k config/default -n lumigo-system
       - name: Run end-to-end tests
