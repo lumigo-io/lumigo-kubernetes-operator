@@ -35,6 +35,22 @@ spec:
           spec:
             description: LumigoSpec defines the desired state of Lumigo
             properties:
+              infrastructure:
+                properties:
+                  enabled:
+                    description: Whether Kubernetes infrastructrure collection should
+                      be active. If unspecified, defaults to `true`
+                    type: boolean
+                  kubeEvents:
+                    description: How to collect Kubernetes events and send them to
+                      Lumigo.
+                    properties:
+                      enabled:
+                        description: Whether Kubernetes events should be collected
+                          and sent to Lumigo. If unspecified, defaults to `true`
+                        type: boolean
+                    type: object
+                type: object
               lumigoToken:
                 description: 'The Lumigo token to be used to authenticate against
                   Lumigo. For info on how to retrieve your Lumigo token, refer to:

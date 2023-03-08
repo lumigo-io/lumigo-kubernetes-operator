@@ -52,8 +52,9 @@ type LumigoSpec struct {
 	// The Lumigo token to be used to authenticate against Lumigo.
 	// For info on how to retrieve your Lumigo token, refer to:
 	// https://docs.lumigo.io/docs/lumigo-tokens
-	LumigoToken Credentials `json:"lumigoToken,omitempty"`
-	Tracing     TracingSpec `json:"tracing,omitempty"`
+	LumigoToken    Credentials        `json:"lumigoToken,omitempty"`
+	Tracing        TracingSpec        `json:"tracing,omitempty"`
+	Infrastructure InfrastructureSpec `json:"infrastructure,omitempty"`
 }
 
 type Credentials struct {
@@ -96,6 +97,24 @@ type InjectionSpec struct {
 	// If unspecified, defaults to `true`. It requires `Enabled` to be set to `true`.
 	// +kubebuilder:validation:Optional
 	RemoveLumigoFromResourcesOnDeletion *bool `json:"removeLumigoFromResourcesOnDeletion,omitempty"`
+}
+
+type InfrastructureSpec struct {
+	// Whether Kubernetes infrastructrure collection should be active.
+	// If unspecified, defaults to `true`
+	// +kubebuilder:validation:Optional
+	Enabled *bool `json:"enabled"` // Using a pointer to support cases where the value is not set (and it counts as enabled)
+
+	// How to collect Kubernetes events and send them to Lumigo.
+	// +kubebuilder:validation:Optional
+	KubeEvents KubeEventsSpec `json:"kubeEvents,omitempty"`
+}
+
+type KubeEventsSpec struct {
+	// Whether Kubernetes events should be collected and sent to Lumigo.
+	// If unspecified, defaults to `true`
+	// +kubebuilder:validation:Optional
+	Enabled *bool `json:"enabled"` // Using a pointer to support cases where the value is not set (and it counts as enabled)
 }
 
 // LumigoStatus defines the observed state of Lumigo

@@ -130,6 +130,11 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 
 	telemetryProxyOtlpService := lumigoEndpoint + "/v1/traces" // TODO: Fix it when the distros use the Lumigo endpoint as root
 
+	namespaceConfigurationsPath, isSet := os.LookupEnv("LUMIGO_NAMESPACE_CONFIGURATIONS")
+	if !isSet {
+		return fmt.Errorf("unable to create controller: environment variable 'LUMIGO_NAMESPACE_CONFIGURATIONS' is not set")
+	}
+
 	lumigoInjectorImage, isSet := os.LookupEnv("LUMIGO_INJECTOR_IMAGE")
 	if !isSet {
 		return fmt.Errorf("unable to create controller: environment variable 'LUMIGO_INJECTOR_IMAGE' is not set")
@@ -154,7 +159,8 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 		LumigoOperatorVersion:        lumigoOperatorVersion,
 		LumigoInjectorImage:          lumigoInjectorImage,
 		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
-		Log:                          logger,
+		TelemetryProxyNamespaceConfigurationsPath: namespaceConfigurationsPath,
+		Log: logger,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller: %w", err)
 	}

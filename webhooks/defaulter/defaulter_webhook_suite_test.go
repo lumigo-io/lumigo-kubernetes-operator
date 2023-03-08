@@ -220,6 +220,8 @@ var _ = Context("Lumigo defaulter webhook", func() {
 
 			Expect(k8sClient.Create(ctx, &newLumigo)).To(Succeed())
 
+			Expect(newLumigo.Spec.Infrastructure.Enabled).To(&beBoolPointer{expectedValue: true})
+			Expect(newLumigo.Spec.Infrastructure.KubeEvents.Enabled).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Tracing.Injection.Enabled).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion).To(&beBoolPointer{expectedValue: true})

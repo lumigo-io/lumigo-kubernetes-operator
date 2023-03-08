@@ -1,17 +1,19 @@
+{{ $namespaces := (datasource "namespaces") }}
 receivers:
   otlp:
     protocols:
       http:
         auth:
-          authenticator: lumigoauth
+          authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
-  k8s_events:
+{{- range (keys $namespaces) }}
+  k8s_events/ns_{{ . }}:
     auth_type: serviceAccount
-    # namespaces: [default, my_namespace] # Default: all
+    namespaces: [ {{ . }} ]
+{{ end }}
 
 extensions:
   health_check:
-  lumigoauth:
   headers_setter/lumigo:
     headers:
     # Use the same authorization header as the one accompanying
@@ -19,16 +21,29 @@ extensions:
     # `include_metadata: true` parameter in the `otlp` exporter
     - key: authorization
       from_context: Authorization
+  lumigoauth/server:
+    type: server
+{{- range $key, $value := $namespaces }}
+  lumigoauth/ns_{{ $key }}:
+    type: client
+    token: {{ $value }}
+{{ end }}
 
 exporters:
   otlphttp/lumigo:
-    endpoint: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+    endpoint: $LUMIGO_ENDPOINT
     auth:
       authenticator: headers_setter/lumigo
   logging:
     loglevel: debug
     sampling_initial: 1
     sampling_thereafter: 1
+{{- range (keys $namespaces) }}
+  otlphttp/lumigo_ns_{{ . }}:
+    endpoint: $LUMIGO_ENDPOINT
+    auth:
+      authenticator: lumigoauth/ns_{{ . }}
+{{ end }}
 
 # We cannot add the Batch processor, as it breaks the `headers_setter/lumigo`
 # see https://github.com/open-telemetry/opentelemetry-collector/issues/4544
@@ -38,21 +53,39 @@ processors:
     passthrough: false
     extract:
       metadata:
-        - k8s.pod.name
-        - k8s.deployment.name
+        # Core
         - k8s.namespace.name
-        - k8s.node.name
+        - k8s.pod.name
         - k8s.pod.start_time
-        # TODO MORE
+        - k8s.node.name
+        # Apps
+        - k8s.daemonset.name
+        - k8s.daemonset.uid
+        - k8s.deployment.name
+        - k8s.replicaset.name
+        - k8s.replicaset.uid
+        - k8s.statefulset.name
+        - k8s.statefulset.uid
+        # Batch
+        - k8s.cronjob.name
+        - k8s.job.name
+        - k8s.job.uid
     pod_association:
-    - from: resource_attribute
-      name: k8s.pod.uid
+    - sources:
+      - from: resource_attribute
+        name: k8s.pod.uid
 
 service:
+  telemetry:
+    logs:
+      level: "debug" # TODO
   extensions:
   - headers_setter/lumigo
   - health_check
-  - lumigoauth
+  - lumigoauth/server
+{{- range (keys $namespaces) }}
+  - lumigoauth/ns_{{ . }}
+{{ end }}
   pipelines:
     traces:
       receivers:
@@ -62,13 +95,12 @@ service:
       exporters:
       - otlphttp/lumigo
       - logging
-    logs:
+{{- range (keys $namespaces) }}
+    logs/k8s_events_ns_{{ . }}:
       receivers:
-      - k8s_events
+      - k8s_events/ns_{{ . }}
       processors: []
       exporters:
-      # - otlphttp/lumigo
+      - otlphttp/lumigo_ns_{{ . }}
       - logging
-  telemetry:
-    logs:
-      level: "debug"
+{{ end }}

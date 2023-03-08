@@ -17,8 +17,11 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -66,11 +69,12 @@ type LumigoReconciler struct {
 	DynamicClient         dynamic.Interface // Look up object references of resources we don't want to treat in a typed fashion
 	// End of clients (?)
 	record.EventRecorder
-	Scheme                       *runtime.Scheme
-	Log                          logr.Logger
-	LumigoOperatorVersion        string
-	LumigoInjectorImage          string
-	TelemetryProxyOtlpServiceUrl string
+	Scheme                                    *runtime.Scheme
+	Log                                       logr.Logger
+	LumigoOperatorVersion                     string
+	LumigoInjectorImage                       string
+	TelemetryProxyOtlpServiceUrl              string
+	TelemetryProxyNamespaceConfigurationsPath string
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -96,7 +100,7 @@ func (r *LumigoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=operator.lumigo.io,resources=lumigoes/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("lumigo-instance", req.NamespacedName)
+	log := r.Log.WithValues("name", req.NamespacedName.Name, "namespace", req.NamespacedName.Namespace)
 	now := metav1.NewTime(time.Now())
 
 	var result reconcile.Result
@@ -116,6 +120,9 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// The active condition has never been set, so this instance has just been created
 	isLumigoInstanceJustCreated := conditions.GetLumigoConditionByType(lumigoInstance, operatorv1alpha1.LumigoConditionTypeActive) == nil
+	if isLumigoInstanceJustCreated {
+		log = log.WithValues("new-lumigo", true)
+	}
 
 	if lumigoInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The Lumigo instance is not being deleted, so ensure it has our finalizer
@@ -125,36 +132,45 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				return ctrl.Result{}, err
 			}
 		}
-	} else {
-		// The Lumigo instance is being deleted
-		if controllerutil.ContainsFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer) {
-			injectionSpec := lumigoInstance.Spec.Tracing.Injection
+	} else if controllerutil.ContainsFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer) {
+		injectionSpec := lumigoInstance.Spec.Tracing.Injection
 
-			if conditions.IsActive(lumigoInstance) {
-				log.Info("Lumigo instance is being deleted, removing instrumentation from resources in namespace")
-				if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.RemoveLumigoFromResourcesOnDeletion, true) {
-					if err := r.removeLumigoFromResources(ctx, lumigoInstance, &log); err != nil {
-						log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
-						return ctrl.Result{}, err
-					}
-				} else {
-					log.Info("Lumigo instance is being deleted, but instrumentation from resources in namespace will not be removed", "Injection.Enabled", injectionSpec.Enabled, "Injection.RemoveLumigoFromResourcesOnDeletion", injectionSpec.RemoveLumigoFromResourcesOnDeletion)
+		if conditions.IsActive(lumigoInstance) {
+			log.Info("Lumigo instance is being deleted, removing instrumentation from resources in namespace")
+			if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.RemoveLumigoFromResourcesOnDeletion, true) {
+				if err := r.removeLumigoFromResources(ctx, lumigoInstance, &log); err != nil {
+					log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
+					return ctrl.Result{}, err
 				}
 			} else {
-				log.Info("Lumigo instance is being deleted, but its status is not active so the instrumentation will not be removed from resources in namespace")
+				log.Info(
+					"Lumigo instance is being deleted, but instrumentation from resources in namespace will not be removed",
+					"Injection.Enabled", injectionSpec.Enabled,
+					"Injection.RemoveLumigoFromResourcesOnDeletion", injectionSpec.RemoveLumigoFromResourcesOnDeletion,
+				)
 			}
-
-			// remove our finalizer from the list and update it.
-			controllerutil.RemoveFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer)
-			if err := r.Update(ctx, lumigoInstance); err != nil {
-				return ctrl.Result{}, err
-			}
-
-			// Set the lumigo instance as inactive
-			conditions.SetActiveConditionWithMessage(lumigoInstance, now, false, "This Lumigo instance is being deleted")
-			conditions.ClearErrorCondition(lumigoInstance, now)
-			return r.updateStatusIfNeeded(ctx, log, lumigoInstance, result)
+		} else {
+			log.Info("Lumigo instance is being deleted, but its status is not active so the instrumentation will not be removed from resources in namespace")
 		}
+
+		// remove our finalizer from the list and update it.
+		controllerutil.RemoveFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer)
+		if err := r.Update(ctx, lumigoInstance); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Update telemetry-proxy not to collect Kube Events for this namespace
+		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigoInstance.Namespace, "")
+		if err != nil {
+			log.Error(err, "Cannot update the telemetry-proxy configurations to remove the monitoring of the namespace")
+		} else if isChanged {
+			log.Info("Updated the telemetry-proxy configurations to remove the monitoring of the namespace")
+		}
+
+		// Set the lumigo instance as inactive
+		conditions.SetActiveConditionWithMessage(lumigoInstance, now, false, "This Lumigo instance is being deleted")
+		conditions.ClearErrorCondition(lumigoInstance, now)
+		return r.updateStatusIfNeeded(ctx, log, lumigoInstance, result)
 	}
 
 	// Validate there is only one Lumigo instance in any one namespace
@@ -190,7 +206,8 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, fmt.Errorf("the Lumigo spec is empty")
 	}
 
-	if err := r.validateCredentials(ctx, req.Namespace, lumigoInstance.Spec.LumigoToken); err != nil {
+	token, err := r.validateCredentials(ctx, req.Namespace, &lumigoInstance.Spec.LumigoToken)
+	if err != nil {
 		conditions.SetErrorAndActiveConditions(lumigoInstance, now, fmt.Errorf("invalid Lumigo token secret reference: %w", err))
 		log.Info("Invalid Lumigo token secret reference", "error", err.Error(), "status", &lumigoInstance.Status)
 		return r.updateStatusIfNeeded(ctx, log, lumigoInstance, result)
@@ -202,10 +219,34 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.InjectLumigoIntoExistingResourcesOnCreation, true) {
 			log.Info("Injecting instrumentation into resources in namespace")
 			if err := r.injectLumigoIntoResources(ctx, lumigoInstance, &log); err != nil {
-				log.Error(err, "cannot inject resources", "namespace", req.Namespace)
+				log.Error(err, "cannot inject resources")
 			}
 		} else {
-			log.Info("Skipping instrumentation from resources in namespace", "Injection.Enabled", injectionSpec.Enabled, "Injection.InjectLumigoIntoExistingResourcesOnCreation", injectionSpec.InjectLumigoIntoExistingResourcesOnCreation)
+			log.Info(
+				"Skipping instrumentation from resources in namespace",
+				"Injection.Enabled", injectionSpec.Enabled,
+				"Injection.InjectLumigoIntoExistingResourcesOnCreation", injectionSpec.InjectLumigoIntoExistingResourcesOnCreation,
+			)
+		}
+	}
+
+	// Update telemetry-proxy to ensure that Kube Events are collected correctly for this namespace
+	if isTruthy(lumigoInstance.Spec.Infrastructure.Enabled, true) && isTruthy(lumigoInstance.Spec.Infrastructure.KubeEvents.Enabled, true) {
+		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigoInstance.Namespace, token)
+		if err != nil {
+			log.Error(err, "Cannot update the telemetry-proxy configurations to monitor the namespace")
+		} else if isChanged {
+			log.Info("Updated the telemetry-proxy configurations to monitor the namespace")
+		}
+	} else {
+		if _, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigoInstance.Namespace, ""); err != nil {
+			log.Error(err, "Cannot update the telemetry-proxy configurations to remove the monitoring of the namespace")
+		} else {
+			log.Info(
+				"Removing infrastructure monitoring of the namespace",
+				"Infrastructure.Enabled", lumigoInstance.Spec.Infrastructure.Enabled,
+				"Infrastructure.KubeEvents.Enabled", lumigoInstance.Spec.Infrastructure.KubeEvents.Enabled,
+			)
 		}
 	}
 
@@ -218,13 +259,13 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		FieldSelector: "reason=LumigoAddedInstrumentation,involvedObject.uid=",
 	})
 	if err != nil {
-		r.Log.Error(err, "Cannot look up dangling LumigoAddedInstrumentation events")
+		log.Error(err, "Cannot look up dangling LumigoAddedInstrumentation events")
 	} else {
 		for _, lumigoEvent := range lumigoEvents.Items {
 			if err := r.rebindLumigoEvent(ctx, namespaceEvents, &lumigoEvent); err != nil {
-				r.Log.Error(err, fmt.Sprintf("Cannot rebind dangling LumigoAddedInstrumentation event '%+v'", &lumigoEvent.UID))
+				log.Error(err, fmt.Sprintf("Cannot rebind dangling LumigoAddedInstrumentation event '%+v'", &lumigoEvent.UID))
 			} else {
-				r.Log.Info(
+				log.Info(
 					"Rebound dangling LumigoAddedInstrumentation event",
 					"event.uid", lumigoEvent.UID,
 					"involvedObject.kind", lumigoEvent.InvolvedObject.Kind,
@@ -275,49 +316,95 @@ func (r *LumigoReconciler) fillOutReference(ctx context.Context, reference *core
 	return nil
 }
 
+func (r *LumigoReconciler) updateTelemetryProxyMonitoringOfNamespace(ctx context.Context, namespace string, token string) (bool, error) {
+	var namespaces map[string]string
+	namespacesFileBytes, err := os.ReadFile(r.TelemetryProxyNamespaceConfigurationsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			namespacesFileBytes = make([]byte, 0)
+			namespaces = map[string]string{}
+		} else {
+			return false, fmt.Errorf("cannot read namespace configuration file '%s': %w", r.TelemetryProxyNamespaceConfigurationsPath, err)
+		}
+	} else if err := json.Unmarshal([]byte(namespacesFileBytes), &namespaces); err != nil {
+		return false, fmt.Errorf("cannot unmarshal namespace configuration file '%s': %w", r.TelemetryProxyNamespaceConfigurationsPath, err)
+	}
+
+	newNamespaces := make(map[string]string, len(namespaces))
+	for key, value := range namespaces {
+		newNamespaces[key] = value
+	}
+
+	if len(token) > 0 {
+		newNamespaces[namespace] = token
+	} else if len(namespacesFileBytes) == 0 {
+		// The namespaces file does not even exit, nothing to do
+		return false, nil
+	} else {
+		delete(newNamespaces, namespace)
+	}
+
+	// The marhsalling is with sorted keys, so the resulting bytes are deterministic
+	updatedNamespacesFileBytes, err := json.Marshal(newNamespaces)
+	if err != nil {
+		return false, fmt.Errorf("cannot marshal the updated namespace configuration: %w", err)
+	}
+
+	if bytes.Equal(namespacesFileBytes, updatedNamespacesFileBytes) {
+		// Nothing to change
+		return false, nil
+	}
+
+	if err := os.WriteFile(r.TelemetryProxyNamespaceConfigurationsPath, updatedNamespacesFileBytes, 0644); err != nil {
+		return false, fmt.Errorf("cannot write the updated namespace configuration file '%s': %w", r.TelemetryProxyNamespaceConfigurationsPath, err)
+	}
+
+	return true, nil
+}
+
 // Check credentials existence
-func (r *LumigoReconciler) validateCredentials(ctx context.Context, namespaceName string, credentials operatorv1alpha1.Credentials) error {
+func (r *LumigoReconciler) validateCredentials(ctx context.Context, namespaceName string, credentials *operatorv1alpha1.Credentials) (string, error) {
 	if credentials.SecretRef == (operatorv1alpha1.KubernetesSecretRef{}) {
-		return fmt.Errorf("no Kubernetes secret reference provided")
+		return "", fmt.Errorf("no Kubernetes secret reference provided")
 	}
 
 	if credentials.SecretRef.Name == "" {
-		return fmt.Errorf("cannot the secret name is not specified")
+		return "", fmt.Errorf("cannot the secret name is not specified")
 	}
 
 	if credentials.SecretRef.Key == "" {
-		return fmt.Errorf("no key is specified for the secret '%s/%s'", namespaceName, credentials.SecretRef.Name)
+		return "", fmt.Errorf("no key is specified for the secret '%s/%s'", namespaceName, credentials.SecretRef.Name)
 	}
 
 	secret, err := r.fetchKubernetesSecret(ctx, namespaceName, credentials.SecretRef.Name)
 	if err != nil {
-		return fmt.Errorf("cannot retrieve secret '%s/%s'", namespaceName, credentials.SecretRef.Name)
+		return "", fmt.Errorf("cannot retrieve secret '%s/%s'", namespaceName, credentials.SecretRef.Name)
 	}
 
 	// Check that the key exists in the secret and the content matches the general shape of a Lumigo token
-	lumigoTokenValueBytes := secret.Data[credentials.SecretRef.Key]
-	if lumigoTokenValueBytes == nil {
-		return fmt.Errorf("the secret '%s/%s' does not have the key '%s'", namespaceName, credentials.SecretRef.Name, credentials.SecretRef.Key)
+	lumigoTokenEnc := secret.Data[credentials.SecretRef.Key]
+	if lumigoTokenEnc == nil {
+		return "", fmt.Errorf("the secret '%s/%s' does not have the key '%s'", namespaceName, credentials.SecretRef.Name, credentials.SecretRef.Key)
 	}
 
-	lumigoTokenValueDec := string(lumigoTokenValueBytes)
+	lumigoToken := string(lumigoTokenEnc)
 
-	matched, err := regexp.MatchString(`t_[[:xdigit:]]{21}`, lumigoTokenValueDec)
+	matched, err := regexp.MatchString(`t_[[:xdigit:]]{21}`, lumigoToken)
 	if err != nil {
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"cannot match the value the field '%s' of the secret '%s/%s' against "+
 				"the expected structure of Lumigo tokens", credentials.SecretRef.Key, namespaceName, credentials.SecretRef.Name)
 	}
 
 	if !matched {
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"the value of the field '%s' of the secret '%s/%s' does not match the expected structure of Lumigo tokens: "+
-				"it should be `t_` followed by of 21 alphanumeric characters; see https://docs.lumigo.io/docs/lumigo-tokens "+
+				"it should be `t_` followed by 21 alphanumeric characters; see https://docs.lumigo.io/docs/lumigo-tokens "+
 				"for instructions on how to retrieve your Lumigo token",
 			credentials.SecretRef.Key, namespaceName, credentials.SecretRef.Name)
 	}
 
-	return nil
+	return lumigoToken, nil
 }
 
 func (r *LumigoReconciler) fetchKubernetesSecret(ctx context.Context, namespaceName string, secretName string) (*corev1.Secret, error) {

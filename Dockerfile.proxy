@@ -26,10 +26,14 @@ RUN mkdir /dist; \
 
 FROM alpine
 
+# Be able to validate the TLS cert of the Lumigo SaaS endpoint
 RUN apk add ca-certificates
+# Update OtelCollector config on namespace file change
+RUN apk add bash procps gomplate
 
 COPY --from=downloader --chown=1234:1234 /dist/otelcontribcol /lumigo/otelcol
-ADD --chown=1234:1234 ./telemetryproxy/config.yaml /etc/otelcol/config.yaml
+ADD --chown=1234:1234 ./telemetryproxy/etc/config.yaml.tpl /lumigo/etc/otelcol-config.yaml.tpl
+ADD --chown=1234:1234 ./telemetryproxy/bin/*.sh /lumigo/bin/
 
-ENTRYPOINT ["/lumigo/otelcol"]
-CMD ["--config=/etc/otelcol/config.yaml"]
+ENTRYPOINT ["/bin/bash"]
+CMD ["/lumigo/bin/entrypoint.sh"]
