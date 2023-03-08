@@ -36,83 +36,116 @@ spec:
         kubectl.kubernetes.io/default-container: manager
       labels:
         control-plane: controller-manager
+        lumigo.auto-trace: "false" # We do not need the operator to inject itself
     spec:
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                - key: kubernetes.io/arch
-                  operator: In
-                  values:
-                    - amd64
-                    - arm64
-                    # - ppc64le
-                    # - s390x
-                - key: kubernetes.io/os
-                  operator: In
-                  values:
-                    - linux
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                      - arm64
+                      # - ppc64le
+                      # - s390x
+                  - key: kubernetes.io/os
+                    operator: In
+                    values:
+                      - linux
       securityContext:
         runAsNonRoot: true
         fsGroup: 1234
-        # TODO(user): For common cases that do not require escalating privileges
-        # it is recommended to ensure that all your Pods/Containers are restrictive.
-        # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
-        # Please uncomment the following code if your project does NOT have to work on old Kubernetes
-        # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
-        # seccompProfile:
-        #   type: RuntimeDefault
       containers:
-      - command:
-        - /manager
-        args:
-        - --leader-elect
-        image: controller:latest
-        name: manager
-        env:
-          - name: LUMIGO_CONTROLLER_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          - name: LUMIGO_CONTROLLER_POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-          - name: TELEMETRY_PROXY_OTLP_SERVICE
-            value: http://$(TELEMETRY_PROXY_SERVICE).$(TELEMETRY_PROXY_SERVICE_NAMESPACE).svc.cluster.local
-          - name: LUMIGO_OPERATOR_VERSION
-            value: "1"
-          - name: LUMIGO_INJECTOR_IMAGE
-            value: public.ecr.aws/lumigo/lumigo-autotrace:latest
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          runAsUser: 1234
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8081
-          initialDelaySeconds: 15
-          periodSeconds: 20
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8081
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        # TODO(user): Configure the resources accordingly based on the project requirements.
-        # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
+        - command:
+            - /manager
+          args:
+            - --leader-elect
+          image: host.docker.internal:5000/controller:latest
+          name: manager
+          env:
+            - name: LUMIGO_CONTROLLER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: LUMIGO_CONTROLLER_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TELEMETRY_PROXY_OTLP_SERVICE
+              value: http://$(TELEMETRY_PROXY_SERVICE).$(TELEMETRY_PROXY_SERVICE_NAMESPACE).svc.cluster.local
+            - name: LUMIGO_OPERATOR_VERSION
+              value: latest
+            - name: LUMIGO_INJECTOR_IMAGE
+              value: public.ecr.aws/lumigo/lumigo-autotrace:latest
+            - name: LUMIGO_NAMESPACE_CONFIGURATIONS
+              value: /lumigo/etc/namespaces/namespaces_to_monitor.json
+            - name: LUMIGO_OPERATOR_VERSION
+              value: latest
+            - name: KUBERNETES_CLUSTER_DOMAIN
+              value: cluster.local
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          # TODO(user): Configure the resources accordingly based on the project requirements.
+          # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /lumigo/etc/namespaces/
+              name: namespace-configurations
+              readOnly: false
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1234
+        - name: telemetry-proxy
+          image: host.docker.internal:5000/telemetry-proxy:latest
+          env:
+            - name: LUMIGO_ENDPOINT
+              value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+          ports:
+            - containerPort: 4318
+              name: otlphttp
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1234
+          volumeMounts:
+            - mountPath: /lumigo/etc/otelcol/
+              name: telemetry-proxy-configurations
+              readOnly: false
+            - mountPath: /lumigo/etc/namespaces/
+              name: namespace-configurations
+              readOnly: false
+      volumes:
+        - emptyDir: {}
+          name: namespace-configurations
+        - emptyDir: {}
+          name: telemetry-proxy-configurations
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

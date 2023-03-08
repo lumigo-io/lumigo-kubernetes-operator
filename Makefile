@@ -12,6 +12,8 @@ PROXY_IMG ?= host.docker.internal:5000/telemetry-proxy:$(IMG_VERSION)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.25.0
 
+TARGET_PLATFORM = linux/amd64
+
 GOCMD?= go
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -98,8 +100,8 @@ e2e-tests:
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${CONTROLLER_IMG} -f Dockerfile.controller .
-	docker build -t ${PROXY_IMG} -f Dockerfile.proxy .
+	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.controller .
+	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.proxy .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
