@@ -23,7 +23,9 @@ RUN mkdir /dist; \
     jq -r ".assets[] | select(.name|match(\"${OTELCOL_BINARY_ASSET_NAME}\")) | .browser_download_url" | \
     xargs -I {} curl -s -L {} -o /dist/otelcontribcol; \
     chmod u+x /dist/otelcontribcol; \
-    ls -al /dist/*
+    ls -al /dist/*; \
+    /dist/otelcontribcol version; \
+    /dist/otelcontribcol components;
 
 FROM alpine
 
