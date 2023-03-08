@@ -22,10 +22,11 @@ RUN mkdir /dist; \
     curl -s https://api.github.com/repos/lumigo-io/opentelemetry-collector-contrib/releases/tags/${version}?draft=true | \
     jq -r ".assets[] | select(.name|match(\"${OTELCOL_BINARY_ASSET_NAME}\")) | .browser_download_url" | \
     xargs -I {} curl -s -L {} -o /dist/otelcontribcol; \
-    chmod u+x /dist/otelcontribcol; \
-    ls -al /dist/*; \
-    /dist/otelcontribcol version; \
-    /dist/otelcontribcol components
+    chmod u+x /dist/otelcontribcol
+
+RUN ls -al /dist/*
+RUN /dist/otelcontribcol version
+RUN /dist/otelcontribcol components
 
 FROM alpine
 
