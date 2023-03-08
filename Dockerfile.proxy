@@ -6,7 +6,7 @@ ENV lumigo_otel_collector_release="${lumigo_otel_collector_release}"
 # Added for compatibility with buildx facilities when not building on buildx
 ARG target_platform="${TARGETPLATFORM}"
 
-RUN apk add curl jq
+RUN apk add bash curl jq
 
 ENV TARGETPLATFORM="${target_platform:-linux/amd64}"
 

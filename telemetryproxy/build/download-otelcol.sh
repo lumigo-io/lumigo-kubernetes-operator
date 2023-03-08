@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xeuo pipelfail
+set -xeuo pipefail
 
 export OTELCOL_BINARY_ASSET_NAME="otelcontribcol_${TARGETPLATFORM/\//_}"
 
@@ -9,6 +9,7 @@ echo "Downloading Downloading 'otelcontribcol_${TARGETPLATFORM//\//_}' from vers
 
 asset_download_link=$(curl -s https://api.github.com/repos/lumigo-io/opentelemetry-collector-contrib/releases/tags/${version}?draft=true | jq -r ".assets[] | select(.name|match(\"${OTELCOL_BINARY_ASSET_NAME}\")) | .browser_download_url")
 
+mkdir /dist
 curl -L "${asset_download_link}" -o /dist/otelcontribcol
 
 chmod u+x /dist/otelcontribcol
