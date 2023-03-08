@@ -128,6 +128,8 @@ jobs:
             --debug --wait --timeout 4m; then
 
             kubectl describe all -n lumigo-system
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
             exit 1
           fi
       - name: Run end-to-end tests
