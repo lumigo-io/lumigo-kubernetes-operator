@@ -8,9 +8,9 @@ The Kubernetes operator of Lumigo provides a one-click solution to monitoring Ku
 
 ## Setup
 
-### Installing the Lumigo operator
+### Installation
 
-Install the Lumigo operator in your Kubernets cluster with [helm](https://helm.sh/):
+Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](https://helm.sh/):
 
 ```sh
 helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
@@ -19,7 +19,7 @@ helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-na
 
 You can customize the namespace name to use something other than `lumigo-system`, but this will make the rest of the instructions subtly wrong :-)
 
-You can verify that the Lumigo Operator is up and running with:
+You can verify that the Lumigo Kubernetes operator is up and running with:
 
 ```sh
 $ kubectl get pods -n lumigo-system
@@ -27,11 +27,13 @@ NAME                                                         READY   STATUS    R
 lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0          56s
 ```
 
+**Note:** While installing the Lumigo Kubernetes operator via [`kustomize`](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) is generally expected to work (except the [uninstallation of instrumentation on removal](#remove-injection-from-existing-resources)), it is not actually supported[^1].
+
 ### Enabling automatic tracing
 
 #### Supported resource types
 
-The Lumigo operator automatically adds distributed tracing to pods created via:
+The Lumigo Kubernetes operator automatically adds distributed tracing to pods created via:
 
 * Deployments ([`apps/v1.Deployment`](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/))
 * Daemonsets ([`apps/v1.DaemonSet`](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/))
@@ -42,7 +44,7 @@ The Lumigo operator automatically adds distributed tracing to pods created via:
 
 The distributed tracing is provided by the [Lumigo OpenTelemetry distribution for Python](https://github.com/lumigo-io/opentelemetry-python-distro) and [Lumigo OpenTelemetry distribution for JS](https://github.com/lumigo-io/opentelemetry-js-distro).
 
-The Lumigo Operator will automatically trace all Python and Node.js processes found in the containers of pods created in the namespaces that Lumigo traces.
+The Lumigo Kubernetes operator will automatically trace all Python and Node.js processes found in the containers of pods created in the namespaces that Lumigo traces.
 To activate automatic tracing for resources in a namespace, create in that namespace a Kubernetes secret containing your [Lumigo token](https://docs.lumigo.io/docs/lumigo-tokens), and reference it from a `Lumigo` (`operator.lumigo.io/v1alpha1.Lumigo`) custom resource:
 
 ```yaml
@@ -72,7 +74,7 @@ spec:
 
 #### Opting out for specific resources
 
-To prevent the Lumigo operator from injecting tracing to pods managed by some resource in a namespace that contains a `Lumigo` resource, add the `lumigo.auto-trace` label set to `false`:
+To prevent the Lumigo Kubernetes operator from injecting tracing to pods managed by some resource in a namespace that contains a `Lumigo` resource, add the `lumigo.auto-trace` label set to `false`:
 
 ```yaml
 apiVersion: apps/v1
@@ -101,7 +103,7 @@ spec:
         name: agnhost
 ```
 
-In the logs of the Lumigo operator, you will see a message like the following:
+In the logs of the Lumigo Kubernetes operator, you will see a message like the following:
 
 ```
 1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/inject", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
@@ -153,28 +155,52 @@ spec:
       removeLumigoFromResourcesOnDeletion: false # Default: true
 ```
 
-**Note:** The removal of injection from existing resources does not occur on uninstallation of the Lumigo operator, as the role-based access control is has likely already been deleted.
+**Note:** The removal of injection from existing resources does not occur on uninstallation of the Lumigo Kubernetes operator, as the role-based access control is has likely already been deleted.
+
+#### Collection of Kubernetes events
+
+The Lumigo Kubernetes operator will automatically collect Kubernetes events occurring in the namespaces with a `Lumigo` resource in active state, and send them to Lumigo for issue detection (e.g., when you pods crash).
+
+To _disable_ the automated collection of Kubernetes events, you can configure your `Lumigo` resources as follows:
+
+```yaml
+apiVersion: operator.lumigo.io/v1alpha1
+kind: Lumigo
+metadata:
+  labels:
+    app.kubernetes.io/name: lumigo
+    app.kubernetes.io/instance: lumigo
+    app.kubernetes.io/part-of: lumigo-operator
+  name: lumigo
+spec:
+  lumigoToken: ...
+  infrastructure:
+    kubeEvents:
+      enabled: false # Default: true
+```
+
+When a `Lumigo` resource is deleted from a namespace, the collection of Kubernetes events is automatically halted.
 
 ### Uninstall
 
-The removal of the Lumigo operator is performed by:
+The removal of the Lumigo Kubernetes operator is performed by:
 
 ```sh
 helm delete lumigo --namespace lumigo-system
 ```
 
-In namespaces with the Lumigo resource having `spec.tracing.injection.enabled` and `spec.tracing.injection.removeLumigoFromResourcesOnDeletion` both set to `true`, [supported resources](#supported-resource-types) that have been injected by the Lumigo operator will be updated to remove the injection, with the following caveat:
+In namespaces with the Lumigo resource having `spec.tracing.injection.enabled` and `spec.tracing.injection.removeLumigoFromResourcesOnDeletion` both set to `true`, [supported resources](#supported-resource-types) that have been injected by the Lumigo Kubernetes operator will be updated to remove the injection, with the following caveat:
 
 **Note:** The removal of injection from existing resources does not apply to `batchv1.Job` resources, as their `corev1.PodSpec` is immutable after the `batchv1.Job` resource has been created.
 
 ## TLS certificates
 
-The Lumigo operator injector webhook uses a self-signed certificate that is automatically generate during the [installation of the Helm chart](#installing-the-lumigo-operator).
-The generated certificate has a 365 days expiration, and a new certificate will be generated every time you upgrade Lumigo operator's helm chart.
+The Lumigo Kubernetes operator injector webhook uses a self-signed certificate that is automatically generate during the [installation of the Helm chart](#installing-the-lumigo-operator).
+The generated certificate has a 365 days expiration, and a new certificate will be generated every time you upgrade Lumigo Kubernetes operator's helm chart.
 
 ## Events
 
-The Lumigo operator will add events to the resources it instruments with the following reasons and in the following cases:
+The Lumigo Kubernetes operator will add events to the resources it instruments with the following reasons and in the following cases:
 
 | Reason | Created on resource types | Under which conditions |
 |--------|---------------------|------------------------|
@@ -184,3 +210,6 @@ The Lumigo operator will add events to the resources it instruments with the fol
 | `LumigoCannotUpdateInstrumentation` | `apps/v1.Deployment`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob` | If a Lumigo resources exists in the namespace, and the resource _should have_ the Lumigo instrumented updated as a result, but an error occurs |
 | `LumigoRemovedInstrumentation` | `apps/v1.Deployment`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob` | If a Lumigo resources is deleted from the namespace, and the resource has the Lumigo instrumented removed as a result |
 | `LumigoCannotRemoveInstrumentation` | `apps/v1.Deployment`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob` | If a Lumigo resources is deleted from the namespace, and the resource _should have_ the Lumigo instrumented removed as a result, but an error occurs |
+
+[^1]: The user experience of having to install [Cert Manager](https://cert-manager.io/docs/installation/) is unnecessarily complex, and Kustomize layers, while they may be fine for one's own applications, are simply unsound for a batteries-included, rapidly-evolving product like the Lumigo Kubernetes operator.
+Specifically, please expect your Kustomize layers to stop working with any release of the Lumigo Kubernetes operator.

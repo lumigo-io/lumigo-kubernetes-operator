@@ -51,7 +51,9 @@ $ curl localhost:5000/v2/_catalog -v
 * Connection #0 to host localhost left intact
 ```
 
-Deploy the Lumigo operator with:
+### Deploy with Helm
+
+Deploy the Lumigo Kubernetes operator with:
 
 ```sh
 make docker-build docker-push
@@ -64,6 +66,42 @@ To avoid strange issues with Docker caching the wrong images in your test enviro
 export IMG_VERSION=1 # Incremend this every time to try a deploy
 make docker-build docker-push
 helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}"
+```
+
+Changing the target Lumigo backend is _not_ supported with Helm (because we do not expect end users ever to have to).
+
+### Deploy with Kustomize
+
+Install [`cert-manager`](https://cert-manager.io/) with:
+
+```sh
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.yaml
+```
+
+Deploy the Lumigo Kubernetes operator with:
+
+```
+kubectl create namespace lumigo-system
+kubectl apply -k config/default -n lumigo-system
+```
+
+Changing the target Lumigo backend can be done with a [`patchStrategicMerge`](https://kubectl.docs.kubernetes.io/references/kustomize/glossary/#patchstrategicmerge):
+
+```sh
+echo -n "apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumigo-controller-manager
+spec:
+  template:
+    spec:
+      containers:
+      - name: telemetry-proxy
+        env:
+        - name: LUMIGO_ENDPOINT
+          value: \"https://my.lumigo.endpoint\" # Replace this!
+" > lumigo-endpoint.patch.yaml
+kubectl patch --patch-file lumigo-endpoint.patch.yaml --type strategic -n lumigo-system --filename=lumigo-endpoint.patch.yaml
 ```
 
 ### Troubleshooting

@@ -6,7 +6,7 @@ ENV lumigo_otel_collector_release="${lumigo_otel_collector_release}"
 # Added for compatibility with buildx facilities when not building on buildx
 ARG target_platform="${TARGETPLATFORM}"
 
-RUN apk add curl jq
+RUN apk add bash curl jq
 
 ENV TARGETPLATFORM="${target_platform:-linux/amd64}"
 
@@ -14,22 +14,19 @@ ADD telemetryproxy/VERSION.otelcontibcol /opt/VERSION.otelcontibcol
 
 # Values for TARGETPLATFORM are 'linux/amd64' and 'linux/arm64'; in the release names of the otelcollector,
 # the matching suffixes are 'linux_amd64' and 'linux_arm64', respectively
-RUN mkdir /dist; \
-    export OTELCOL_BINARY_ASSET_NAME="otelcontribcol_${TARGETPLATFORM/\//_}" && \
-    echo "Downloading 'otelcontribcol_${TARGETPLATFORM//\//_}'" && \
-    export version="${lumigo_otel_collector_release:-$(cat /opt/VERSION.otelcontibcol)}" && \
-    echo "Downloading version ${version} from https://github.com/lumigo-io/opentelemetry-collector-contrib" && \
-    curl -s https://api.github.com/repos/lumigo-io/opentelemetry-collector-contrib/releases/tags/${version}?draft=true | \
-    jq -r ".assets[] | select(.name|match(\"${OTELCOL_BINARY_ASSET_NAME}\")) | .browser_download_url" | \
-    xargs -I {} curl -s -L {} -o /dist/otelcontribcol; \
-    chmod u+x /dist/otelcontribcol
+ADD ./telemetryproxy/build/download-otelcol.sh /build/download-otelcol.sh
+RUN /build/download-otelcol.sh
 
 FROM alpine
 
+# Be able to validate the TLS cert of the Lumigo SaaS endpoint
 RUN apk add ca-certificates
+# Update OtelCollector config on namespace file change
+RUN apk add bash procps gomplate
 
-COPY --from=downloader --chown=1234:1234 /dist/otelcontribcol /lumigo/otelcol
-ADD --chown=1234:1234 ./telemetryproxy/config.yaml /etc/otelcol/config.yaml
+ADD --chown=1234:1234 ./telemetryproxy/etc/config.yaml.tpl /lumigo/etc/otelcol-config.yaml.tpl
+ADD --chown=1234:1234 ./telemetryproxy/bin/*.sh /lumigo/bin/
+COPY --from=downloader --chown=1234:1234 /dist/otelcontribcol /lumigo/bin/otelcol
 
-ENTRYPOINT ["/lumigo/otelcol"]
-CMD ["--config=/etc/otelcol/config.yaml"]
+ENTRYPOINT ["/bin/bash"]
+CMD ["/lumigo/bin/entrypoint.sh"]

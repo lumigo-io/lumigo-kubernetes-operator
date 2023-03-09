@@ -15,6 +15,7 @@
 # vendor/
 
 bin/
+!telemetryproxy/bin
 
 node_modules
 test.out

@@ -132,12 +132,18 @@ func (h *LumigoDefaulterWebhookHandler) Handle(ctx context.Context, request admi
 	if newLumigo.Spec.Tracing.Injection.Enabled == nil {
 		newLumigo.Spec.Tracing.Injection.Enabled = &newTrue
 	}
-
 	if newLumigo.Spec.Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation == nil {
 		newLumigo.Spec.Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation = &newTrue
 	}
 	if newLumigo.Spec.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion == nil {
 		newLumigo.Spec.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion = &newTrue
+	}
+
+	if newLumigo.Spec.Infrastructure.Enabled == nil {
+		newLumigo.Spec.Infrastructure.Enabled = &newTrue
+	}
+	if newLumigo.Spec.Infrastructure.KubeEvents.Enabled == nil {
+		newLumigo.Spec.Infrastructure.KubeEvents.Enabled = &newTrue
 	}
 
 	marshalled, err := json.Marshal(newLumigo)

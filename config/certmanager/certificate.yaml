@@ -30,8 +30,8 @@ metadata:
   namespace: system
 spec:
   dnsNames:
-  - $(INJECTOR_SERVICE_NAME).$(INJECTOR_SERVICE_NAMESPACE).svc
-  - $(INJECTOR_SERVICE_NAME).$(INJECTOR_SERVICE_NAMESPACE).svc.cluster.local
+  - $(WEBHOOKS_SERVICE_NAME).$(WEBHOOKS_SERVICE_NAMESPACE).svc
+  - $(WEBHOOKS_SERVICE_NAME).$(WEBHOOKS_SERVICE_NAMESPACE).svc.cluster.local
   issuerRef:
     kind: Issuer
     name: selfsigned-issuer
