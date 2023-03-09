@@ -132,10 +132,6 @@ var _ = Context("End-to-end tests", func() {
 				namespaceName = fmt.Sprintf("test%s", uuid.New())
 
 				namespace := &corev1.Namespace{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Namespace",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: namespaceName,
 					},
@@ -147,13 +143,9 @@ var _ = Context("End-to-end tests", func() {
 		})
 
 		AfterEach(func() {
-			if deleteNamespaces {
+			if !CurrentGinkgoTestDescription().Failed || deleteNamespaces {
 				By("Cleaning up test namespace", func() {
 					namespace := &corev1.Namespace{
-						TypeMeta: metav1.TypeMeta{
-							Kind:       "Namespace",
-							APIVersion: "v1",
-						},
 						ObjectMeta: metav1.ObjectMeta{
 							Name: namespaceName,
 						},
@@ -181,10 +173,6 @@ var _ = Context("End-to-end tests", func() {
 
 			By("Creating the LumigoToken secret", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      lumigoTokenName,
@@ -312,7 +300,7 @@ var _ = Context("End-to-end tests", func() {
 			})
 		})
 
-		It("trace a Python deployment created after the Lumigo resource is created", func() {
+		It("trace a Python deployment with tight security settings that is created after the Lumigo resource is created", func() {
 			lumigoTokenName := "lumigo-credentials"
 			lumigoTokenKey := "token"
 			testImage := "python"
@@ -321,10 +309,6 @@ var _ = Context("End-to-end tests", func() {
 
 			By("Creating the LumigoToken secret", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      lumigoTokenName,
@@ -370,6 +354,9 @@ var _ = Context("End-to-end tests", func() {
 			deploymentName := "testdeployment"
 
 			By("Creating the deployment", func() {
+				t := true
+				var g int64 = 5678
+
 				var replicas int32 = 1
 				deployment := &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
@@ -392,6 +379,12 @@ var _ = Context("End-to-end tests", func() {
 								},
 							},
 							Spec: corev1.PodSpec{
+								SecurityContext: &corev1.PodSecurityContext{
+									RunAsUser:    &g,
+									RunAsGroup:   &g,
+									RunAsNonRoot: &t,
+									FSGroup:      &g,
+								},
 								Containers: []corev1.Container{
 									{
 										Name:    "myapp",
@@ -467,10 +460,6 @@ var _ = Context("End-to-end tests", func() {
 
 			By("Creating the LumigoToken secret", func() {
 				Expect(k8sClient.Create(ctx, &corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: "v1",
-					},
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: namespaceName,
 						Name:      lumigoTokenName,

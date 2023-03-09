@@ -148,7 +148,7 @@ export class EksPythonSqsLambdaStack extends Stack {
       },
       stringData: {
         // Sigh, no integration with the CDK constructs yet :-(
-        token: SecretValue.unsafePlainText('AccessKeys').toJSON().LumigoToken,
+        token: SecretValue.secretsManager('AccessKeys').toJSON().LumigoToken,
       },
     });
 

@@ -48,6 +48,9 @@ const LumigoEndpointEnvVarName = "LUMIGO_ENDPOINT"
 const LdPreloadEnvVarName = "LD_PRELOAD"
 const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
 
+var defaultLumigoInitContainerUser int64 = 1234
+var defaultLumigoInitContainerGroup int64 = defaultLumigoInitContainerUser
+
 type Mutator interface {
 	GetAutotraceLabelValue() string
 	InjectLumigoInto(resource interface{}) (bool, error)
@@ -65,6 +68,9 @@ type Mutator interface {
 	RemoveLumigoFromBatchV1CronJob(deployment *batchv1.CronJob) (bool, error)
 	RemoveLumigoFromBatchV1Job(deployment *batchv1.Job) (bool, error)
 }
+
+var f = false
+var t = true
 
 type mutatorImpl struct {
 	log                       *logr.Logger
@@ -268,6 +274,15 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 	}
 	podSpec.Volumes = volumes
 
+	// The `lumigo-injector` init-container must be able to write to the `lumigo-injector`` volume.
+	// To ensure that, if FSGroup is set, the `lumigo-injector` init-container should use it as group.
+	initContainerUser := &defaultLumigoInitContainerUser
+	initContainerGroup := &defaultLumigoInitContainerGroup
+	if podSpec.SecurityContext.FSGroup != nil {
+		initContainerUser = podSpec.SecurityContext.FSGroup
+		initContainerGroup = podSpec.SecurityContext.FSGroup
+	}
+
 	lumigoInjectorContainer := &corev1.Container{
 		Name:  LumigoInjectorContainerName,
 		Image: m.lumigoInjectorImage,
@@ -276,6 +291,15 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 				Name:  TargetDirectoryEnvVarName,
 				Value: TargetDirectoryPath,
 			},
+		},
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: &f,
+			Privileged:               &f,
+			ReadOnlyRootFilesystem:   &t,
+			// We need to have no more privileges than the rest of the pod
+			RunAsNonRoot: podSpec.SecurityContext.RunAsNonRoot,
+			RunAsUser:    initContainerUser,
+			RunAsGroup:   initContainerGroup,
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			{

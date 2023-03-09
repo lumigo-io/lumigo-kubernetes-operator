@@ -433,6 +433,138 @@ var _ = Context("Lumigo defaulter webhook", func() {
 
 			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
 		})
+
+		It("should inject a deployment with containers running not as root", func() {
+			lumigo := newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
+				SecretRef: operatorv1alpha1.KubernetesSecretRef{
+					Name: "lumigosecret",
+					Key:  "token",
+				},
+			}, true)
+			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
+
+			lumigo.Status = statusActive
+			k8sClient.Status().Update(ctx, lumigo)
+
+			name := "test-deployment"
+
+			f := false
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespaceName,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"deployment": name,
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"deployment": name,
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "myapp",
+									Image: "busybox",
+								},
+							},
+							SecurityContext: &corev1.PodSecurityContext{
+								RunAsNonRoot: &f,
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+
+			deploymentAfter := &appsv1.Deployment{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: namespaceName,
+				Name:      name,
+			}, deploymentAfter); err != nil {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+			Expect(deploymentAfter.Spec.Template.Spec.InitContainers[0].SecurityContext.RunAsNonRoot).To(Equal(&f))
+		})
+
+		It("should inject a deployment with containers with FSGroup set", func() {
+			lumigo := newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
+				SecretRef: operatorv1alpha1.KubernetesSecretRef{
+					Name: "lumigosecret",
+					Key:  "token",
+				},
+			}, true)
+			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
+
+			lumigo.Status = statusActive
+			k8sClient.Status().Update(ctx, lumigo)
+
+			name := "test-deployment"
+
+			var group int64 = 4321
+			t := true
+			f := false
+
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespaceName,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"deployment": name,
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"deployment": name,
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "myapp",
+									Image: "busybox",
+									SecurityContext: &corev1.SecurityContext{
+										RunAsNonRoot:             &f,
+										RunAsGroup:               &group,
+										RunAsUser:                &group,
+										Privileged:               &f,
+										AllowPrivilegeEscalation: &f,
+										ReadOnlyRootFilesystem:   &t,
+									},
+								},
+							},
+							SecurityContext: &corev1.PodSecurityContext{
+								FSGroup: &group,
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+
+			deploymentAfter := &appsv1.Deployment{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: namespaceName,
+				Name:      name,
+			}, deploymentAfter); err != nil {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+			Expect(deploymentAfter.Spec.Template.Spec.InitContainers[0].SecurityContext.RunAsGroup).To(Equal(&group))
+		})
+
 	})
 
 	It("should not inject a minimal deployment with the lumigo.auto-trace label set to false", func() {
