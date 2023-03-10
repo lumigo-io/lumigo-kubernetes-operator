@@ -2,18 +2,29 @@
 
 set -eo pipefail
 
-readonly CONFIG_FILE_PATH="/lumigo/etc/otelcol/config.yaml"
-readonly CONFIG_TEMPLATE_FILE_PATH="/lumigo/etc/otelcol-config.yaml.tpl"
+readonly OTELCOL_CONFIG_FILE_PATH="/lumigo/etc/otelcol/config.yaml"
+readonly OTELCOL_CONFIG_TEMPLATE_FILE_PATH="/lumigo/etc/otelcol-config.yaml.tpl"
+readonly GENERATION_CONFIG_FILE_PATH="/lumigo/etc/otelcol/generation-config.json"
 readonly NAMESPACES_FILE_PATH="/lumigo/etc/namespaces/namespaces_to_monitor.json"
 readonly NAMESPACES_FILE_SHA_PATH="${NAMESPACES_FILE_PATH}.sha1"
 
 function generate_configs() {
     # Update config
-    mkdir -p $(dirname "${CONFIG_FILE_PATH}")
-    gomplate -f "${CONFIG_TEMPLATE_FILE_PATH}" -d "namespaces=${NAMESPACES_FILE_PATH}" > "${CONFIG_FILE_PATH}"
+    mkdir -p $(dirname "${OTELCOL_CONFIG_FILE_PATH}")
 
-    if [ "${LUMIGO_DEBUG}" == 'true' ]; then
-        cat "${CONFIG_FILE_PATH}"
+    local debug=
+    if [ "${LUMIGO_DEBUG,,}" = 'true' ]; then
+        debug='true'
+    fi
+
+
+    # Build configs as minified JSON
+    echo -n "\"${debug}\"" | jq -r '{debug:((. | type) == "string" and (. | ascii_downcase) == "true")}' > "${GENERATION_CONFIG_FILE_PATH}"
+
+    gomplate -f "${OTELCOL_CONFIG_TEMPLATE_FILE_PATH}" -d "config=${GENERATION_CONFIG_FILE_PATH}" -d "namespaces=${NAMESPACES_FILE_PATH}" --in "${config}" > "${OTELCOL_CONFIG_FILE_PATH}"
+
+    if [ -n "${debug}" ]; then
+        cat "${OTELCOL_CONFIG_FILE_PATH}"
     fi
 
     sha1sum "${NAMESPACES_FILE_PATH}" > "${NAMESPACES_FILE_SHA_PATH}"
@@ -58,4 +69,4 @@ echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH}"
 
 watch_namespaces_file &
 
-exec /lumigo/bin/otelcol "--config=${CONFIG_FILE_PATH}"
+exec /lumigo/bin/otelcol "--config=${OTELCOL_CONFIG_FILE_PATH}"

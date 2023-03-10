@@ -1,4 +1,5 @@
-{{ $namespaces := (datasource "namespaces") }}
+{{- $namespaces := (datasource "namespaces") }}
+{{- $config := (datasource "config") }}
 receivers:
   otlp:
     protocols:
@@ -31,13 +32,15 @@ extensions:
 
 exporters:
   otlphttp/lumigo:
-    endpoint: $LUMIGO_ENDPOINT
+    endpoint: {{ env.Getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
+{{- if $config.debug }}
   logging:
-    loglevel: debug
+    verbosity:
     sampling_initial: 1
     sampling_thereafter: 1
+{{ end }}
 {{- range (keys $namespaces) }}
   otlphttp/lumigo_ns_{{ . }}:
     endpoint: $LUMIGO_ENDPOINT
@@ -78,7 +81,7 @@ processors:
 service:
   telemetry:
     logs:
-      level: "debug" # TODO
+      level: {{ ternary $config.debug "debug" "info" }}
   extensions:
   - headers_setter/lumigo
   - health_check
@@ -94,7 +97,9 @@ service:
       - k8sattributes
       exporters:
       - otlphttp/lumigo
+{{- if $config.debug }}
       - logging
+{{ end }}
 {{- range (keys $namespaces) }}
     logs/k8s_events_ns_{{ . }}:
       receivers:
@@ -102,5 +107,7 @@ service:
       processors: []
       exporters:
       - otlphttp/lumigo_ns_{{ . }}
+{{- if $config.debug }}
       - logging
+{{ end }}
 {{ end }}
