@@ -403,6 +403,7 @@ jobs:
         id: create-release-commit
         run: |
           git add charts/lumigo-operator
+          git add config/manager/manager.yaml
           git commit -m "v${{ needs.validate-release-increment.outputs.version }}"
 
           git tag "v${{ needs.validate-release-increment.outputs.version }}" $(git rev-parse HEAD)
