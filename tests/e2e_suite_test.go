@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
+	gintype "github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	gtypes "github.com/onsi/gomega/types"
@@ -36,14 +37,14 @@ import (
 )
 
 var (
-	ctx              context.Context
-	k8sClient        client.Client
-	clientset        *kubernetes.Clientset
-	lumigoToken      string
-	lumigoNamespace  = "lumigo-system"
-	defaultTimeout   = 10 * time.Second
-	defaultInterval  = 100 * time.Millisecond
-	deleteNamespaces bool
+	ctx                     context.Context
+	k8sClient               client.Client
+	clientset               *kubernetes.Clientset
+	lumigoToken             string
+	lumigoNamespace         = "lumigo-system"
+	defaultTimeout          = 10 * time.Second
+	defaultInterval         = 100 * time.Millisecond
+	keepNamespacesOnFailure bool
 )
 
 // These tests assume:
@@ -58,8 +59,8 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	deleteNamespacesString, isSet := os.LookupEnv("DELETE_TEST_NAMESPACES")
-	deleteNamespaces = !isSet || (deleteNamespacesString == "true")
+	keepNamespacesOnFailureString, isSet := os.LookupEnv("KEEP_TEST_NAMESPACES_ON_FAILURE")
+	keepNamespacesOnFailure = !isSet || (keepNamespacesOnFailureString == "false")
 
 	ctx = context.TODO()
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
@@ -143,7 +144,7 @@ var _ = Context("End-to-end tests", func() {
 		})
 
 		AfterEach(func() {
-			if !CurrentGinkgoTestDescription().Failed || deleteNamespaces {
+			if CurrentSpecReport().State == gintype.SpecStatePassed || !keepNamespacesOnFailure {
 				By("Cleaning up test namespace", func() {
 					namespace := &corev1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{
