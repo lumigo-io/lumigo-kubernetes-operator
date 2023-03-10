@@ -1,5 +1,13 @@
 # Contributing
 
+## House rules
+
+* Commit history must be linear (enforced via GitHub settings).
+* Pull Requests must have their title comforming to the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) specification (enforced via a [build workflow](.github/workflows/check-pr-title.yml)).
+* PR's are squashed on merge (enforced via GitHub settings).
+* The PR's title and description are used as to create the message of the squashed commit that is merged into `main`.
+* The [changelog](./CHANGELOG.md) is automatically updated on release based on the commit history.
+
 ## Local testing with Minikube
 
 Install [minikube](https://minikube.sigs.k8s.io/docs/start/), [Helm](https://helm.sh/docs/intro/install/), [Go](https://go.dev/doc/install) and a local Docker daemon, e.g., [Docker Desktop](https://www.docker.com/products/docker-desktop/).

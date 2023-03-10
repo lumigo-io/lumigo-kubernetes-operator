@@ -423,6 +423,23 @@ jobs:
 
           git commit -m "${{ needs.validate-release-increment.outputs.version }}"
           echo "commit_sha=$(git rev-parse HEAD)" >> ${GITHUB_OUTPUT}
+      - name: Prep Changelog settings
+        id: changelog-settings
+        run: |
+          echo "organization=$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{ print $1 }')" >> ${GITHUB_OUTPUT}
+          echo "repository=$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{ print $2 }')" >> ${GITHUB_OUTPUT}
+      - name: Update Changelog
+        uses: addnab/docker-run-action@v3
+        env:
+          CHANGELOG_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image: githubchangeloggenerator/github-changelog-generator
+          options: "-v ${{ github.workspace }}:/github/workspace --env SRC_PATH=/github/workspace --env CHANGELOG_GITHUB_TOKEN --workdir /github/workspace"
+          run: |
+            github_changelog_generator -u "${{ steps.changelog-settings.outputs.organization }}" -p "${{ steps.changelog-settings.outputs.repository }}" pull-requests=false issues=false issues-wo-labels=false pr-wo-labels=false
+      - name: Print CHANGELOG.md
+        run: |
+          cat CHANGELOG.md
       - name: Create Release
         uses: ncipollo/release-action@v1.12.0
         with:
