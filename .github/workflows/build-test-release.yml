@@ -323,7 +323,7 @@ jobs:
           registry-type: public
       - name: Build and push container image to Amazon ECR
         env:
-          CONTROLLER_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate_release_increment.outputs.version }}
+          CONTROLLER_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}
         run: |
           make docker-buildx-manager
 
@@ -357,7 +357,7 @@ jobs:
           registry-type: public
       - name: Build and push container image to Amazon ECR
         env:
-          PROXY_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate_release_increment.outputs.version }}
+          PROXY_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
         run: |
           make docker-buildx-telemetry-proxy
 
