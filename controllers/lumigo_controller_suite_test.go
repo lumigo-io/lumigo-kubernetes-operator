@@ -18,20 +18,16 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/format"
-	gtypes "github.com/onsi/gomega/types"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
-	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
+	. "github.com/lumigo-io/lumigo-kubernetes-operator/controllers/internal/matchers"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
 	//+kubebuilder:scaffold:imports
 )
@@ -203,7 +199,8 @@ var _ = Context("Lumigo controller", func() {
 	Context("with one Lumigo instance", func() {
 
 		It("has an error if the referenced secret does not exist", func() {
-			lumigo := newLumigo(namespaceName, "lumigo", operatorv1alpha1.Credentials{
+			lumigoName := "lumigo"
+			lumigo := newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
 				SecretRef: operatorv1alpha1.KubernetesSecretRef{
 					Name: "lumigo-credentials",
 					Key:  "token",
@@ -212,9 +209,13 @@ var _ = Context("Lumigo controller", func() {
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
-				Eventually(func() bool {
-					return hasErrorCondition(lumigo, fmt.Sprintf("invalid Lumigo token secret reference: cannot retrieve secret '%s/lumigo-credentials'", namespaceName))
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(
+						BeInErroneousState(
+							fmt.Sprintf("invalid Lumigo token secret reference: cannot retrieve secret '%s/lumigo-credentials'", namespaceName),
+						),
+					)
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 
 				Eventually(func(g Gomega) {
 					g.Expect(telemetryProxyNamespacesFile).ShouldNot(BeMonitoringNamespace(namespaceName))
@@ -233,9 +234,9 @@ var _ = Context("Lumigo controller", func() {
 					},
 				})).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 
 				Eventually(func(g Gomega) {
 					g.Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
@@ -246,7 +247,8 @@ var _ = Context("Lumigo controller", func() {
 		It("has an error if the referenced secret does not have the expected key", func() {
 			expectedTokenKey := "token"
 			wrongTokenKey := "NOTTOKEN"
-			lumigo := newLumigo(namespaceName, "lumigo", operatorv1alpha1.Credentials{
+			lumigoName := "lumigo"
+			lumigo := newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
 				SecretRef: operatorv1alpha1.KubernetesSecretRef{
 					Name: "lumigo-credentials",
 					Key:  expectedTokenKey,
@@ -255,9 +257,13 @@ var _ = Context("Lumigo controller", func() {
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
-				Eventually(func() bool {
-					return hasErrorCondition(lumigo, fmt.Sprintf("invalid Lumigo token secret reference: cannot retrieve secret '%s/lumigo-credentials'", namespaceName))
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(
+						BeInErroneousState(
+							fmt.Sprintf("invalid Lumigo token secret reference: cannot retrieve secret '%s/lumigo-credentials'", namespaceName),
+						),
+					)
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 
 			Expect(telemetryProxyNamespacesFile).ShouldNot(BeMonitoringNamespace(namespaceName))
@@ -273,9 +279,15 @@ var _ = Context("Lumigo controller", func() {
 					},
 				})).Should(Succeed())
 
-				Eventually(func() bool {
-					return hasErrorCondition(lumigo, fmt.Sprintf("invalid Lumigo token secret reference: the secret '%s/%s' does not have the key '%s'", namespaceName, "lumigo-credentials", expectedTokenKey))
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(
+						BeInErroneousState(
+							fmt.Sprintf(
+								"invalid Lumigo token secret reference: the secret '%s/%s' does not have the key '%s'", namespaceName, "lumigo-credentials", expectedTokenKey,
+							),
+						),
+					)
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 
 			By("the Lumigo instance recovers when the secret is updated with the right key", func() {
@@ -292,9 +304,9 @@ var _ = Context("Lumigo controller", func() {
 
 				Expect(k8sClient.Update(ctx, updatedSecret)).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 
 				Eventually(func(g Gomega) {
 					g.Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
@@ -315,7 +327,8 @@ var _ = Context("Lumigo controller", func() {
 				},
 			})).Should(Succeed())
 
-			lumigo := newLumigo(namespaceName, "lumigo", operatorv1alpha1.Credentials{
+			lumigoName := "lumigo"
+			lumigo := newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
 				SecretRef: operatorv1alpha1.KubernetesSecretRef{
 					Name: "lumigo-credentials",
 					Key:  expectedTokenKey,
@@ -324,12 +337,12 @@ var _ = Context("Lumigo controller", func() {
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
-				Eventually(func() bool {
-					return hasErrorCondition(lumigo, fmt.Sprintf(
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(BeInErroneousState(fmt.Sprintf(
 						"invalid Lumigo token secret reference: the value of the field '%s' of the secret '%s/%s' does not match the expected structure of Lumigo tokens: "+
 							"it should be `t_` followed by 21 alphanumeric characters; see https://docs.lumigo.io/docs/lumigo-tokens "+
-							"for instructions on how to retrieve your Lumigo token", expectedTokenKey, namespaceName, "lumigo-credentials"))
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+							"for instructions on how to retrieve your Lumigo token", expectedTokenKey, namespaceName, "lumigo-credentials")))
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 
 			By("the Lumigo instance recovers when the secret is updated with the a valid token", func() {
@@ -346,9 +359,9 @@ var _ = Context("Lumigo controller", func() {
 
 				Expect(k8sClient.Update(ctx, updatedSecret)).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 
 				Eventually(func(g Gomega) {
 					g.Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
@@ -356,7 +369,7 @@ var _ = Context("Lumigo controller", func() {
 			})
 		})
 
-		It("should not injection existing resources when creating the Lumigo resource with .Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation set to false", func() {
+		It("should not inject existing resources when creating the Lumigo resource with .Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation set to false", func() {
 			lumigoSecretName := "lumigo-credentials"
 			expectedTokenKey := "token"
 
@@ -374,54 +387,64 @@ var _ = Context("Lumigo controller", func() {
 
 			deploymentName := "test-deployment"
 
-			By("Inititalizing the deployment", func() {
-				deployment := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      deploymentName,
-						Namespace: namespaceName,
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      deploymentName,
+					Namespace: namespaceName,
+					Labels: map[string]string{
+						mutation.LumigoAutoTraceLabelKey: "false",
 					},
-					Spec: appsv1.DeploymentSpec{
-						Selector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"deployment": deploymentName,
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
 								"deployment": deploymentName,
 							},
 						},
-						Template: corev1.PodTemplateSpec{
-							ObjectMeta: metav1.ObjectMeta{
-								Labels: map[string]string{
-									"deployment": deploymentName,
-								},
-							},
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "myapp",
-										Image: "busybox",
-									},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "myapp",
+									Image: "busybox",
 								},
 							},
 						},
 					},
-				}
+				},
+			}
+
+			By("Inititalizing the deployment", func() {
 				Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
 			})
 
 			lumigoName := "lumigo1"
 			var lumigo *operatorv1alpha1.Lumigo
-			By("Initializing the Lumigo resource", func() {
-				// Instantiating Lumigo after the deployment, so that the former is instrumented without the webhook
-				lumigo = newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
-					SecretRef: operatorv1alpha1.KubernetesSecretRef{
-						Name: lumigoSecretName,
-						Key:  expectedTokenKey,
-					},
-				}, true, false, false)
-				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+			// Instantiating Lumigo after the deployment, so that the former is instrumented without the webhook
+			By("Initializing the Lumigo resource", func() {
+				Eventually(func(g Gomega) {
+					lumigo = newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
+						SecretRef: operatorv1alpha1.KubernetesSecretRef{
+							Name: lumigoSecretName,
+							Key:  expectedTokenKey,
+						},
+					}, true, false, false)
+					g.Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
+
+			GinkgoWriter.Println("SUUUUUUKAAAAAA")
+
+			Eventually(func(g Gomega) {
+				g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+				g.Expect(currentVersionOf(lumigo, g)).NotTo(HaveInstrumentedObjectReferenceFor(deployment))
+			}, defaultTimeout, 5*time.Second).Should(Succeed())
 
 			By("Validating deployment did not get injected", func() {
 				deployment := &appsv1.Deployment{}
@@ -486,11 +509,10 @@ var _ = Context("Lumigo controller", func() {
 				Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
 			})
 
-			lumigoName := "lumigo1"
 			var lumigo *operatorv1alpha1.Lumigo
 			By("Initializing the Lumigo resource", func() {
 				// Instantiating Lumigo after the deployment, so that the former is instrumented without the webhook
-				lumigo = newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
+				lumigo = newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
 					SecretRef: operatorv1alpha1.KubernetesSecretRef{
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
@@ -498,9 +520,9 @@ var _ = Context("Lumigo controller", func() {
 				}, true, true, false)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 
 				Eventually(func(g Gomega) {
 					g.Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
@@ -508,13 +530,17 @@ var _ = Context("Lumigo controller", func() {
 			})
 
 			By("Validating deployment got injected", func() {
-				deployment := &appsv1.Deployment{}
-				Expect(k8sClient.Get(ctx, types.NamespacedName{
-					Namespace: namespaceName,
-					Name:      deploymentName,
-				}, deployment)).To(Succeed())
+				Eventually(func(g Gomega) {
+					deployment := &appsv1.Deployment{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: namespaceName,
+						Name:      deploymentName,
+					}, deployment)).To(Succeed())
 
-				Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+					g.Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+					g.Expect(currentVersionOf(lumigo, g)).To(HaveInstrumentedObjectReferenceFor(deployment))
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 
 			By("Deleting the Lumigo resource", func() {
@@ -522,8 +548,8 @@ var _ = Context("Lumigo controller", func() {
 
 				Eventually(func(g Gomega) {
 					g.Expect(k8sClient.Get(ctx, types.NamespacedName{
-						Namespace: namespaceName,
-						Name:      lumigoName,
+						Namespace: lumigo.Namespace,
+						Name:      lumigo.Name,
 					}, &operatorv1alpha1.Lumigo{})).To(MatchError(ContainSubstring("not found")))
 				}, defaultTimeout, defaultInterval).Should(Succeed())
 
@@ -560,43 +586,44 @@ var _ = Context("Lumigo controller", func() {
 			})
 
 			deploymentName := "test-deployment"
-
-			By("Inititalizing the deployment", func() {
-				deployment := &appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      deploymentName,
-						Namespace: namespaceName,
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      deploymentName,
+					Namespace: namespaceName,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"deployment": deploymentName,
+						},
 					},
-					Spec: appsv1.DeploymentSpec{
-						Selector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
 								"deployment": deploymentName,
 							},
 						},
-						Template: corev1.PodTemplateSpec{
-							ObjectMeta: metav1.ObjectMeta{
-								Labels: map[string]string{
-									"deployment": deploymentName,
-								},
-							},
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "myapp",
-										Image: "busybox",
-									},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "myapp",
+									Image: "busybox",
 								},
 							},
 						},
 					},
-				}
+				},
+			}
+
+			By("Inititalizing the deployment", func() {
 				Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
 			})
 
+			lumigoName := "lumigo1"
 			var lumigo *operatorv1alpha1.Lumigo
 			By("Initializing the Lumigo resource", func() {
 				// Instantiating Lumigo after the deployment, so that the former is instrumented without the webhook
-				lumigo = newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
+				lumigo = newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
 					SecretRef: operatorv1alpha1.KubernetesSecretRef{
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
@@ -604,9 +631,10 @@ var _ = Context("Lumigo controller", func() {
 				}, true, true, true)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+					g.Expect(currentVersionOf(lumigo, g)).To(HaveInstrumentedObjectReferenceFor(deployment))
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
 
 			By("Validating deployment got injected", func() {
@@ -685,9 +713,9 @@ var _ = Context("Lumigo controller", func() {
 				}, true, true, false)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 
 				Eventually(func(g Gomega) {
 					g.Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
@@ -736,41 +764,36 @@ var _ = Context("Lumigo controller", func() {
 			}
 
 			lumigo1 := newLumigo(namespaceName, "lumigo1", lumigoToken, true, true, true)
-			lumigo1NamespacesName := types.NamespacedName{
-				Namespace: lumigo1.Namespace,
-				Name:      lumigo1.Name,
-			}
 			Expect(k8sClient.Create(ctx, lumigo1)).Should(Succeed())
 			Eventually(func(g Gomega) {
-				updatedLumigo := &operatorv1alpha1.Lumigo{}
-				g.Expect(k8sClient.Get(ctx, lumigo1NamespacesName, updatedLumigo)).To(Succeed())
-				g.Expect(conditions.IsActive(updatedLumigo)).To(BeTrue())
+				g.Expect(currentVersionOf(lumigo1, g)).To(BeActive())
 			}, defaultTimeout, defaultInterval).Should(Succeed())
 
 			Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
 
 			lumigo2 := newLumigo(namespaceName, "lumigo2", lumigoToken, true, true, true)
-
 			By("adding a second Lumigo in the namespace", func() {
 				Expect(k8sClient.Create(ctx, lumigo2)).Should(Succeed())
 
-				By("checking the status of the original lumigo resource")
-				Eventually(func() bool {
-					return isActive(lumigo1)
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				By("checking the status of the original lumigo resource", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(currentVersionOf(lumigo1, g)).To(BeActive())
+					}, defaultTimeout, defaultInterval).Should(Succeed())
+				})
 
-				By("checking the status of the new lumigo resource")
-				Eventually(func() bool {
-					return hasErrorCondition(lumigo2, "other Lumigo instances in this namespace")
-				}, defaultTimeout, defaultInterval).Should(BeTrue())
+				By("checking the status of the new lumigo resource", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(currentVersionOf(lumigo2, g)).To(BeInErroneousState(""))
+					}, defaultTimeout, defaultInterval).Should(Succeed())
+				})
 			})
 
 			By("the first Lumigo instance remains active when the second is deleted", func() {
 				Expect(k8sClient.Delete(ctx, lumigo2)).Should(Succeed())
 
-				Eventually(func() bool {
-					return isActive(lumigo1)
-				}, 15*time.Second, defaultInterval).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					g.Expect(currentVersionOf(lumigo1, g)).To(BeActive())
+				}, defaultTimeout, defaultInterval).Should(Succeed())
 
 				Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
 			})
@@ -779,22 +802,6 @@ var _ = Context("Lumigo controller", func() {
 	})
 
 })
-
-func hasErrorCondition(lumigo *operatorv1alpha1.Lumigo, message string) bool {
-	updatedLumigo := &operatorv1alpha1.Lumigo{}
-	if err := k8sClient.Get(context.Background(), toObjectKey(lumigo), updatedLumigo); err != nil {
-		fmt.Fprint(GinkgoWriter, err)
-		return false
-	}
-
-	if hasError, errorMessage := conditions.HasError(updatedLumigo); hasError {
-		isSatisfied := errorMessage == message
-		GinkgoWriter.Println(fmt.Sprintf("expected: '%s'; actual: '%s'; satisfied? %v", message, errorMessage, isSatisfied))
-		return isSatisfied
-	}
-
-	return false
-}
 
 func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool, injectLumigoIntoExistingResourcesOnCreation bool, removeLumigoFromResourcesOnDeletion bool) *operatorv1alpha1.Lumigo {
 	return &operatorv1alpha1.Lumigo{
@@ -816,96 +823,11 @@ func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Crede
 	}
 }
 
-func isActive(lumigo *operatorv1alpha1.Lumigo) bool {
-	updatedLumigo := &operatorv1alpha1.Lumigo{}
-	if err := k8sClient.Get(context.Background(), toObjectKey(lumigo), updatedLumigo); err != nil {
-		GinkgoWriter.Println(err)
-		return false
-	}
-
-	return conditions.IsActive(updatedLumigo)
-}
-
-func toObjectKey(lumigo *operatorv1alpha1.Lumigo) client.ObjectKey {
-	return client.ObjectKey{
-		Namespace: lumigo.Namespace,
-		Name:      lumigo.Name,
-	}
-}
-
-type beMonitoringNamespace struct {
-	expectedMonitoredNamespace string
-}
-
-func BeMonitoringNamespace(namespace string) gtypes.GomegaMatcher {
-	return &beMonitoringNamespace{
-		expectedMonitoredNamespace: namespace,
-	}
-}
-
-func (m *beMonitoringNamespace) Match(actual interface{}) (bool, error) {
-	actualMonitoredNamespaces, err := parseJsonFile(actual)
-	if err != nil {
-		return false, err
-	}
-
-	for monitoredNamespace := range actualMonitoredNamespaces {
-		if monitoredNamespace == m.expectedMonitoredNamespace {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func (m *beMonitoringNamespace) FailureMessage(actual interface{}) (message string) {
-	actualMonitoredNamespaces, err := parseJsonFile(actual)
-	if err != nil {
-		return err.Error()
-	}
-
-	return fmt.Sprintf(
-		"is not monitoring the namespace '%s'; monitored namespaces: %v",
-		m.expectedMonitoredNamespace,
-		reflect.ValueOf(actualMonitoredNamespaces).MapKeys(),
-	)
-}
-
-func (m *beMonitoringNamespace) NegatedFailureMessage(actual interface{}) (message string) {
-	actualMonitoredNamespaces, err := parseJsonFile(actual)
-	if err != nil {
-		return err.Error()
-	}
-
-	return fmt.Sprintf(
-		"is monitoring the namespace '%s'; monitored namespaces: %v",
-		m.expectedMonitoredNamespace,
-		reflect.ValueOf(actualMonitoredNamespaces).MapKeys(),
-	)
-}
-
-func parseJsonFile(actual interface{}) (map[string]string, error) {
-	var actualFile string
-	switch a := actual.(type) {
-	case string:
-		actualFile = a
-	default:
-		return nil, fmt.Errorf("BeJsonFileMatching matcher expects a string; got:\n%s", format.Object(actual, 1))
-	}
-
-	actualBytes, err := os.ReadFile(actualFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return make(map[string]string, 0), nil
-		} else {
-			return nil, fmt.Errorf("cannot read the actual file '%s': %w", actualFile, err)
-		}
-	}
-
-	var monitoredNamespaces map[string]string
-	if err := json.Unmarshal(actualBytes, &monitoredNamespaces); err != nil {
-		return nil, fmt.Errorf("cannot unmarshal actual file '%s': %w", actualFile, err)
-	}
-
-	return monitoredNamespaces, nil
+func currentVersionOf(originalLumigo *operatorv1alpha1.Lumigo, g Gomega) *operatorv1alpha1.Lumigo {
+	lumigo := &operatorv1alpha1.Lumigo{}
+	g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: originalLumigo.Namespace,
+		Name:      originalLumigo.Name,
+	}, lumigo)).To(Succeed())
+	return lumigo
 }

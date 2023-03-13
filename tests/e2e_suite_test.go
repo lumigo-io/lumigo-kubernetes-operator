@@ -37,14 +37,15 @@ import (
 )
 
 var (
-	ctx                     context.Context
-	k8sClient               client.Client
-	clientset               *kubernetes.Clientset
-	lumigoToken             string
-	lumigoNamespace         = "lumigo-system"
-	defaultTimeout          = 10 * time.Second
-	defaultInterval         = 100 * time.Millisecond
-	keepNamespacesOnFailure bool
+	ctx                       context.Context
+	k8sClient                 client.Client
+	clientset                 *kubernetes.Clientset
+	lumigoToken               string
+	lumigoNamespace           = "lumigo-system"
+	defaultTimeout            = 10 * time.Second
+	defaultInterval           = 100 * time.Millisecond
+	deleteNamespacesOnSuccess bool
+	keepNamespacesOnFailure   bool
 )
 
 // These tests assume:
@@ -59,6 +60,9 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	deleteNamespacesOnSuccessString, isSet := os.LookupEnv("DELETE_TEST_NAMESPACES_ON_SUCCESS")
+	deleteNamespacesOnSuccess = !isSet || (deleteNamespacesOnSuccessString == "true")
+
 	keepNamespacesOnFailureString, isSet := os.LookupEnv("KEEP_TEST_NAMESPACES_ON_FAILURE")
 	keepNamespacesOnFailure = !isSet || (keepNamespacesOnFailureString == "false")
 
@@ -144,7 +148,7 @@ var _ = Context("End-to-end tests", func() {
 		})
 
 		AfterEach(func() {
-			if CurrentSpecReport().State == gintype.SpecStatePassed || !keepNamespacesOnFailure {
+			if (CurrentSpecReport().State == gintype.SpecStatePassed && deleteNamespacesOnSuccess) || !keepNamespacesOnFailure {
 				By("Cleaning up test namespace", func() {
 					namespace := &corev1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{

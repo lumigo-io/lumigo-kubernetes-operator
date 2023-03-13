@@ -72,6 +72,30 @@ spec:
       key: token # This must match the key in the Kubernetes secret
 ```
 
+Each `Lumigo` resource keeps in its state a list of resources it currently instruments:
+
+```yaml
+$ kubectl describe lumigo -n my-namespace
+Name:         lumigo
+Namespace:    my-namespace
+API Version:  operator.lumigo.io/v1alpha1
+Kind:         Lumigo
+Metadata:
+  ... # Data removed for readability
+Spec:
+  ... # Data removed for readability
+Status:
+  Conditions:
+  ... # Data removed for readability
+  Instrumented Resources:
+    API Version:       apps/v1
+    Kind:              StatefulSet
+    Name:              my-statefulset
+    Namespace:         my-namespace
+    Resource Version:  320123
+    UID:               93d6d809-ac2a-43a9-bc07-f0d4e314efcc
+```
+
 #### Opting out for specific resources
 
 To prevent the Lumigo Kubernetes operator from injecting tracing to pods managed by some resource in a namespace that contains a `Lumigo` resource, add the `lumigo.auto-trace` label set to `false`:

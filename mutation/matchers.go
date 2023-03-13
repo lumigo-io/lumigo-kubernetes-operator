@@ -13,6 +13,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	errAutotraceLabelNotFound        = fmt.Errorf("'%s' label not found", LumigoAutoTraceLabelKey)
+	errLdPreloadEnvVarNotSet         = fmt.Errorf("the environment variable '%s' is not set in the container's Env", LdPreloadEnvVarName)
+	errLumigoTracerTokenEnvVarNotSet = fmt.Errorf("the environment variable '%s' is not set in the container's Env", LumigoTracerTokenEnvVarName)
+	errLumigoEndpointEnvVarNotSet    = fmt.Errorf("the environment variable '%s' is not set in the container's Env", LumigoEndpointEnvVarName)
+)
+
 func BeInstrumentedWithLumigo(lumigoOperatorVersion string, lumigoInjectorImage string, lumigoEndpointUrl string) types.GomegaMatcher {
 	return &beInstrumentedWithLumigo{
 		lumigoOperatorVersion: lumigoOperatorVersion,
@@ -178,6 +185,17 @@ func (m *beInstrumentedWithLumigo) doMatch(actual interface{}) (bool, error) {
 
 func (m *beInstrumentedWithLumigo) hasTheAutoTraceLabelSet(objectMeta *metav1.ObjectMeta) error {
 	version := m.lumigoOperatorVersion
+
+	if len(version) == 0 {
+		// Just check that the key exists
+		_, ok := objectMeta.Labels[LumigoAutoTraceLabelKey]
+		if ok {
+			return nil
+		} else {
+			return errAutotraceLabelNotFound
+		}
+	}
+
 	if len(version) > 8 {
 		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
 	}
@@ -189,7 +207,7 @@ func (m *beInstrumentedWithLumigo) hasTheAutoTraceLabelSet(objectMeta *metav1.Ob
 		return fmt.Errorf("cannot lookup '%s' label: %w", LumigoAutoTraceLabelKey, err)
 	}
 	if !podTemplateHasAutoTraceLabels {
-		return fmt.Errorf("'%s' label not found", LumigoAutoTraceLabelKey)
+		return errAutotraceLabelNotFound
 	}
 
 	return nil
@@ -253,15 +271,15 @@ func (m *beInstrumentedWithLumigo) isContainerInstrumentedWithLumigo(container *
 	}
 
 	if !ldPreloadEnvVarFound {
-		return false, fmt.Errorf("the env var '%s' is not set on the container Env: %+v", LdPreloadEnvVarName, container.Env)
+		return false, errLdPreloadEnvVarNotSet
 	}
 
 	if !lumigoTracerTokenEnvVarFound {
-		return false, fmt.Errorf("the env var '%s' is not set on the container Env", LumigoTracerTokenEnvVarName)
+		return false, errLumigoTracerTokenEnvVarNotSet
 	}
 
 	if !lumigoEndpointEnvVarFound {
-		return false, fmt.Errorf("the env var '%s' is not set on the container Env", LumigoEndpointEnvVarName)
+		return false, errLumigoEndpointEnvVarNotSet
 	}
 
 	volumeMountFound := false
