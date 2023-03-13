@@ -39,8 +39,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -51,6 +53,7 @@ import (
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/internal/sorting"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
 )
 
@@ -83,6 +86,12 @@ func (r *LumigoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&operatorv1alpha1.Lumigo{}).
 		// Watch for changes in secrets that are referenced in Lumigo instances as containing the Lumigo token
 		Watches(&source.Kind{Type: &corev1.Secret{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfSecretReferencedByLumigo)).
+		Watches(&source.Kind{Type: &appsv1.DaemonSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
+		Watches(&source.Kind{Type: &appsv1.Deployment{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
+		Watches(&source.Kind{Type: &appsv1.ReplicaSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
+		Watches(&source.Kind{Type: &appsv1.StatefulSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
+		Watches(&source.Kind{Type: &batchv1.CronJob{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
+		Watches(&source.Kind{Type: &batchv1.Job{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
 		Complete(r)
 }
 
@@ -104,8 +113,8 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	now := metav1.NewTime(time.Now())
 
 	var result reconcile.Result
-	lumigoInstance := &operatorv1alpha1.Lumigo{} // TODO Match object name
-	if err := r.Client.Get(ctx, req.NamespacedName, lumigoInstance); err != nil {
+	lumigo := &operatorv1alpha1.Lumigo{}
+	if err := r.Client.Get(ctx, req.NamespacedName, lumigo); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Request object may have been deleted after the reconcile request has been issued,
 			// e.g., due to garbage collection.
@@ -119,26 +128,26 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// The active condition has never been set, so this instance has just been created
-	isLumigoInstanceJustCreated := conditions.GetLumigoConditionByType(lumigoInstance, operatorv1alpha1.LumigoConditionTypeActive) == nil
-	if isLumigoInstanceJustCreated {
+	isLumigoJustCreated := conditions.GetLumigoConditionByType(lumigo, operatorv1alpha1.LumigoConditionTypeActive) == nil
+	if isLumigoJustCreated {
 		log = log.WithValues("new-lumigo", true)
 	}
 
-	if lumigoInstance.ObjectMeta.DeletionTimestamp.IsZero() {
+	if lumigo.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The Lumigo instance is not being deleted, so ensure it has our finalizer
-		if !controllerutil.ContainsFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer) {
-			controllerutil.AddFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer)
-			if err := r.Update(ctx, lumigoInstance); err != nil {
+		if !controllerutil.ContainsFinalizer(lumigo, operatorv1alpha1.LumigoResourceFinalizer) {
+			controllerutil.AddFinalizer(lumigo, operatorv1alpha1.LumigoResourceFinalizer)
+			if err := r.Update(ctx, lumigo); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
-	} else if controllerutil.ContainsFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer) {
-		injectionSpec := lumigoInstance.Spec.Tracing.Injection
+	} else if controllerutil.ContainsFinalizer(lumigo, operatorv1alpha1.LumigoResourceFinalizer) {
+		injectionSpec := lumigo.Spec.Tracing.Injection
 
-		if conditions.IsActive(lumigoInstance) {
+		if conditions.IsActive(lumigo) {
 			log.Info("Lumigo instance is being deleted, removing instrumentation from resources in namespace")
 			if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.RemoveLumigoFromResourcesOnDeletion, true) {
-				if err := r.removeLumigoFromResources(ctx, lumigoInstance, &log); err != nil {
+				if err := r.removeLumigoFromResources(ctx, lumigo, &log); err != nil {
 					log.Error(err, "cannot remove instrumentation from resources", "namespace", req.Namespace)
 					return ctrl.Result{}, err
 				}
@@ -154,13 +163,13 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		// remove our finalizer from the list and update it.
-		controllerutil.RemoveFinalizer(lumigoInstance, operatorv1alpha1.LumigoResourceFinalizer)
-		if err := r.Update(ctx, lumigoInstance); err != nil {
+		controllerutil.RemoveFinalizer(lumigo, operatorv1alpha1.LumigoResourceFinalizer)
+		if err := r.Update(ctx, lumigo); err != nil {
 			return ctrl.Result{}, err
 		}
 
 		// Update telemetry-proxy not to collect Kube Events for this namespace
-		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigoInstance.Namespace, "")
+		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigo.Namespace, "")
 		if err != nil {
 			log.Error(err, "Cannot update the telemetry-proxy configurations to remove the monitoring of the namespace")
 		} else if isChanged {
@@ -168,9 +177,9 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		// Set the lumigo instance as inactive
-		conditions.SetActiveConditionWithMessage(lumigoInstance, now, false, "This Lumigo instance is being deleted")
-		conditions.ClearErrorCondition(lumigoInstance, now)
-		return r.updateStatusIfNeeded(ctx, log, lumigoInstance, result)
+		conditions.SetActiveConditionWithMessage(lumigo, now, false, "This Lumigo instance is being deleted")
+		conditions.ClearErrorCondition(lumigo, now)
+		return r.updateStatusIfNeeded(ctx, log, lumigo, result)
 	}
 
 	// Validate there is only one Lumigo instance in any one namespace
@@ -183,42 +192,42 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	otherLumigoesInNamespace := []string{}
-	for _, otherLumigoInstance := range lumigoesInNamespace.Items {
-		if otherLumigoInstance.Name != lumigoInstance.Name {
-			otherLumigoesInNamespace = append(otherLumigoesInNamespace, otherLumigoInstance.Name)
+	for _, otherLumigoes := range lumigoesInNamespace.Items {
+		if otherLumigoes.Name != lumigo.Name {
+			otherLumigoesInNamespace = append(otherLumigoesInNamespace, otherLumigoes.Name)
 		}
 	}
 
 	if len(otherLumigoesInNamespace) > 0 {
 		// We set the error if this Lumigo instance is not the first one that has been created
-		sort.Sort(ByCreationTime(lumigoesInNamespace.Items))
+		sort.Sort(sorting.ByCreationTime(lumigoesInNamespace.Items))
 
-		if lumigoesInNamespace.Items[0].UID != lumigoInstance.UID {
+		if lumigoesInNamespace.Items[0].UID != lumigo.UID {
 			log.Info("Other Lumigo instances in this namespace", "otherLumigoNames", otherLumigoesInNamespace)
-			conditions.SetErrorAndActiveConditions(lumigoInstance, now, fmt.Errorf("other Lumigo instances in this namespace"))
+			conditions.SetErrorAndActiveConditions(lumigo, now, fmt.Errorf("other Lumigo instances in this namespace"))
 
-			return r.updateStatusIfNeeded(ctx, log, lumigoInstance, result)
+			return r.updateStatusIfNeeded(ctx, log, lumigo, result)
 		}
 	}
 
-	if lumigoInstance.Spec == (operatorv1alpha1.LumigoSpec{}) {
+	if lumigo.Spec == (operatorv1alpha1.LumigoSpec{}) {
 		// This could happen if somehow the defaulter webhook is malfunctioning or turned off
 		return ctrl.Result{}, fmt.Errorf("the Lumigo spec is empty")
 	}
 
-	token, err := r.validateCredentials(ctx, req.Namespace, &lumigoInstance.Spec.LumigoToken)
+	token, err := r.validateCredentials(ctx, req.Namespace, &lumigo.Spec.LumigoToken)
 	if err != nil {
-		conditions.SetErrorAndActiveConditions(lumigoInstance, now, fmt.Errorf("invalid Lumigo token secret reference: %w", err))
-		log.Info("Invalid Lumigo token secret reference", "error", err.Error(), "status", &lumigoInstance.Status)
-		return r.updateStatusIfNeeded(ctx, log, lumigoInstance, result)
+		conditions.SetErrorAndActiveConditions(lumigo, now, fmt.Errorf("invalid Lumigo token secret reference: %w", err))
+		log.Info("Invalid Lumigo token secret reference", "error", err.Error(), "status", &lumigo.Status)
+		return r.updateStatusIfNeeded(ctx, log, lumigo, result)
 	}
 
-	if isLumigoInstanceJustCreated {
+	if isLumigoJustCreated {
 		log.Info("New Lumigo instance found")
-		injectionSpec := lumigoInstance.Spec.Tracing.Injection
+		injectionSpec := lumigo.Spec.Tracing.Injection
 		if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.InjectLumigoIntoExistingResourcesOnCreation, true) {
 			log.Info("Injecting instrumentation into resources in namespace")
-			if err := r.injectLumigoIntoResources(ctx, lumigoInstance, &log); err != nil {
+			if err := r.injectLumigoIntoResources(ctx, lumigo, &log); err != nil {
 				log.Error(err, "cannot inject resources")
 			}
 		} else {
@@ -231,21 +240,21 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Update telemetry-proxy to ensure that Kube Events are collected correctly for this namespace
-	if isTruthy(lumigoInstance.Spec.Infrastructure.Enabled, true) && isTruthy(lumigoInstance.Spec.Infrastructure.KubeEvents.Enabled, true) {
-		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigoInstance.Namespace, token)
+	if isTruthy(lumigo.Spec.Infrastructure.Enabled, true) && isTruthy(lumigo.Spec.Infrastructure.KubeEvents.Enabled, true) {
+		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigo.Namespace, token)
 		if err != nil {
 			log.Error(err, "Cannot update the telemetry-proxy configurations to monitor the namespace")
 		} else if isChanged {
 			log.Info("Updated the telemetry-proxy configurations to monitor the namespace")
 		}
 	} else {
-		if _, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigoInstance.Namespace, ""); err != nil {
+		if _, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigo.Namespace, ""); err != nil {
 			log.Error(err, "Cannot update the telemetry-proxy configurations to remove the monitoring of the namespace")
 		} else {
 			log.Info(
 				"Removing infrastructure monitoring of the namespace",
-				"Infrastructure.Enabled", lumigoInstance.Spec.Infrastructure.Enabled,
-				"Infrastructure.KubeEvents.Enabled", lumigoInstance.Spec.Infrastructure.KubeEvents.Enabled,
+				"Infrastructure.Enabled", lumigo.Spec.Infrastructure.Enabled,
+				"Infrastructure.KubeEvents.Enabled", lumigo.Spec.Infrastructure.KubeEvents.Enabled,
 			)
 		}
 	}
@@ -253,7 +262,7 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// Validate that Lumigo events are all correctly associated with objects,
 	// as the webhook cannot correctly associate events with objects that do
 	// not yet exist.
-	namespaceEvents := r.Clientset.CoreV1().Events(lumigoInstance.Namespace)
+	namespaceEvents := r.Clientset.CoreV1().Events(lumigo.Namespace)
 	lumigoEvents, err := namespaceEvents.List(ctx, metav1.ListOptions{
 		// Get all LumigoAddedInstrumentation events without the UID of the involved object
 		FieldSelector: "reason=LumigoAddedInstrumentation,involvedObject.uid=",
@@ -277,9 +286,20 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Clear errors if any, mark instance as active, all is fine
-	conditions.SetActiveCondition(lumigoInstance, now, true)
-	conditions.ClearErrorCondition(lumigoInstance, now)
-	return r.updateStatusIfNeeded(ctx, log, lumigoInstance, result)
+	conditions.SetActiveCondition(lumigo, now, true)
+	conditions.ClearErrorCondition(lumigo, now)
+
+	var instrumentedResources *[]corev1.ObjectReference
+	// Update autotraced resource references
+	if instrumentedResources, err = r.getInstrumentedObjectReferences(ctx, lumigo.Namespace); err != nil {
+		log.Error(err, "Cannot put together the instrumented resource references")
+		return ctrl.Result{
+			RequeueAfter: defaultErrRequeuePeriod,
+		}, nil
+	}
+
+	lumigo.Status.InstrumentedResources = *instrumentedResources
+	return r.updateStatusIfNeeded(ctx, log, lumigo, result)
 }
 
 func (r *LumigoReconciler) rebindLumigoEvent(ctx context.Context, eventInterface v1.EventInterface, event *corev1.Event) error {
@@ -424,23 +444,49 @@ func (r *LumigoReconciler) enqueueIfSecretReferencedByLumigo(obj client.Object) 
 	reconcileRequests := []reconcile.Request{{}}
 
 	namespace := obj.GetNamespace()
-	lumigoInstances := &operatorv1alpha1.LumigoList{}
+	lumigoes := &operatorv1alpha1.LumigoList{}
 
-	if err := r.Client.List(context.TODO(), lumigoInstances, &client.ListOptions{Namespace: namespace}); err != nil {
+	if err := r.Client.List(context.TODO(), lumigoes, &client.ListOptions{Namespace: namespace}); err != nil {
 		r.Log.Error(err, "unable to list Lumigo instances in namespace '%s'", namespace)
 		// TODO Can we re-enqueue or something? Should we signal an error in the Lumigo operator?
 		return reconcileRequests
 	}
 
-	for _, lumigoInstance := range lumigoInstances.Items {
-		if lumigoToken := lumigoInstance.Spec.LumigoToken; lumigoToken != (operatorv1alpha1.Credentials{}) {
+	for _, lumigo := range lumigoes.Items {
+		if lumigoToken := lumigo.Spec.LumigoToken; lumigoToken != (operatorv1alpha1.Credentials{}) {
 			if secretRef := lumigoToken.SecretRef; secretRef != (operatorv1alpha1.KubernetesSecretRef{}) {
 				if secretRef.Name == obj.GetName() {
 					reconcileRequests = append(reconcileRequests, reconcile.Request{NamespacedName: types.NamespacedName{
-						Namespace: lumigoInstance.Namespace,
-						Name:      lumigoInstance.Name,
+						Namespace: lumigo.Namespace,
+						Name:      lumigo.Name,
 					}})
 				}
+			}
+		}
+	}
+
+	return reconcileRequests
+}
+
+func (r *LumigoReconciler) enqueueIfHasLumigoAutotraceLabel(obj client.Object) []reconcile.Request {
+	reconcileRequests := []reconcile.Request{{}}
+
+	if _, ok := obj.GetLabels()[mutation.LumigoAutoTraceLabelKey]; ok {
+		namespace := obj.GetNamespace()
+		lumigoes := &operatorv1alpha1.LumigoList{}
+
+		if err := r.Client.List(context.TODO(), lumigoes, &client.ListOptions{Namespace: namespace}); err != nil {
+			r.Log.Error(err, "unable to list Lumigo instances in namespace '%s'", namespace)
+			// TODO Can we re-enqueue or something? Should we signal an error in the Lumigo operator?
+			return reconcileRequests
+		}
+
+		for _, lumigo := range lumigoes.Items {
+			if conditions.IsActive(&lumigo) {
+				reconcileRequests = append(reconcileRequests, reconcile.Request{NamespacedName: types.NamespacedName{
+					Namespace: lumigo.Namespace,
+					Name:      lumigo.Name,
+				}})
 			}
 		}
 	}
@@ -454,10 +500,17 @@ func (r *LumigoReconciler) updateStatusIfNeeded(ctx context.Context, logger logr
 	// API (maybe due to bugs, maybe due to eventual consistency), which causes updates to be lost.
 	// To reduce the risk of losing updates, we reque the request after a grace period.
 
+	// Ensure status is valid (e.g., Lumigo instance just created and has no resources instrumented)
+	if instance.Status.InstrumentedResources == nil {
+		instance.Status.InstrumentedResources = make([]corev1.ObjectReference, 0)
+	}
+
 	if err := r.Client.Status().Update(ctx, instance); err != nil {
 		logger.Error(err, "unable to update Lumigo instance's status")
 		return ctrl.Result{RequeueAfter: defaultErrRequeuePeriod}, nil
 	}
+
+	logger.Info("Status updated", "status", &instance.Status)
 
 	if hasError, _ := conditions.HasError(instance); hasError {
 		return ctrl.Result{RequeueAfter: defaultErrRequeuePeriod}, nil
@@ -466,10 +519,16 @@ func (r *LumigoReconciler) updateStatusIfNeeded(ctx context.Context, logger logr
 	return ctrl.Result{RequeueAfter: defaultRequeuePeriod}, nil
 }
 
-func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigoInstance *operatorv1alpha1.Lumigo, log *logr.Logger) error {
-	mutator, err := mutation.NewMutator(log, &lumigoInstance.Spec.LumigoToken, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
+func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, log *logr.Logger) error {
+	mutator, err := mutation.NewMutator(log, &lumigo.Spec.LumigoToken, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
+	}
+
+	namespace := lumigo.Namespace
+
+	lumigoWithoutAutotraceLabelListOptions := metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("!%s", mutation.LumigoAutoTraceLabelKey),
 	}
 
 	// Ensure that all the resources that could be injected, are injected
@@ -482,14 +541,11 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	lumigoNotAutotracedLabelSelector := labels.NewSelector()
 	lumigoNotAutotracedLabelSelector.Add(*lumigoNotAutotracedLabelFalseOrNotSet)
 
-	eventTrigger := fmt.Sprintf("controller, acting on behalf of the '%s/%s' Lumigo resource", lumigoInstance.Namespace, lumigoInstance.Name)
+	eventTrigger := fmt.Sprintf("controller, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name)
 
 	// Mutate daemonsets
-	daemonsets := &appsv1.DaemonSetList{}
-	if err := r.Client.List(ctx, daemonsets, &client.ListOptions{
-		LabelSelector: lumigoNotAutotracedLabelSelector,
-		Namespace:     lumigoInstance.GetNamespace(),
-	}); err != nil {
+	daemonsets, err := r.Clientset.AppsV1().DaemonSets(namespace).List(ctx, lumigoWithoutAutotraceLabelListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list non-autotraced daemonsets: %w", err)
 	}
 
@@ -519,11 +575,8 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	}
 
 	// Mutate deployments
-	deployments := &appsv1.DeploymentList{}
-	if err := r.Client.List(ctx, deployments, &client.ListOptions{
-		LabelSelector: lumigoNotAutotracedLabelSelector,
-		Namespace:     lumigoInstance.GetNamespace(),
-	}); err != nil {
+	deployments, err := r.Clientset.AppsV1().Deployments(namespace).List(ctx, lumigoWithoutAutotraceLabelListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list non-autotraced deployments: %w", err)
 	}
 
@@ -553,11 +606,8 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	}
 
 	// Mutate replicasets
-	replicasets := &appsv1.ReplicaSetList{}
-	if err := r.Client.List(ctx, replicasets, &client.ListOptions{
-		LabelSelector: lumigoNotAutotracedLabelSelector,
-		Namespace:     lumigoInstance.GetNamespace(),
-	}); err != nil {
+	replicasets, err := r.Clientset.AppsV1().ReplicaSets(namespace).List(ctx, lumigoWithoutAutotraceLabelListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list non-autotraced replicasets: %w", err)
 	}
 
@@ -587,11 +637,8 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	}
 
 	// Mutate statefulsets
-	statefulsets := &appsv1.StatefulSetList{}
-	if err := r.Client.List(ctx, statefulsets, &client.ListOptions{
-		LabelSelector: lumigoNotAutotracedLabelSelector,
-		Namespace:     lumigoInstance.GetNamespace(),
-	}); err != nil {
+	statefulsets, err := r.Clientset.AppsV1().StatefulSets(namespace).List(ctx, lumigoWithoutAutotraceLabelListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list non-autotraced statefulsets: %w", err)
 	}
 
@@ -621,11 +668,8 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	}
 
 	// Mutate cronjobs
-	cronjobs := &batchv1.CronJobList{}
-	if err := r.Client.List(ctx, cronjobs, &client.ListOptions{
-		LabelSelector: lumigoNotAutotracedLabelSelector,
-		Namespace:     lumigoInstance.GetNamespace(),
-	}); err != nil {
+	cronjobs, err := r.Clientset.BatchV1().CronJobs(namespace).List(ctx, lumigoWithoutAutotraceLabelListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list non-autotraced cronjobs: %w", err)
 	}
 
@@ -655,11 +699,8 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	}
 
 	// Cannot mutate existing jobs: their PodSpecs are immutable!
-	jobs := &batchv1.JobList{}
-	if err := r.Client.List(ctx, jobs, &client.ListOptions{
-		LabelSelector: lumigoNotAutotracedLabelSelector,
-		Namespace:     lumigoInstance.GetNamespace(),
-	}); err != nil {
+	jobs, err := r.Clientset.BatchV1().Jobs(namespace).List(ctx, lumigoWithoutAutotraceLabelListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list autotraced jobs: %w", err)
 	}
 
@@ -671,29 +712,22 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 	return nil
 }
 
-func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigoInstance *operatorv1alpha1.Lumigo, log *logr.Logger) error {
-	namespace := lumigoInstance.Namespace
+func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, log *logr.Logger) error {
+	namespace := lumigo.Namespace
 	mutator, err := mutation.NewMutator(log, nil, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
 	}
 
-	lumigoAutotracedLabelSet, err := labels.NewRequirement(mutation.LumigoAutoTraceLabelKey, selection.Exists, []string{})
-	if err != nil {
-		return fmt.Errorf("cannot create label selector for autotraced objects: %w", err)
+	lumigoAutotracedListOptions := metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%[1]s,%[1]s != false", mutation.LumigoAutoTraceLabelKey),
 	}
 
-	lumigoAutotracedLabelSelector := labels.NewSelector()
-	lumigoAutotracedLabelSelector.Add(*lumigoAutotracedLabelSet)
-
-	eventTrigger := fmt.Sprintf("controller, acting on behalf of the '%s/%s' Lumigo resource", lumigoInstance.Namespace, lumigoInstance.Name)
+	eventTrigger := fmt.Sprintf("controller, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name)
 
 	// Mutate daemonsets
-	daemonsets := &appsv1.DaemonSetList{}
-	if err := r.Client.List(ctx, daemonsets, &client.ListOptions{
-		LabelSelector: lumigoAutotracedLabelSelector,
-		Namespace:     namespace,
-	}); err != nil {
+	daemonsets, err := r.Clientset.AppsV1().DaemonSets(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list autotraced daemonsets: %w", err)
 	}
 
@@ -727,11 +761,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 	}
 
 	// Mutate deployments
-	deployments := &appsv1.DeploymentList{}
-	if err := r.Client.List(ctx, deployments, &client.ListOptions{
-		LabelSelector: lumigoAutotracedLabelSelector,
-		Namespace:     namespace,
-	}); err != nil {
+	deployments, err := r.Clientset.AppsV1().Deployments(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list autotraced deployments: %w", err)
 	}
 
@@ -765,11 +796,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 	}
 
 	// Mutate replicasets
-	replicasets := &appsv1.ReplicaSetList{}
-	if err := r.Client.List(ctx, replicasets, &client.ListOptions{
-		LabelSelector: lumigoAutotracedLabelSelector,
-		Namespace:     namespace,
-	}); err != nil {
+	replicasets, err := r.Clientset.AppsV1().ReplicaSets(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list autotraced replicasets: %w", err)
 	}
 
@@ -803,11 +831,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 	}
 
 	// Mutate statefulsets
-	statefulsets := &appsv1.StatefulSetList{}
-	if err := r.Client.List(ctx, statefulsets, &client.ListOptions{
-		LabelSelector: lumigoAutotracedLabelSelector,
-		Namespace:     namespace,
-	}); err != nil {
+	statefulsets, err := r.Clientset.AppsV1().StatefulSets(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list autotraced statefulsets: %w", err)
 	}
 
@@ -841,11 +866,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 	}
 
 	// Mutate cronjobs
-	cronjobs := &batchv1.CronJobList{}
-	if err := r.Client.List(ctx, cronjobs, &client.ListOptions{
-		LabelSelector: lumigoAutotracedLabelSelector,
-		Namespace:     namespace,
-	}); err != nil {
+	cronjobs, err := r.Clientset.BatchV1().CronJobs(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list autotraced cronjobs: %w", err)
 	}
 
@@ -879,11 +901,8 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 	}
 
 	// Cannot mutate existing jobs: their PodSpecs are immutable!
-	jobs := &batchv1.JobList{}
-	if err := r.Client.List(ctx, jobs, &client.ListOptions{
-		LabelSelector: lumigoAutotracedLabelSelector,
-		Namespace:     namespace,
-	}); err != nil {
+	jobs, err := r.Clientset.BatchV1().Jobs(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
 		return fmt.Errorf("cannot list autotraced jobs: %w", err)
 	}
 
@@ -893,6 +912,102 @@ func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo
 	}
 
 	return nil
+}
+
+func (r *LumigoReconciler) getInstrumentedObjectReferences(ctx context.Context, namespace string) (*[]corev1.ObjectReference, error) {
+	objectReferences := make([]corev1.ObjectReference, 0)
+
+	lumigoAutotracedListOptions := metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%[1]s,%[1]s != false", mutation.LumigoAutoTraceLabelKey),
+	}
+
+	daemonSets, err := r.Clientset.AppsV1().DaemonSets(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot list autotraced daemonsets: %w", err)
+	}
+
+	sort.Sort(sorting.ByDaemonsetName(daemonSets.Items))
+	for _, daemonSet := range daemonSets.Items {
+		objectReference, err := reference.GetReference(scheme.Scheme, &daemonSet)
+		if err != nil {
+			return nil, err
+		}
+		objectReferences = append(objectReferences, *objectReference)
+	}
+
+	deployments, err := r.Clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%[1]s,%[1]s != false", mutation.LumigoAutoTraceLabelKey),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot list autotraced deployments: %w", err)
+	}
+
+	sort.Sort(sorting.ByDeploymentName(deployments.Items))
+	for _, deployment := range deployments.Items {
+		objectReference, err := reference.GetReference(scheme.Scheme, &deployment)
+		if err != nil {
+			return nil, err
+		}
+		objectReferences = append(objectReferences, *objectReference)
+	}
+
+	replicaSets, err := r.Clientset.AppsV1().ReplicaSets(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot list autotraced replicasets: %w", err)
+	}
+
+	sort.Sort(sorting.ByReplicaSetName(replicaSets.Items))
+	for _, replicaSet := range replicaSets.Items {
+		objectReference, err := reference.GetReference(scheme.Scheme, &replicaSet)
+		if err != nil {
+			return nil, err
+		}
+		objectReferences = append(objectReferences, *objectReference)
+	}
+
+	statefulSets, err := r.Clientset.AppsV1().StatefulSets(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot list autotraced statefulsets: %w", err)
+	}
+
+	sort.Sort(sorting.ByStatefulSetName(statefulSets.Items))
+	for _, statefulSet := range statefulSets.Items {
+		objectReference, err := reference.GetReference(scheme.Scheme, &statefulSet)
+		if err != nil {
+			return nil, err
+		}
+		objectReferences = append(objectReferences, *objectReference)
+	}
+
+	cronJobs, err := r.Clientset.BatchV1().CronJobs(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot list autotraced cronjobs: %w", err)
+	}
+
+	sort.Sort(sorting.ByCronJobName(cronJobs.Items))
+	for _, cronJob := range cronJobs.Items {
+		objectReference, err := reference.GetReference(scheme.Scheme, &cronJob)
+		if err != nil {
+			return nil, err
+		}
+		objectReferences = append(objectReferences, *objectReference)
+	}
+
+	jobs, err := r.Clientset.BatchV1().Jobs(namespace).List(ctx, lumigoAutotracedListOptions)
+	if err != nil {
+		return nil, fmt.Errorf("cannot list autotraced jobs: %w", err)
+	}
+
+	sort.Sort(sorting.ByJobName(jobs.Items))
+	for _, job := range jobs.Items {
+		objectReference, err := reference.GetReference(scheme.Scheme, &job)
+		if err != nil {
+			return nil, err
+		}
+		objectReferences = append(objectReferences, *objectReference)
+	}
+
+	return &objectReferences, nil
 }
 
 func addAutoTraceSkipNextInjectorLabel(objectMeta *metav1.ObjectMeta) {
@@ -907,18 +1022,4 @@ func isTruthy(value *bool, defaultIfNil bool) bool {
 	}
 
 	return v
-}
-
-// To be used with sort.Sort
-type ByCreationTime []operatorv1alpha1.Lumigo
-
-func (s ByCreationTime) Len() int {
-	return len(s)
-}
-func (s ByCreationTime) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func (s ByCreationTime) Less(i, j int) bool {
-	return s[i].CreationTimestamp.Before(&s[j].CreationTimestamp)
 }

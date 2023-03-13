@@ -121,6 +121,9 @@ type KubeEventsSpec struct {
 type LumigoStatus struct {
 	// The status of single Lumigo resources
 	Conditions []LumigoCondition `json:"conditions"`
+
+	// List of resources instrumented by this Lumigo instance
+	InstrumentedResources []corev1.ObjectReference `json:"instrumentedResources"`
 }
 
 type LumigoCondition struct {

@@ -82,6 +82,7 @@ var statusActive = operatorv1alpha1.LumigoStatus{
 			LastTransitionTime: metav1.NewTime(time.Now()),
 		},
 	},
+	InstrumentedResources: make([]corev1.ObjectReference, 0),
 }
 
 var statusErroneous = operatorv1alpha1.LumigoStatus{
