@@ -11,6 +11,36 @@ receivers:
   k8s_events/ns_{{ . }}:
     auth_type: serviceAccount
     namespaces: [ {{ . }} ]
+  k8sobjects/ns_{{ . }}:
+    auth_type: serviceAccount
+    objects:
+    - name: pods
+      mode: watch
+      namespaces: [ {{ . }} ]
+    - name: daemonsets
+      group: apps
+      mode: watch
+      namespaces: [ {{ . }} ]
+    - name: deployments
+      group: apps
+      mode: watch
+      namespaces: [ {{ . }} ]
+    - name: replicasets
+      group: apps
+      mode: watch
+      namespaces: [ {{ . }} ]
+    - name: statefulsets
+      group: apps
+      mode: watch
+      namespaces: [ {{ . }} ]
+    - name: cronjobs
+      group: batch
+      mode: watch
+      namespaces: [ {{ . }} ]
+    - name: jobs
+      group: batch
+      mode: watch
+      namespaces: [ {{ . }} ]
 {{ end }}
 
 extensions:
@@ -104,6 +134,7 @@ service:
     logs/k8s_events_ns_{{ . }}:
       receivers:
       - k8s_events/ns_{{ . }}
+      - k8sobjects/ns_{{ . }}
       processors: []
       exporters:
       - otlphttp/lumigo_ns_{{ . }}
