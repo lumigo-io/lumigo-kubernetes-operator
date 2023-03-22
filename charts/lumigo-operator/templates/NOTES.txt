@@ -38,11 +38,11 @@ The Lumigo operator currently monitors the following namespaces:
 {{- else }}
 * {{ include "highlight" (list $namespace "green" $coloredOutput) }}
 {{- end }}
+{{- end }}
 
 The list of currently injected resources can be retrieved with:
 
   $ kubectl get all -A --selector=lumigo.auto-trace
-{{- end }}
 {{- end }}
 {{- end }}
 
