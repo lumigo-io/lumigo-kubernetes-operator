@@ -17,11 +17,8 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -54,6 +51,7 @@ import (
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/internal/sorting"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/telemetryproxyconfigs"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
 )
 
@@ -112,6 +110,21 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	log := r.Log.WithValues("name", req.NamespacedName.Name, "namespace", req.NamespacedName.Namespace)
 	now := metav1.NewTime(time.Now())
 
+	namespace, err := r.Clientset.CoreV1().Namespaces().Get(ctx, req.NamespacedName.Namespace, metav1.GetOptions{})
+	namespaceUid := ""
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// The namespace has been meanwhile deleted, but we will still need to reconcile the telemetry-proxy configs
+		} else {
+			// Error reading the namespace - requeue the request.
+			return ctrl.Result{
+				RequeueAfter: defaultErrRequeuePeriod,
+			}, nil
+		}
+	} else {
+		namespaceUid = string(namespace.GetUID())
+	}
+
 	var result reconcile.Result
 	lumigo := &operatorv1alpha1.Lumigo{}
 	if err := r.Client.Get(ctx, req.NamespacedName, lumigo); err != nil {
@@ -169,7 +182,7 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		// Update telemetry-proxy not to collect Kube Events for this namespace
-		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigo.Namespace, "")
+		isChanged, err := telemetryproxyconfigs.RemoveTelemetryProxyMonitoringOfNamespace(ctx, r.TelemetryProxyNamespaceConfigurationsPath, lumigo.Namespace, &log)
 		if err != nil {
 			log.Error(err, "Cannot update the telemetry-proxy configurations to remove the monitoring of the namespace")
 		} else if isChanged {
@@ -241,14 +254,14 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// Update telemetry-proxy to ensure that Kube Events are collected correctly for this namespace
 	if isTruthy(lumigo.Spec.Infrastructure.Enabled, true) && isTruthy(lumigo.Spec.Infrastructure.KubeEvents.Enabled, true) {
-		isChanged, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigo.Namespace, token)
+		isChanged, err := telemetryproxyconfigs.UpsertTelemetryProxyMonitoringOfNamespace(ctx, r.TelemetryProxyNamespaceConfigurationsPath, lumigo.Namespace, namespaceUid, token, &log)
 		if err != nil {
 			log.Error(err, "Cannot update the telemetry-proxy configurations to monitor the namespace")
 		} else if isChanged {
 			log.Info("Updated the telemetry-proxy configurations to monitor the namespace")
 		}
 	} else {
-		if _, err := r.updateTelemetryProxyMonitoringOfNamespace(ctx, lumigo.Namespace, ""); err != nil {
+		if _, err := telemetryproxyconfigs.RemoveTelemetryProxyMonitoringOfNamespace(ctx, r.TelemetryProxyNamespaceConfigurationsPath, lumigo.Namespace, &log); err != nil {
 			log.Error(err, "Cannot update the telemetry-proxy configurations to remove the monitoring of the namespace")
 		} else {
 			log.Info(
@@ -334,52 +347,6 @@ func (r *LumigoReconciler) fillOutReference(ctx context.Context, reference *core
 	reference.ResourceVersion = obj.GetResourceVersion()
 
 	return nil
-}
-
-func (r *LumigoReconciler) updateTelemetryProxyMonitoringOfNamespace(ctx context.Context, namespace string, token string) (bool, error) {
-	var namespaces map[string]string
-	namespacesFileBytes, err := os.ReadFile(r.TelemetryProxyNamespaceConfigurationsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			namespacesFileBytes = make([]byte, 0)
-			namespaces = map[string]string{}
-		} else {
-			return false, fmt.Errorf("cannot read namespace configuration file '%s': %w", r.TelemetryProxyNamespaceConfigurationsPath, err)
-		}
-	} else if err := json.Unmarshal([]byte(namespacesFileBytes), &namespaces); err != nil {
-		return false, fmt.Errorf("cannot unmarshal namespace configuration file '%s': %w", r.TelemetryProxyNamespaceConfigurationsPath, err)
-	}
-
-	newNamespaces := make(map[string]string, len(namespaces))
-	for key, value := range namespaces {
-		newNamespaces[key] = value
-	}
-
-	if len(token) > 0 {
-		newNamespaces[namespace] = token
-	} else if len(namespacesFileBytes) == 0 {
-		// The namespaces file does not even exit, nothing to do
-		return false, nil
-	} else {
-		delete(newNamespaces, namespace)
-	}
-
-	// The marhsalling is with sorted keys, so the resulting bytes are deterministic
-	updatedNamespacesFileBytes, err := json.Marshal(newNamespaces)
-	if err != nil {
-		return false, fmt.Errorf("cannot marshal the updated namespace configuration: %w", err)
-	}
-
-	if bytes.Equal(namespacesFileBytes, updatedNamespacesFileBytes) {
-		// Nothing to change
-		return false, nil
-	}
-
-	if err := os.WriteFile(r.TelemetryProxyNamespaceConfigurationsPath, updatedNamespacesFileBytes, 0644); err != nil {
-		return false, fmt.Errorf("cannot write the updated namespace configuration file '%s': %w", r.TelemetryProxyNamespaceConfigurationsPath, err)
-	}
-
-	return true, nil
 }
 
 // Check credentials existence

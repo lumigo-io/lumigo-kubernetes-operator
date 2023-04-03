@@ -6,6 +6,8 @@ we are forkec to put in the same file all resources that are related with self-s
 {{- $ca := genCA "lumigo-webhooks-ca" 365 -}}
 {{- $cert := genSignedCert ( include "helm.name" . ) nil $altNames 365 $ca -}}
 {{- $certFingerprint := $cert.Cert | b64enc | substr 10 25 | quote }}
+{{- $memoryReservedForControllerMib := 100 }}
+{{- $memoryReservedForKubeRbacProxyMib := 50 }}
 ---
 apiVersion: v1
 kind: Secret
@@ -181,6 +183,8 @@ spec:
           value: "{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}"
         - name: LUMIGO_INJECTOR_IMAGE
           value: {{ .Values.injectorWebhook.lumigoInjector.image.repository }}:{{ .Values.injectorWebhook.lumigoInjector.image.tag | default "latest" }}
+        - name: GOMEMLIMIT
+          value: {{ $memoryReservedForControllerMib }}MiB
         ports:
         - containerPort: 9443
           name: webhook-server
@@ -218,6 +222,8 @@ spec:
         env:
         - name: LUMIGO_ENDPOINT
           value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+        - name: RESERVED_MEMORY_MIB
+          value: "{{ add $memoryReservedForControllerMib $memoryReservedForKubeRbacProxyMib }}"
         ports:
         - containerPort: 4318
           name: otlphttp
@@ -247,6 +253,8 @@ spec:
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ .Values.kubernetesClusterDomain }}
+        - name: GOMEMLIMIT
+          value: {{ $memoryReservedForKubeRbacProxyMib }}MiB
         ports:
         - containerPort: 8443
           name: https

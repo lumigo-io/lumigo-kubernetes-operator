@@ -67,9 +67,11 @@ if any; otherwise, returns nil.
 */}}
 {{- define "lumigo.error" }}
 {{- $lumigo := . }}
+{{- if $lumigo.status }}
 {{- range $index, $condition := $lumigo.status.conditions }}
 {{- if and (eq $condition.type "Error") (ne $condition.status "False") }}
 {{- $condition.message }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

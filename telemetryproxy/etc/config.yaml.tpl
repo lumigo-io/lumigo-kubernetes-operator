@@ -1,5 +1,5 @@
-{{- $namespaces := (datasource "namespaces") }}
-{{- $config := (datasource "config") }}
+{{- $namespaces := (datasource "namespaces") -}}
+{{- $config := (datasource "config") -}}
 receivers:
   otlp:
     protocols:
@@ -7,42 +7,41 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
-{{- range (keys $namespaces) }}
-  k8s_events/ns_{{ . }}:
+{{- range $i, $namespace := $namespaces }}
+  k8s_events/ns_{{ $namespace.name }}:
     auth_type: serviceAccount
-    namespaces: [ {{ . }} ]
-  k8sobjects/ns_{{ . }}:
+    namespaces: [ {{ $namespace.name }} ]
+  k8sobjects/ns_{{ $namespace.name }}:
     auth_type: serviceAccount
     objects:
     - name: pods
       mode: watch
-      namespaces: [ {{ . }} ]
+      namespaces: [ {{ $namespace.name }} ]
     - name: daemonsets
       group: apps
       mode: watch
-      namespaces: [ {{ . }} ]
+      namespaces: [ {{ $namespace.name }} ]
     - name: deployments
       group: apps
       mode: watch
-      namespaces: [ {{ . }} ]
+      namespaces: [ {{ $namespace.name }} ]
     - name: replicasets
       group: apps
       mode: watch
-      namespaces: [ {{ . }} ]
+      namespaces: [ {{ $namespace.name }} ]
     - name: statefulsets
       group: apps
       mode: watch
-      namespaces: [ {{ . }} ]
+      namespaces: [ {{ $namespace.name }} ]
     - name: cronjobs
       group: batch
       mode: watch
-      namespaces: [ {{ . }} ]
+      namespaces: [ {{ $namespace.name }} ]
     - name: jobs
       group: batch
       mode: watch
-      namespaces: [ {{ . }} ]
-{{ end }}
-
+      namespaces: [ {{ $namespace.name }} ]
+{{- end }}
 extensions:
   health_check:
   headers_setter/lumigo:
@@ -54,12 +53,11 @@ extensions:
       from_context: Authorization
   lumigoauth/server:
     type: server
-{{- range $key, $value := $namespaces }}
-  lumigoauth/ns_{{ $key }}:
+{{- range $i, $namespace := $namespaces }}
+  lumigoauth/ns_{{ $namespace.name }}:
     type: client
-    token: {{ $value }}
-{{ end }}
-
+    token: {{ $namespace.token }}
+{{- end }}
 exporters:
   otlphttp/lumigo:
     endpoint: {{ env.Getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
@@ -67,19 +65,16 @@ exporters:
       authenticator: headers_setter/lumigo
 {{- if $config.debug }}
   logging:
-    verbosity:
+    verbosity: detailed
     sampling_initial: 1
     sampling_thereafter: 1
-{{ end }}
-{{- range (keys $namespaces) }}
-  otlphttp/lumigo_ns_{{ . }}:
+{{- end }}
+{{- range $i, $namespace := $namespaces }}
+  otlphttp/lumigo_ns_{{ $namespace.name }}:
     endpoint: $LUMIGO_ENDPOINT
     auth:
-      authenticator: lumigoauth/ns_{{ . }}
-{{ end }}
-
-# We cannot add the Batch processor, as it breaks the `headers_setter/lumigo`
-# see https://github.com/open-telemetry/opentelemetry-collector/issues/4544
+      authenticator: lumigoauth/ns_{{ $namespace.name }}
+{{- end }}
 processors:
   k8sattributes:
     auth_type: serviceAccount
@@ -107,7 +102,22 @@ processors:
     - sources:
       - from: resource_attribute
         name: k8s.pod.uid
+  transform/inject_nsuid_into_trace_resources:
+    trace_statements:
+    - context: resource
+      statements:
+{{- range $i, $namespace := $namespaces }}
+      - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}") where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
+{{- end }}
 
+{{- range $i, $namespace := $namespaces }}
+  transform/inject_nsuid_ns_{{ $namespace.name }}:
+    log_statements:
+    - context: log
+      statements:
+      - set(attributes["k8s.namespace.name"], "{{ $namespace.name }}")
+      - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}")
+{{- end }}
 service:
   telemetry:
     logs:
@@ -116,29 +126,43 @@ service:
   - headers_setter/lumigo
   - health_check
   - lumigoauth/server
-{{- range (keys $namespaces) }}
-  - lumigoauth/ns_{{ . }}
-{{ end }}
+{{- range $i, $namespace := $namespaces }}
+  - lumigoauth/ns_{{ $namespace.name }}
+{{- end }}
   pipelines:
     traces:
+      # We cannot add a Batch processor to this pipeline as it would break the
+      # `headers_setter/lumigo` extension.
+      # See https://github.com/open-telemetry/opentelemetry-collector/issues/4544
       receivers:
       - otlp
       processors:
       - k8sattributes
+      - transform/inject_nsuid_into_trace_resources
       exporters:
       - otlphttp/lumigo
 {{- if $config.debug }}
       - logging
-{{ end }}
-{{- range (keys $namespaces) }}
-    logs/k8s_events_ns_{{ . }}:
+{{- end }}
+{{- range $i, $namespace := $namespaces }}
+    logs/k8s_events_ns_{{ $namespace.name }}:
       receivers:
-      - k8s_events/ns_{{ . }}
-      - k8sobjects/ns_{{ . }}
-      processors: []
+      - k8s_events/ns_{{ $namespace.name }}
+      processors:
+      - transform/inject_nsuid_ns_{{ $namespace.name }}
       exporters:
-      - otlphttp/lumigo_ns_{{ . }}
 {{- if $config.debug }}
       - logging
-{{ end }}
+{{- end }}
+      - otlphttp/lumigo_ns_{{ $namespace.name }}
+    logs/k8s_objects_ns_{{ $namespace.name }}:
+      receivers:
+      - k8sobjects/ns_{{ $namespace.name }}
+      processors:
+      - transform/inject_nsuid_ns_{{ $namespace.name }}
+      exporters:
+{{- if $config.debug }}
+      - logging
+{{- end }}
+      - otlphttp/lumigo_ns_{{ $namespace.name }}
 {{ end }}

@@ -20,10 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/telemetryproxyconfigs"
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -145,12 +145,12 @@ func (m *haveInstrumentedObjectReferenceFor) NegatedFailureMessage(actual interf
 
 func BeMonitoringNamespace(namespace string) types.GomegaMatcher {
 	return &beMonitoringNamespace{
-		expectedMonitoredNamespace: namespace,
+		expectedMonitoredNamespaceName: namespace,
 	}
 }
 
 type beMonitoringNamespace struct {
-	expectedMonitoredNamespace string
+	expectedMonitoredNamespaceName string
 }
 
 func (m *beMonitoringNamespace) Match(actual interface{}) (bool, error) {
@@ -159,8 +159,8 @@ func (m *beMonitoringNamespace) Match(actual interface{}) (bool, error) {
 		return false, err
 	}
 
-	for monitoredNamespace := range actualMonitoredNamespaces {
-		if monitoredNamespace == m.expectedMonitoredNamespace {
+	for _, monitoredNamespace := range actualMonitoredNamespaces {
+		if monitoredNamespace.Name == m.expectedMonitoredNamespaceName {
 			return true, nil
 		}
 	}
@@ -176,8 +176,8 @@ func (m *beMonitoringNamespace) FailureMessage(actual interface{}) (message stri
 
 	return fmt.Sprintf(
 		"is not monitoring the namespace '%s'; monitored namespaces: %v",
-		m.expectedMonitoredNamespace,
-		reflect.ValueOf(actualMonitoredNamespaces).MapKeys(),
+		m.expectedMonitoredNamespaceName,
+		actualMonitoredNamespaces,
 	)
 }
 
@@ -189,12 +189,12 @@ func (m *beMonitoringNamespace) NegatedFailureMessage(actual interface{}) (messa
 
 	return fmt.Sprintf(
 		"is monitoring the namespace '%s'; monitored namespaces: %v",
-		m.expectedMonitoredNamespace,
-		reflect.ValueOf(actualMonitoredNamespaces).MapKeys(),
+		m.expectedMonitoredNamespaceName,
+		actualMonitoredNamespaces,
 	)
 }
 
-func parseJsonFile(actual interface{}) (map[string]string, error) {
+func parseJsonFile(actual interface{}) ([]telemetryproxyconfigs.NamespaceMonitoringConfig, error) {
 	var actualFile string
 	switch a := actual.(type) {
 	case string:
@@ -206,13 +206,13 @@ func parseJsonFile(actual interface{}) (map[string]string, error) {
 	actualBytes, err := os.ReadFile(actualFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(map[string]string, 0), nil
+			return make([]telemetryproxyconfigs.NamespaceMonitoringConfig, 0), nil
 		} else {
 			return nil, fmt.Errorf("cannot read the actual file '%s': %w", actualFile, err)
 		}
 	}
 
-	var monitoredNamespaces map[string]string
+	var monitoredNamespaces []telemetryproxyconfigs.NamespaceMonitoringConfig
 	if err := json.Unmarshal(actualBytes, &monitoredNamespaces); err != nil {
 		return nil, fmt.Errorf("cannot unmarshal actual file '%s': %w", actualFile, err)
 	}
