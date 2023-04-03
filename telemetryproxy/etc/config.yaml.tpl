@@ -115,21 +115,12 @@ processors:
     - sources:
       - from: resource_attribute
         name: k8s.pod.uid
-  transform/inject_nsuid_into_trace_resources:
+  transform/inject_nsuid_into_resource:
     trace_statements:
     - context: resource
       statements:
 {{- range $i, $namespace := $namespaces }}
       - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}") where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
-{{- end }}
-
-{{- range $i, $namespace := $namespaces }}
-  transform/inject_nsuid_ns_{{ $namespace.name }}:
-    log_statements:
-    - context: log
-      statements:
-      - set(attributes["k8s.namespace.name"], "{{ $namespace.name }}")
-      - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}")
 {{- end }}
 
 service:
@@ -152,7 +143,7 @@ service:
       - otlp
       processors:
       - k8sattributes
-      - transform/inject_nsuid_into_trace_resources
+      - transform/inject_nsuid_into_resource
       exporters:
       - otlphttp/lumigo
 {{- if $config.debug }}
@@ -163,7 +154,7 @@ service:
       receivers:
       - k8sobjects/ns_{{ $namespace.name }}
       processors:
-      - transform/inject_nsuid_ns_{{ $namespace.name }}
+      - transform/inject_nsuid_into_resource
       exporters:
 {{- if $config.debug }}
       - logging
