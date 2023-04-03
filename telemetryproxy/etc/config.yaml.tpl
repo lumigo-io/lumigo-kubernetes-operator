@@ -8,40 +8,51 @@ receivers:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
 {{- range $i, $namespace := $namespaces }}
-  k8s_events/ns_{{ $namespace.name }}:
-    auth_type: serviceAccount
-    namespaces: [ {{ $namespace.name }} ]
   k8sobjects/ns_{{ $namespace.name }}:
     auth_type: serviceAccount
     objects:
+{{- range $i, $mode := (coll.Slice "watch" "pull") }}
     - name: pods
-      mode: watch
+      mode: {{ $mode }}
+      interval: 10m
       namespaces: [ {{ $namespace.name }} ]
     - name: daemonsets
       group: apps
-      mode: watch
+      mode: {{ $mode }}
+      interval: 10m
       namespaces: [ {{ $namespace.name }} ]
     - name: deployments
       group: apps
-      mode: watch
+      mode: {{ $mode }}
+      interval: 10m
       namespaces: [ {{ $namespace.name }} ]
     - name: replicasets
       group: apps
-      mode: watch
+      mode: {{ $mode }}
+      interval: 10m
       namespaces: [ {{ $namespace.name }} ]
     - name: statefulsets
       group: apps
-      mode: watch
+      mode: {{ $mode }}
+      interval: 10m
       namespaces: [ {{ $namespace.name }} ]
     - name: cronjobs
       group: batch
-      mode: watch
+      mode: {{ $mode }}
+      interval: 10m
       namespaces: [ {{ $namespace.name }} ]
     - name: jobs
       group: batch
-      mode: watch
+      mode: {{ $mode }}
+      interval: 10m
+      namespaces: [ {{ $namespace.name }} ]
+    - name: events
+      mode: {{ $mode }}
+      interval: 10m
       namespaces: [ {{ $namespace.name }} ]
 {{- end }}
+{{- end }}
+
 extensions:
   health_check:
   headers_setter/lumigo:
@@ -58,6 +69,7 @@ extensions:
     type: client
     token: {{ $namespace.token }}
 {{- end }}
+
 exporters:
   otlphttp/lumigo:
     endpoint: {{ env.Getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
@@ -75,6 +87,7 @@ exporters:
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
+
 processors:
   k8sattributes:
     auth_type: serviceAccount
@@ -118,6 +131,7 @@ processors:
       - set(attributes["k8s.namespace.name"], "{{ $namespace.name }}")
       - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}")
 {{- end }}
+
 service:
   telemetry:
     logs:
@@ -145,16 +159,6 @@ service:
       - logging
 {{- end }}
 {{- range $i, $namespace := $namespaces }}
-    logs/k8s_events_ns_{{ $namespace.name }}:
-      receivers:
-      - k8s_events/ns_{{ $namespace.name }}
-      processors:
-      - transform/inject_nsuid_ns_{{ $namespace.name }}
-      exporters:
-{{- if $config.debug }}
-      - logging
-{{- end }}
-      - otlphttp/lumigo_ns_{{ $namespace.name }}
     logs/k8s_objects_ns_{{ $namespace.name }}:
       receivers:
       - k8sobjects/ns_{{ $namespace.name }}
