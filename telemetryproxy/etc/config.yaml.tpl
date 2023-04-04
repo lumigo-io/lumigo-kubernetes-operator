@@ -115,6 +115,22 @@ processors:
     - sources:
       - from: resource_attribute
         name: k8s.pod.uid
+  transform/inject_operator_details_into_resource:
+    trace_statements:
+    - context: resource
+      statements:
+      - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
+      - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
+    metric_statements:
+    - context: resource
+      statements:
+      - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
+      - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
+    log_statements:
+    - context: resource
+      statements:
+      - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
+      - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
   transform/inject_nsuid_into_resource:
     trace_statements:
     - context: resource
@@ -144,6 +160,7 @@ service:
       processors:
       - k8sattributes
       - transform/inject_nsuid_into_resource
+      - transform/inject_operator_details_into_resource
       exporters:
       - otlphttp/lumigo
 {{- if $config.debug }}
@@ -155,6 +172,7 @@ service:
       - k8sobjects/ns_{{ $namespace.name }}
       processors:
       - transform/inject_nsuid_into_resource
+      - transform/inject_operator_details_into_resource
       exporters:
 {{- if $config.debug }}
       - logging

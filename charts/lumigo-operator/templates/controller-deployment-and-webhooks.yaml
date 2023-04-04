@@ -8,6 +8,7 @@ we are forkec to put in the same file all resources that are related with self-s
 {{- $certFingerprint := $cert.Cert | b64enc | substr 10 25 | quote }}
 {{- $memoryReservedForControllerMib := 100 }}
 {{- $memoryReservedForKubeRbacProxyMib := 50 }}
+{{- $lumigoOperatorVersion := .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
 ---
 apiVersion: v1
 kind: Secret
@@ -180,7 +181,7 @@ spec:
         - name: LUMIGO_NAMESPACE_CONFIGURATIONS
           value: /lumigo/etc/namespaces/namespaces_to_monitor.json
         - name: LUMIGO_OPERATOR_VERSION
-          value: "{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}"
+          value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_INJECTOR_IMAGE
           value: {{ .Values.injectorWebhook.lumigoInjector.image.repository }}:{{ .Values.injectorWebhook.lumigoInjector.image.tag | default "latest" }}
         - name: GOMEMLIMIT
@@ -222,6 +223,10 @@ spec:
         env:
         - name: LUMIGO_ENDPOINT
           value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+        - name: LUMIGO_OPERATOR_VERSION
+          value: "{{ $lumigoOperatorVersion }}"
+        - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
+          value: "Helm-{{ .Capabilities.HelmVersion.Version }}"
         - name: RESERVED_MEMORY_MIB
           value: "{{ add $memoryReservedForControllerMib $memoryReservedForKubeRbacProxyMib }}"
         ports:

@@ -81,8 +81,6 @@ spec:
               value: public.ecr.aws/lumigo/lumigo-autotrace:latest
             - name: LUMIGO_NAMESPACE_CONFIGURATIONS
               value: /lumigo/etc/namespaces/namespaces_to_monitor.json
-            - name: LUMIGO_OPERATOR_VERSION
-              value: latest
             - name: KUBERNETES_CLUSTER_DOMAIN
               value: cluster.local
           livenessProbe:
@@ -121,6 +119,10 @@ spec:
         - name: telemetry-proxy
           image: host.docker.internal:5000/telemetry-proxy:latest
           env:
+            - name: LUMIGO_OPERATOR_VERSION
+              value: latest
+            - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
+              value: Kustomize
             - name: LUMIGO_ENDPOINT
               value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
           ports:

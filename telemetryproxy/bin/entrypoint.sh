@@ -32,10 +32,17 @@ if [ "${LUMIGO_DEBUG,,}" = 'true' ]; then
     debug='true'
 fi
 
+operator_version="${LUMIGO_OPERATOR_VERSION:-unknown}"
+operator_deployment_method="${LUMIGO_OPERATOR_DEPLOYMENT_METHOD:-unknown}"
+
 # Create generation configs
 mkdir -p $(dirname "${GENERATION_CONFIG_FILE_PATH}")
 
 echo "{
+    \"operator\": {
+        \"version\": \"${operator_version}\",
+        \"deployment_method\": \"${operator_deployment_method}\"
+    },
     \"debug\": ${debug}
 }" > "${GENERATION_CONFIG_FILE_PATH}"
 
@@ -46,7 +53,7 @@ fi
 function generate_configs() {
     gomplate -f "${OTELCOL_CONFIG_TEMPLATE_FILE_PATH}" -d "config=${GENERATION_CONFIG_FILE_PATH}" -d "namespaces=${NAMESPACES_FILE_PATH}" --in "${config}" > "${OTELCOL_CONFIG_FILE_PATH}"
 
-    if [ -n "${debug}" ]; then
+    if [ "${debug}" == 'true' ]; then
        cat "${OTELCOL_CONFIG_FILE_PATH}"
     fi
 
