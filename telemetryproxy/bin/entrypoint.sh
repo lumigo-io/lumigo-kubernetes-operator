@@ -46,9 +46,9 @@ fi
 function generate_configs() {
     gomplate -f "${OTELCOL_CONFIG_TEMPLATE_FILE_PATH}" -d "config=${GENERATION_CONFIG_FILE_PATH}" -d "namespaces=${NAMESPACES_FILE_PATH}" --in "${config}" > "${OTELCOL_CONFIG_FILE_PATH}"
 
-    #if [ -n "${debug}" ]; then
-    #    cat "${OTELCOL_CONFIG_FILE_PATH}"
-    #fi
+    if [ -n "${debug}" ]; then
+       cat "${OTELCOL_CONFIG_FILE_PATH}"
+    fi
 
     sha1sum "${NAMESPACES_FILE_PATH}" > "${NAMESPACES_FILE_SHA_PATH}"
 }
