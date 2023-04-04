@@ -138,6 +138,14 @@ processors:
 {{- range $i, $namespace := $namespaces }}
       - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}") where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
 {{- end }}
+{{- range $i, $namespace := $namespaces }}
+  transform/inject_ns_into_resource_{{ $namespace.name }}:
+    log_statements:
+    - context: resource
+      statements:
+      - set(attributes["k8s.namespace.name"], "{{ $namespace.name }}")
+      - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}")
+{{- end }}
 
 service:
   telemetry:
@@ -171,7 +179,7 @@ service:
       receivers:
       - k8sobjects/ns_{{ $namespace.name }}
       processors:
-      - transform/inject_nsuid_into_resource
+      - transform/inject_ns_into_resource_{{ $namespace.name }}
       - transform/inject_operator_details_into_resource
       exporters:
 {{- if $config.debug }}

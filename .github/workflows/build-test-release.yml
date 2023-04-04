@@ -399,9 +399,10 @@ jobs:
         run: |
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
-      - name: Update Kustomize version
+      - name: Update Kustomize operator version
         run: |
-          TODO
+          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == "LUMIGO_OPERATOR_VERSION")).value = "${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
+          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy") | .env[] | select(.name == "LUMIGO_OPERATOR_VERSION")).value = "${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
       - name: Prep Changelog settings
         id: changelog-settings
         run: |

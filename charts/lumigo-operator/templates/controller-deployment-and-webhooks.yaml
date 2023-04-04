@@ -182,6 +182,8 @@ spec:
           value: /lumigo/etc/namespaces/namespaces_to_monitor.json
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
+        - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
+          value: "helm-{{ .Capabilities.HelmVersion.Version }}"
         - name: LUMIGO_INJECTOR_IMAGE
           value: {{ .Values.injectorWebhook.lumigoInjector.image.repository }}:{{ .Values.injectorWebhook.lumigoInjector.image.tag | default "latest" }}
         - name: GOMEMLIMIT

@@ -77,6 +77,8 @@ spec:
               value: http://$(TELEMETRY_PROXY_SERVICE).$(TELEMETRY_PROXY_SERVICE_NAMESPACE).svc.cluster.local
             - name: LUMIGO_OPERATOR_VERSION
               value: latest
+            - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
+              value: kustomize
             - name: LUMIGO_INJECTOR_IMAGE
               value: public.ecr.aws/lumigo/lumigo-autotrace:latest
             - name: LUMIGO_NAMESPACE_CONFIGURATIONS
