@@ -8,7 +8,7 @@ receivers:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
 {{- range $i, $namespace := $namespaces }}
-  k8sobjects/ns_{{ $namespace.name }}:
+  k8sobjects/objects_ns_{{ $namespace.name }}:
     auth_type: serviceAccount
     objects:
 {{- range $i, $mode := (coll.Slice "watch" "pull") }}
@@ -46,6 +46,13 @@ receivers:
       mode: {{ $mode }}
       interval: 10m
       namespaces: [ {{ $namespace.name }} ]
+{{- end }}
+{{- end }}
+{{- range $i, $namespace := $namespaces }}
+  k8sobjects/events_ns_{{ $namespace.name }}:
+    auth_type: serviceAccount
+    objects:
+{{- range $i, $mode := (coll.Slice "watch" "pull") }}
     - name: events
       mode: {{ $mode }}
       interval: 10m
@@ -115,6 +122,19 @@ processors:
     - sources:
       - from: resource_attribute
         name: k8s.pod.uid
+  transform/set_k8s_objects_scope:
+    log_statements:
+    - context: scope
+      statements:
+      - set(name, "lumigo-operator.k8s-objects")
+      - set(version, "{{ $config.operator.version }}")
+  transform/set_k8s_events_scope:
+    log_statements:
+    - context: scope
+      statements:
+      - set(name, "lumigo-operator.k8s-events")
+      - set(version, "{{ $config.operator.version }}")
+
   transform/inject_operator_details_into_resource:
     trace_statements:
     - context: resource
@@ -177,8 +197,21 @@ service:
 {{- range $i, $namespace := $namespaces }}
     logs/k8s_objects_ns_{{ $namespace.name }}:
       receivers:
-      - k8sobjects/ns_{{ $namespace.name }}
+      - k8sobjects/objects_ns_{{ $namespace.name }}
       processors:
+      - transform/set_k8s_objects_scope
+      - transform/inject_ns_into_resource_{{ $namespace.name }}
+      - transform/inject_operator_details_into_resource
+      exporters:
+{{- if $config.debug }}
+      - logging
+{{- end }}
+      - otlphttp/lumigo_ns_{{ $namespace.name }}
+    logs/k8s_events_ns_{{ $namespace.name }}:
+      receivers:
+      - k8sobjects/events_ns_{{ $namespace.name }}
+      processors:
+      - transform/set_k8s_events_scope
       - transform/inject_ns_into_resource_{{ $namespace.name }}
       - transform/inject_operator_details_into_resource
       exporters:
