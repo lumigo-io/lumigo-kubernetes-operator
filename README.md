@@ -181,11 +181,13 @@ spec:
 
 **Note:** The removal of injection from existing resources does not occur on uninstallation of the Lumigo Kubernetes operator, as the role-based access control is has likely already been deleted.
 
-#### Collection of Kubernetes events
+#### Collection of Kubernetes objects
 
-The Lumigo Kubernetes operator will automatically collect Kubernetes events occurring in the namespaces with a `Lumigo` resource in active state, and send them to Lumigo for issue detection (e.g., when you pods crash).
+The Lumigo Kubernetes operator will automatically collect Kubernetes object versions in the namespaces with a `Lumigo` resource in active state, and send them to Lumigo for issue detection (e.g., when you pods crash).
+The collected object types are: `corev1.Events`, `corev1.Pods`, `appsv1.Deployments`, `apps/v1.DaemonSet`, `apps/v1.ReplicaSet`, `apps/v1.StatefulSet`, `batch/v1.CronJob`, and `batch/v1.Job`.
+Besides events, the object versions, e.g., pods, replicasets and deployments, are needed to be able to correlate events across the [owner-reference chain](https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/), e.g., the pod belongs to that replicaset, which belongs to that deployment.
 
-To _disable_ the automated collection of Kubernetes events, you can configure your `Lumigo` resources as follows:
+To _disable_ the automated collection of Kubernetes events and object versions, you can configure your `Lumigo` resources as follows:
 
 ```yaml
 apiVersion: operator.lumigo.io/v1alpha1
@@ -203,7 +205,7 @@ spec:
       enabled: false # Default: true
 ```
 
-When a `Lumigo` resource is deleted from a namespace, the collection of Kubernetes events is automatically halted.
+When a `Lumigo` resource is deleted from a namespace, the collection of Kubernetes events and object versions is automatically halted.
 
 ### Uninstall
 
