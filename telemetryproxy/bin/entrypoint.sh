@@ -9,20 +9,28 @@ readonly NAMESPACES_FILE_PATH="/lumigo/etc/namespaces/namespaces_to_monitor.json
 readonly NAMESPACES_FILE_SHA_PATH="${NAMESPACES_FILE_PATH}.sha1"
 
 readonly DEFAULT_MEMORY_LIMIT_MIB=4000
-
-memory_limit_mib=${DEFAULT_MEMORY_LIMIT_MIB}
+readonly NO_MEMORY_LIMIT=9223372036854771712
 
 if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
-    # Memory limits are set in the container
-    memory_limit_mib=$(echo < /sys/fs/cgroup/memory/memory.limit_in_bytes)
-    if [ -n "${memory_limit_mib}" ] && [ -n "${RESERVED_MEMORY_MIB}" ]; then
-        # TODO Check memory limit bigger than 100
-        reserved_memory=${RESERVED_MEMORY_MIB}
-        memory_limit_mib=$(( a - reserved_memory ))
+    memory_limit_bytes=$(</sys/fs/cgroup/memory/memory.limit_in_bytes)
+
+    if [ -n "${memory_limit_bytes}" ] && [ "${memory_limit_bytes}" != "${NO_MEMORY_LIMIT}" ]; then
+        # Memory limits are set in the container
+        memory_limit_mib=$(( ${memory_limit_bytes} / 1048576 ))
+    
+        if [ -n "${RESERVED_MEMORY_MIB}" ]; then
+            # TODO Check memory limit bigger than 100
+            reserved_memory=${RESERVED_MEMORY_MIB}
+            memory_limit_mib=$(( a - reserved_memory ))
+        fi
     fi
+fi
+
+if [ -n "${memory_limit_mib}" ]; then
     echo "Setting memory limits on the OtelCollector to ${memory_limit_mib} MiB"
 else
     echo "No memory limits found on the container; using the ${DEFAULT_MEMORY_LIMIT_MIB} MiB default"
+    memory_limit_mib="${DEFAULT_MEMORY_LIMIT_MIB}"
 fi
 
 export GOMEMLIMIT="${memory_limit_mib}MiB"
