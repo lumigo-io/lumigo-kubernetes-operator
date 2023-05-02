@@ -29,6 +29,15 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 
 **Note:** While installing the Lumigo Kubernetes operator via [`kustomize`](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) is generally expected to work (except the [uninstallation of instrumentation on removal](#remove-injection-from-existing-resources)), it is not actually supported[^1].
 
+### Upgrading
+
+To upgrade to a newer version of the Lumigo Kubernetes operator, run:
+
+```sh
+helm repo update
+helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
+```
+
 ### Enabling automatic tracing
 
 #### Supported resource types
