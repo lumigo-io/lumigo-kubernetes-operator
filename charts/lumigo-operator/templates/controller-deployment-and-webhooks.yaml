@@ -113,7 +113,7 @@ spec:
     control-plane: controller-manager
     lumigo.cert-digest: {{ $certFingerprint }}
   ports:
-	{{- .Values.injectorWebhookService.ports | toYaml | nindent 2 }}
+  {{- .Values.injectorWebhookService.ports | toYaml | nindent 2 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
