@@ -2,6 +2,7 @@ package kind
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -32,11 +33,11 @@ func TestMain(m *testing.M) {
 	var kindClusterName string
 	var runId string
 
-	if ghJobId, isPresent := os.LookupEnv("GITHUB_JOB"); isPresent {
+	if ghRunId, isPresent := os.LookupEnv("GITHUB_RUN_ID"); isPresent {
 		// Use the GitHub job id as run id, as it removes unnecessary congnitive
 		// complexity in analyzing the OTLP data
-		kindClusterName = fmt.Sprintf("lumigo-operator-%s", ghJobId)
-		runId = ghJobId
+		kindClusterName = fmt.Sprintf("lumigo-operator-%s", ghRunId)
+		runId = ghRunId
 	} else {
 		kindClusterName = envconf.RandomName("lumigo-operator", 24)
 		runId = kindClusterName[16:]
@@ -115,12 +116,36 @@ func TestMain(m *testing.M) {
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
+	var loadControllerImageFunc, loadProxyImageFunc env.Func
+
+	if controllerImageArchive, isPresent := os.LookupEnv("CONTROLLER_IMG_ARCHIVE"); isPresent {
+		controllerImageArchiveAbsPath, err := validatePath(controllerImageArchive)
+		if err != nil {
+			logger.Fatalf("Failed to resolve absolute URL for %s image from archive %s: %v", controllerImageName, controllerImageArchive, err)
+		} else {
+			loadControllerImageFunc = envfuncs.LoadImageArchiveToCluster(kindClusterName, controllerImageArchiveAbsPath)
+		}
+	} else {
+		loadControllerImageFunc = wrapLoadImageWithLogging(kindClusterName, controllerImageName, *logger)
+	}
+
+	if telemetryProxyImageArchive, isPresent := os.LookupEnv("PROXY_IMG_ARCHIVE"); isPresent {
+		telemetryProxyImageArchiveAbsPath, err := validatePath(telemetryProxyImageArchive)
+		if err != nil {
+			logger.Fatalf("Failed to resolve absolute URL for %s image from archive %s: %v", telemetryProxyImageName, telemetryProxyImageArchive, err)
+		} else {
+			loadProxyImageFunc = envfuncs.LoadImageArchiveToCluster(kindClusterName, telemetryProxyImageArchiveAbsPath)
+		}
+	} else {
+		loadProxyImageFunc = wrapLoadImageWithLogging(kindClusterName, telemetryProxyImageName, *logger)
+	}
+
 	testEnv.Setup(
 		envfuncs.CreateKindClusterWithConfig(kindClusterName, kindNodeImageVal, kindConfigPath),
+		loadControllerImageFunc,
+		loadProxyImageFunc,
 		envfuncs.CreateNamespace(OTLP_SINK_NAMESPACE),
 		envfuncs.CreateNamespace(LUMIGO_SYSTEM_NAMESPACE),
-		wrapLoadImageWithLogging(kindClusterName, controllerImageName, *logger),
-		wrapLoadImageWithLogging(kindClusterName, telemetryProxyImageName, *logger),
 		/*
 		 * Otel Collector image is on Docker hub, no need to pull it into Kind (pulling into Kind
 		 * works only for local image, in the local Docker daemon).
@@ -149,6 +174,19 @@ func TestMain(m *testing.M) {
 	)
 
 	os.Exit(testEnv.Run(m))
+}
+
+func validatePath(relativePath string) (string, error) {
+	cwd, _ := os.Getwd()
+
+	absPath, err := filepath.Abs(filepath.Join(cwd, relativePath))
+	if err != nil {
+		return "", fmt.Errorf("Failed to resolve relative path '%s': %v", relativePath, err)
+	} else if _, err := os.Stat(absPath); errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("The resolved absolute path '%s' does not exist", absPath)
+	}
+
+	return absPath, nil
 }
 
 func wrapLoadImageWithLogging(kindClusterName, containerImageName string, logger log.Logger) env.Func {

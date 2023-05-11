@@ -1,3 +1,5 @@
+debug:
+  enabled: false
 output:
   color: true
   showOperatorStatus: true

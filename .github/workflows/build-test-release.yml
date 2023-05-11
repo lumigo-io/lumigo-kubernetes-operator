@@ -31,6 +31,10 @@ jobs:
         ports:
           - 5000:5000
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       # The networking setup of this job is... complex. We run a local registry as
       # a service, which means that on the worker node there is a registry on localhost:5000.
       # However, Minikube cannot pull images from *that* localhost, because it's own localhost
@@ -86,10 +90,6 @@ jobs:
           start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
           driver: docker
           # cni: bridge
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
       - name: Set up Helm
@@ -160,6 +160,10 @@ jobs:
       # of HTTPS). But the fun does not end here: since we cannot use localhost in the image name,
       # the `docker/build-push-action@v3` cannot apparently be told to consider the repo as insecure!
       # So we need to output images to file, and then push them to the local repo via regctl.
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Look up host ip
         id: hostip
         run: |
@@ -207,10 +211,6 @@ jobs:
           start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
           driver: docker
           # cni: bridge
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
       - name: Install Cert Manager
@@ -243,35 +243,11 @@ jobs:
 
   test-kind:
     runs-on: ubuntu-latest
-    services:
-      # Run a local registry
-      registry:
-        image: registry:2
-        ports:
-          - 5000:5000
     steps:
-      # The networking setup of this job is... complex. We run a local registry as
-      # a service, which means that on the worker node there is a registry on localhost:5000.
-      # However, Minikube cannot pull images from *that* localhost, because it's own localhost
-      # is something else, so we need to reference the registry via the IP of the worker machine,
-      # and configure `minikube` to treat that registry as insecure (i.e., talking HTTP instead
-      # of HTTPS). But the fun does not end here: since we cannot use localhost in the image name,
-      # the `docker/build-push-action@v3` cannot apparently be told to consider the repo as insecure!
-      # So we need to output images to file, and then push them to the local repo via regctl.
-      - name: Look up host ip
-        id: hostip
-        run: |
-          ip a
-          echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
-      - name: Set up regctl
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
-          sudo curl -L https://github.com/regclient/regclient/releases/download/v0.4.4/regctl-linux-amd64 -o /usr/bin/regctl
-          sudo chmod +x /usr/bin/regctl
-
-          # Configure local registry as insecure
-          /usr/bin/regctl registry set --tls disabled "${{ steps.hostip.outputs.ip }}:5000"
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # We do not need the git history
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Build controller image and save it to file
@@ -279,35 +255,22 @@ jobs:
         with:
           platforms: linux/amd64
           file: Dockerfile.controller
-          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          tags: lumigo-operator/controller:${{ github.run_number }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
           file: Dockerfile.proxy
-          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          tags: lumigo-operator/telemetry-proxy:${{ github.run_number }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
-      - name: Push container images to local repository
-        env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
-        run: |
-          set -eux
-          regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
-          regctl image inspect "${CONTROLLER_IMG}"
-
-          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar -v info
-          regctl image inspect "${PROXY_IMG}"
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1  # We do not need the git history
       - name: Run Kind tests
         working-directory: tests/kubernetes-distros/kind
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: lumigo-operator/controller:${{ github.run_number }}
+          CONTROLLER_IMG_ARCHIVE: ../../../controller-image.tar
+          PROXY_IMG: lumigo-operator/telemetry-proxy:${{ github.run_number }}
+          PROXY_IMG_ARCHIVE: ../../../telemetry-proxy-image.tar
           KEEP_OTLP_DATA: true
         run: go test
       - name: Store OTLP test data as artifact
