@@ -94,10 +94,6 @@ exporters:
     endpoint: $LUMIGO_ENDPOINT
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
-  file/dump_events_ns_{{ $namespace.name }}:
-    path: /tmp/dump_events_ns_{{ $namespace.name }}.json
-  file/dump_objects_ns_{{ $namespace.name }}:
-    path: /tmp/dump_objects_ns_{{ $namespace.name }}.json
 {{- end }}
 
 processors:
@@ -219,7 +215,6 @@ service:
       exporters:
 {{- if $config.debug }}
       - logging
-      - file/dump_objects_ns_{{ $namespace.name }}
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
     logs/k8s_events_ns_{{ $namespace.name }}:
@@ -233,7 +228,6 @@ service:
       exporters:
 {{- if $config.debug }}
       - logging
-      - file/dump_events_ns_{{ $namespace.name }}
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
 {{ end }}
