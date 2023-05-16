@@ -272,13 +272,13 @@ jobs:
           PROXY_IMG: lumigo-operator/telemetry-proxy:${{ github.run_number }}
           PROXY_IMG_ARCHIVE: ../../../telemetry-proxy-image.tar
           KEEP_OTLP_DATA: true
-        run: go test
+        run: go test -v
       - name: Store OTLP test data as artifact
         if: always()
         uses: actions/upload-artifact@v3
         with:
           name: kind-otlp-data
-          path: tests/kubernetes-distros/kind/resources/test-runs/${{ github.job }}/otlp-sink/data
+          path: tests/kubernetes-distros/kind/resources/test-runs/${{ github.job }}
 
   all-tests:
     runs-on: ubuntu-latest
