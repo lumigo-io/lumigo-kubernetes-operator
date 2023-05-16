@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 		logger.Fatalf("Cannot serialize Kind config to '%s': %v", kindConfigPath, err)
 	}
 
-	logger.Println(fmt.Sprintf("Running tests on cluster '%s' using '%s' Kind image", kindClusterName, kindNodeImageVal), "kind-config", kindConfig)
+	logger.Printf("Running tests on cluster '%s' using '%s' Kind image", kindClusterName, kindNodeImageVal)
 
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
@@ -191,7 +191,7 @@ func validatePath(relativePath string) (string, error) {
 
 func wrapLoadImageWithLogging(kindClusterName, containerImageName string, logger log.Logger) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		logger.Printf("Loading into the Kind cluster '%v' the image '%s'\n", kindClusterName, containerImageName)
+		logger.Printf("Loading the image '%[2]s' into the Kind cluster '%[1]v'\n", kindClusterName, containerImageName)
 		delegate := envfuncs.LoadDockerImageToCluster(kindClusterName, containerImageName)
 		return delegate(ctx, cfg)
 	}

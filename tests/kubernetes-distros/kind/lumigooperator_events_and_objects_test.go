@@ -14,7 +14,10 @@ import (
 
 	"github.com/go-logr/logr/testr"
 	"golang.org/x/exp/slices"
+	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
+	"sigs.k8s.io/e2e-framework/klient/wait"
+	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
@@ -104,7 +107,7 @@ func TestLumigoOperator(t *testing.T) {
 			tr := true
 			var g int64 = 5678
 
-			var replicas int32 = 1
+			var replicas int32 = 2
 			deployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespaceName,
@@ -147,6 +150,24 @@ func TestLumigoOperator(t *testing.T) {
 			if err := client.Resources().Create(ctx, deployment); err != nil {
 				t.Fatal(err)
 			}
+
+			// Wait until the deployment has all its pods running
+			// See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#complete-deployment
+			wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
+				d := object.(*appsv1.Deployment)
+				return d.Status.AvailableReplicas == replicas && d.Status.ReadyReplicas == replicas
+			}))
+
+			logger.Info("Deployment is ready")
+
+			// Tear it all down
+			if err := client.Resources().Delete(ctx, deployment); err != nil {
+				t.Fatal(err)
+			}
+
+			wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
+
+			logger.Info("Deployment is deleted")
 
 			return ctx
 		}).
