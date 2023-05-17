@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"os/user"
 	"strconv"
 	"testing"
 	"time"
@@ -38,6 +39,21 @@ func OtlpSinkFeature(namespaceName string, deploymentName string, otlpCollectorI
 		replicas := int32(1)
 
 		otlpSinkDataDir := "/var/otlp-sink"
+
+		currentUser, err := user.Current()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		otlpUid, err := strconv.ParseInt(currentUser.Uid, 10, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		otlpGid, err := strconv.ParseInt(currentUser.Gid, 10, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		otlpSinkDeployment := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespaceName},
@@ -87,6 +103,13 @@ func OtlpSinkFeature(namespaceName string, deploymentName string, otlpCollectorI
 										HostPort:      otlpSinkPort,
 										ContainerPort: otlpSinkPort,
 									},
+								},
+								// The FileExporter does not have configurable file permissions, so we need to grant to
+								// 'group' and 'other' at least read permissions programmatically.
+								// See https://github.com/lumigo-io/opentelemetry-collector-contrib/blob/a39e9cc396f23c85aab766526bdde0a0fdd67673/exporter/fileexporter/factory.go#LL149C42-L149C42
+								SecurityContext: &corev1.SecurityContext{
+									RunAsUser:  &otlpUid,
+									RunAsGroup: &otlpGid,
 								},
 							},
 						},

@@ -266,13 +266,13 @@ jobs:
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Run Kind tests
         working-directory: tests/kubernetes-distros/kind
+        run: go test -test.v -args -v 4
         env:
           CONTROLLER_IMG: lumigo-operator/controller:${{ github.run_id }}
           CONTROLLER_IMG_ARCHIVE: ../../../controller-image.tar
           PROXY_IMG: lumigo-operator/telemetry-proxy:${{ github.run_id }}
           PROXY_IMG_ARCHIVE: ../../../telemetry-proxy-image.tar
           KEEP_OTLP_DATA: true
-        run: go test -test.v -args -v 4
       - run: ls -lR tests/kubernetes-distros/kind
         if: always()
       - name: Store OTLP test data as artifact
