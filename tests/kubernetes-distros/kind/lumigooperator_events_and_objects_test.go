@@ -45,11 +45,6 @@ var (
 func TestLumigoOperator(t *testing.T) {
 	logger := testr.New(t)
 
-	lumigoToken, isPresent := os.LookupEnv("LUMIGO_TRACER_TOKEN")
-	if !isPresent {
-		lumigoToken = DEFAULT_LUMIGO_TOKEN
-	}
-
 	// Specify the deployment of the OTLP Sink on Kind
 	otlpSinkFeature, otlpSinkServiceUrl := internal.OtlpSinkFeature(OTLP_SINK_NAMESPACE, "otlp-sink", OTLP_SINK_OTEL_COLLECTOR_IMAGE, logger)
 
@@ -68,6 +63,8 @@ func TestLumigoOperator(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
+
+			lumigoToken := ctx.Value(internal.ContextKeyLumigoToken).(string)
 
 			lumigoTokenName := "lumigo-credentials"
 			lumigoTokenKey := "token"

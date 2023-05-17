@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,20 +29,8 @@ const (
 
 func LumigoOperatorFeature(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) features.Feature {
 	return features.New("LumigoOperatorLocal").Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-		controllerImageVal, isPresent := os.LookupEnv("CONTROLLER_IMG")
-		if !isPresent {
-			controllerImageVal = DEFAULT_CONTROLLER_IMG_NAME
-		}
-
-		telemetryProxyImageVal, isPresent := os.LookupEnv("PROXY_IMG")
-		if !isPresent {
-			telemetryProxyImageVal = DEFAULT_PROXY_IMG_NAME
-		}
-
-		imageVersionVal, isPresent := os.LookupEnv("IMG_VERSION")
-		if !isPresent {
-			imageVersionVal = DEFAULT_IMG_VERSION
-		}
+		controllerImageName, controllerImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorControllerImage).(string))
+		telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorProxyImage).(string))
 
 		var curDir, _ = os.Getwd()
 		chartDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(curDir))), "charts", "lumigo-operator")
@@ -52,10 +41,10 @@ func LumigoOperatorFeature(lumigoNamespace string, otlpSinkUrl string, logger lo
 			helm.WithName("lumigo"),
 			helm.WithChart(chartDir),
 			helm.WithNamespace(lumigoNamespace),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.repository=%s", controllerImageVal)),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", imageVersionVal)),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageVal)),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", imageVersionVal)),
+			helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.repository=%s", controllerImageName)),
+			helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
+			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
+			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
 			helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
 			helm.WithArgs("--set debug.enabled=true"), // Operator debug logging at runtime
 			helm.WithArgs("--debug"), // Helm debug output on install
@@ -77,4 +66,16 @@ func LumigoOperatorFeature(lumigoNamespace string, otlpSinkUrl string, logger lo
 
 		return ctx
 	}).Feature()
+}
+
+func splitContainerImageNameAndTag(imageName string) (string, string) {
+	lastColonIndex := strings.LastIndex(imageName, ":")
+	lastSlashIndex := strings.LastIndex(imageName, "/")
+
+	if lastColonIndex < 0 || lastSlashIndex > lastColonIndex {
+		// No tag in the image: if there is a colon character, must be a port in the domain
+		return imageName, ""
+	}
+
+	return imageName[:lastColonIndex], imageName[lastColonIndex+1:]
 }

@@ -115,9 +115,17 @@ func TestMain(m *testing.M) {
 
 	logger.Printf("Running tests on cluster '%s' using '%s' Kind image", kindClusterName, kindNodeImageVal)
 
+	lumigoToken, isPresent := os.LookupEnv("LUMIGO_TRACER_TOKEN")
+	if !isPresent {
+		lumigoToken = DEFAULT_LUMIGO_TOKEN
+	}
+
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkDataPath, dataSinkDataDir)
+	ctx = context.WithValue(ctx, internal.ContextKeyLumigoToken, lumigoToken)
+	ctx = context.WithValue(ctx, internal.ContextKeyOperatorControllerImage, controllerImageName)
+	ctx = context.WithValue(ctx, internal.ContextKeyOperatorProxyImage, telemetryProxyImageName)
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
