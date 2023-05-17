@@ -273,6 +273,8 @@ jobs:
           PROXY_IMG_ARCHIVE: ../../../telemetry-proxy-image.tar
           KEEP_OTLP_DATA: true
         run: go test -test.v -args -v 4
+      - run: ls -lR tests/kubernetes-distros/kind
+        if: always()
       - name: Store OTLP test data as artifact
         if: always()
         uses: actions/upload-artifact@v3
