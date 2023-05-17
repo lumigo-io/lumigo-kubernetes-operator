@@ -69,6 +69,7 @@ extensions:
     # `include_metadata: true` parameter in the `otlp` exporter
     - key: authorization
       from_context: Authorization
+      action: upsert
   lumigoauth/server:
     type: server
 {{- range $i, $namespace := $namespaces }}
@@ -134,7 +135,14 @@ processors:
       statements:
       - set(name, "lumigo-operator.k8s-events")
       - set(version, "{{ $config.operator.version }}")
-
+{{- range $i, $namespace := $namespaces }}
+  batch/k8s_objects_ns_{{ $namespace.name }}:
+    send_batch_size: 100
+    timeout: 1s
+  batch/k8s_events_ns_{{ $namespace.name }}:
+    send_batch_size: 100
+    timeout: 1s
+{{- end }}
   transform/inject_operator_details_into_resource:
     trace_statements:
     - context: resource
@@ -194,6 +202,7 @@ service:
 {{- if $config.debug }}
       - logging
 {{- end }}
+
 {{- range $i, $namespace := $namespaces }}
     logs/k8s_objects_ns_{{ $namespace.name }}:
       receivers:
@@ -202,6 +211,7 @@ service:
       - transform/set_k8s_objects_scope
       - transform/inject_ns_into_resource_{{ $namespace.name }}
       - transform/inject_operator_details_into_resource
+      - batch/k8s_objects_ns_{{ $namespace.name }}
       exporters:
 {{- if $config.debug }}
       - logging
@@ -214,6 +224,7 @@ service:
       - transform/set_k8s_events_scope
       - transform/inject_ns_into_resource_{{ $namespace.name }}
       - transform/inject_operator_details_into_resource
+      - batch/k8s_events_ns_{{ $namespace.name }}
       exporters:
 {{- if $config.debug }}
       - logging

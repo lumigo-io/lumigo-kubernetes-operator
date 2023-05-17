@@ -1,3 +1,5 @@
+debug:
+  enabled: false
 output:
   color: true
   showOperatorStatus: true
@@ -55,3 +57,6 @@ metricsService:
       protocol: TCP
       targetPort: https
   type: ClusterIP
+endpoint:
+  otlp:
+    url: https://ga-otlp.lumigo-tracer-edge.golumigo.com

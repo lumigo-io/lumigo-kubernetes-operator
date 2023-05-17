@@ -1,0 +1,24 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "0.0.0.0:${OTLP_PORT}"
+
+exporters:
+  file/logs:
+    path: ${LOGS_DUMP_PATH}
+  file/traces:
+    path: ${TRACES_DUMP_PATH}
+
+service:
+  pipelines:
+    logs:
+      receivers:
+      - otlp
+      exporters:
+      - file/logs
+    traces:
+      receivers:
+      - otlp
+      exporters:
+      - file/traces

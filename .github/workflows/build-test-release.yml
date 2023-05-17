@@ -31,6 +31,10 @@ jobs:
         ports:
           - 5000:5000
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       # The networking setup of this job is... complex. We run a local registry as
       # a service, which means that on the worker node there is a registry on localhost:5000.
       # However, Minikube cannot pull images from *that* localhost, because it's own localhost
@@ -60,19 +64,19 @@ jobs:
         with:
           platforms: linux/amd64
           file: Dockerfile.controller
-          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
           file: Dockerfile.proxy
-          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
         run: |
           set -eux
           regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
@@ -86,10 +90,6 @@ jobs:
           start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
           driver: docker
           # cni: bridge
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
       - name: Set up Helm
@@ -114,17 +114,17 @@ jobs:
           helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
-            --set "controllerManager.manager.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
-            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
             --dry-run
 
           if ! helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
-            --set "controllerManager.manager.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
-            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
             --debug --wait --timeout 4m; then
 
             kubectl describe all -n lumigo-system
@@ -160,6 +160,10 @@ jobs:
       # of HTTPS). But the fun does not end here: since we cannot use localhost in the image name,
       # the `docker/build-push-action@v3` cannot apparently be told to consider the repo as insecure!
       # So we need to output images to file, and then push them to the local repo via regctl.
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Look up host ip
         id: hostip
         run: |
@@ -181,19 +185,19 @@ jobs:
         with:
           platforms: linux/amd64
           file: Dockerfile.controller
-          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
           file: Dockerfile.proxy
-          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
         run: |
           set -eux
           regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
@@ -207,10 +211,6 @@ jobs:
           start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
           driver: docker
           # cni: bridge
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
       - name: Install Cert Manager
@@ -223,8 +223,8 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
       - name: Deploy locally-built operator
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
         run: |
           yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"manager\")).image = \"${CONTROLLER_IMG}\"" config/manager/manager.yaml
           yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"telemetry-proxy\")).image = \"${PROXY_IMG}\"" config/manager/manager.yaml
@@ -241,12 +241,54 @@ jobs:
             exit 1
           fi
 
+  test-kind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # We do not need the git history
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build controller image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          file: Dockerfile.controller
+          tags: lumigo-operator/controller:${{ github.run_id }}
+          outputs: type=oci,dest=controller-image.tar
+      - name: Build telemetry-proxy image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          file: Dockerfile.proxy
+          tags: lumigo-operator/telemetry-proxy:${{ github.run_id }}
+          outputs: type=oci,dest=telemetry-proxy-image.tar
+      - name: Run Kind tests
+        working-directory: tests/kubernetes-distros/kind
+        run: go test -test.v -args -v 4
+        env:
+          CONTROLLER_IMG: lumigo-operator/controller:${{ github.run_id }}
+          CONTROLLER_IMG_ARCHIVE: ../../../controller-image.tar
+          PROXY_IMG: lumigo-operator/telemetry-proxy:${{ github.run_id }}
+          PROXY_IMG_ARCHIVE: ../../../telemetry-proxy-image.tar
+          KEEP_OTLP_DATA: true
+      - run: ls -lR tests/kubernetes-distros/kind
+        if: always()
+      - name: Store OTLP test data as artifact
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: kind-otlp-data
+          path: tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}
+
   all-tests:
     runs-on: ubuntu-latest
     needs:
     - unit-test
     - test-helm-upgrade
     - test-kustomize
+    - test-kind
     steps:
       - name: no-op
         run: echo '*tongue click* noice'

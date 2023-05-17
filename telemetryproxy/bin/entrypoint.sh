@@ -86,6 +86,10 @@ function watch_namespaces_file() {
 
         if ! sha1sum -c "${NAMESPACES_FILE_SHA_PATH}" > /dev/null 2>&1; then
             # Config changed
+            if [ "${debug}" == 'true' ]; then
+                echo 'Namespace file change detected'
+                cat "${NAMESPACES_FILE_SHA_PATH}"
+            fi
             generate_configs
             trigger_config_reload
         fi

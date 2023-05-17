@@ -158,6 +158,14 @@ $ minikube start --insecure-registry "host.docker.internal:5000"
    ```
    See [How to fix Helm's "Upgrade Failed: has no deployed releases" error ](https://dev.to/mxglt/how-to-fix-helms-upgrade-failed-has-no-deployed-releases-error-5cbn) for more info.
 
+## End-to-end tests with Kind
+
+Install [`kind`](https://kind.sigs.k8s.io/) and run:
+
+```sh
+(cd tests/kubernetes-distros/kind; go test)
+```
+
 ## Helm chart
 
 The first version of the [Helm chart](./deploy/helm/) has been generated with [helmify](https://github.com/arttor/helmify) by running `kustomize build config/default | helmify deploy/helm`.
