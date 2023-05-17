@@ -204,7 +204,7 @@ func validatePath(relativePath string) (string, error) {
 
 	absPath, err := filepath.Abs(filepath.Join(cwd, relativePath))
 	if err != nil {
-		return "", fmt.Errorf("Failed to resolve relative path '%s': %v", relativePath, err)
+		return "", fmt.Errorf("Failed to resolve relative path '%s': %w", relativePath, err)
 	} else if _, err := os.Stat(absPath); errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("The resolved absolute path '%s' does not exist", absPath)
 	}

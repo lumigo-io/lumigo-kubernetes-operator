@@ -171,6 +171,20 @@ func TestLumigoOperator(t *testing.T) {
 		Assess("All resourceVersions mentioned in event's involve objects are available as objects", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			runId := ctx.Value(internal.ContextKeyRunId).(string)
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			// The FileExporter does not have configurable file permissions, so we need to grant to
+			// 'group' and 'other' at least read permissions programmatically.
+			// See https://github.com/lumigo-io/opentelemetry-collector-contrib/blob/a39e9cc396f23c85aab766526bdde0a0fdd67673/exporter/fileexporter/factory.go#LL149C42-L149C42
+			if err := filepath.Walk(otlpSinkDataPath,
+				func(path string, info os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					return os.Chmod(path, 0644)
+				}); err != nil {
+				t.Fatalf("Cannot adjust file permissions for OTLP data folder: %v", err)
+			}
+
 			logsPath := filepath.Join(otlpSinkDataPath, fmt.Sprintf("logs-%s.json", runId))
 
 			waitCtx := context.TODO()
@@ -178,12 +192,10 @@ func TestLumigoOperator(t *testing.T) {
 			if err := apimachinerywait.PollImmediateUntilWithContext(waitCtx, time.Second*5, func(context.Context) (bool, error) {
 				logsBytes, err := os.ReadFile(logsPath)
 				if err != nil {
-					// t.Fatalf("Cannot read test OTLP logs from '%s': %v", logsPath, err)
 					return false, err
 				}
 
 				if len(logsBytes) < 1 {
-					// t.Fatalf("Empty logs file '%s'", logsPath)
 					return false, err
 				}
 
