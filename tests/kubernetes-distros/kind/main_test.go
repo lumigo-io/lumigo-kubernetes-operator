@@ -98,6 +98,11 @@ func TestMain(m *testing.M) {
 		1,
 	)
 
+	kindLogsDir := filepath.Join(tmpDir, "kind", "logs")
+	if err := os.MkdirAll(kindLogsDir, os.ModePerm); err != nil {
+		logger.Fatalf("Cannot create Kind logs directory at '%s': %v", kindLogsDir, err)
+	}
+
 	kindConfigDir := filepath.Join(tmpDir, "kind", "config")
 	if err := os.MkdirAll(kindConfigDir, os.ModePerm); err != nil {
 		logger.Fatalf("Cannot create Kind config directory at '%s': %v", kindConfigDir, err)
@@ -154,6 +159,7 @@ func TestMain(m *testing.M) {
 	)
 
 	testEnv.Finish(
+		envfuncs.ExportKindClusterLogs(kindClusterName, kindLogsDir),
 		func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
 			keepDataFolder, isPresent := os.LookupEnv("KEEP_OTLP_DATA")
 			if !isPresent || keepDataFolder != "true" {
