@@ -57,7 +57,8 @@ func LumigoOperatorFeature(lumigoNamespace string, otlpSinkUrl string, logger lo
 			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageVal)),
 			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", imageVersionVal)),
 			helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
-			helm.WithArgs("--set debug.enabled=true"),
+			helm.WithArgs("--set debug.enabled=true"), // Operator debug logging at runtime
+			helm.WithArgs("--debug"), // Helm debug output on install
 			helm.WithWait(),
 			helm.WithTimeout("10m"),
 		); err != nil {

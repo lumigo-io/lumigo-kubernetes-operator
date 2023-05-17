@@ -123,7 +123,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			logger.Fatalf("Failed to resolve absolute URL for %s image from archive %s: %v", controllerImageName, controllerImageArchive, err)
 		} else {
-			loadControllerImageFunc = envfuncs.LoadImageArchiveToCluster(kindClusterName, controllerImageArchiveAbsPath)
+			loadControllerImageFunc = wrapLoadImageArchiveWithLogging(kindClusterName, controllerImageArchiveAbsPath, *logger)
 		}
 	} else {
 		loadControllerImageFunc = wrapLoadImageWithLogging(kindClusterName, controllerImageName, *logger)
@@ -134,7 +134,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			logger.Fatalf("Failed to resolve absolute URL for %s image from archive %s: %v", telemetryProxyImageName, telemetryProxyImageArchive, err)
 		} else {
-			loadProxyImageFunc = envfuncs.LoadImageArchiveToCluster(kindClusterName, telemetryProxyImageArchiveAbsPath)
+			loadProxyImageFunc = wrapLoadImageArchiveWithLogging(kindClusterName, telemetryProxyImageArchiveAbsPath, *logger)
 		}
 	} else {
 		loadProxyImageFunc = wrapLoadImageWithLogging(kindClusterName, telemetryProxyImageName, *logger)
@@ -187,6 +187,14 @@ func validatePath(relativePath string) (string, error) {
 	}
 
 	return absPath, nil
+}
+
+func wrapLoadImageArchiveWithLogging(kindClusterName, containerImageArchivePath string, logger log.Logger) env.Func {
+	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
+		logger.Printf("Loading the image arhive '%[2]s' into the Kind cluster '%[1]v'\n", kindClusterName, containerImageArchivePath)
+		delegate := envfuncs.LoadImageArchiveToCluster(kindClusterName, containerImageArchivePath)
+		return delegate(ctx, cfg)
+	}
 }
 
 func wrapLoadImageWithLogging(kindClusterName, containerImageName string, logger log.Logger) env.Func {
