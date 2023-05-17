@@ -191,7 +191,7 @@ func validatePath(relativePath string) (string, error) {
 
 func wrapLoadImageArchiveWithLogging(kindClusterName, containerImageArchivePath string, logger log.Logger) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		logger.Printf("Loading the image arhive '%[2]s' into the Kind cluster '%[1]v'\n", kindClusterName, containerImageArchivePath)
+		logger.Printf("Loading the image archive '%[2]s' into the Kind cluster '%[1]v'\n", kindClusterName, containerImageArchivePath)
 		delegate := envfuncs.LoadImageArchiveToCluster(kindClusterName, containerImageArchivePath)
 		return delegate(ctx, cfg)
 	}

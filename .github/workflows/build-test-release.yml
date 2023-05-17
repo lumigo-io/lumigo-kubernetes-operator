@@ -64,19 +64,19 @@ jobs:
         with:
           platforms: linux/amd64
           file: Dockerfile.controller
-          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
           file: Dockerfile.proxy
-          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
         run: |
           set -eux
           regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
@@ -114,17 +114,17 @@ jobs:
           helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
-            --set "controllerManager.manager.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
-            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
             --dry-run
 
           if ! helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
-            --set "controllerManager.manager.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
-            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_number }}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
             --debug --wait --timeout 4m; then
 
             kubectl describe all -n lumigo-system
@@ -185,19 +185,19 @@ jobs:
         with:
           platforms: linux/amd64
           file: Dockerfile.controller
-          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
           file: Dockerfile.proxy
-          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
         run: |
           set -eux
           regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
@@ -223,8 +223,8 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
       - name: Deploy locally-built operator
         env:
-          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_number }}
-          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_number }}
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
         run: |
           yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"manager\")).image = \"${CONTROLLER_IMG}\"" config/manager/manager.yaml
           yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"telemetry-proxy\")).image = \"${PROXY_IMG}\"" config/manager/manager.yaml
@@ -255,21 +255,21 @@ jobs:
         with:
           platforms: linux/amd64
           file: Dockerfile.controller
-          tags: lumigo-operator/controller:${{ github.run_number }}
+          tags: lumigo-operator/controller:${{ github.run_id }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
           file: Dockerfile.proxy
-          tags: lumigo-operator/telemetry-proxy:${{ github.run_number }}
+          tags: lumigo-operator/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Run Kind tests
         working-directory: tests/kubernetes-distros/kind
         env:
-          CONTROLLER_IMG: lumigo-operator/controller:${{ github.run_number }}
+          CONTROLLER_IMG: lumigo-operator/controller:${{ github.run_id }}
           CONTROLLER_IMG_ARCHIVE: ../../../controller-image.tar
-          PROXY_IMG: lumigo-operator/telemetry-proxy:${{ github.run_number }}
+          PROXY_IMG: lumigo-operator/telemetry-proxy:${{ github.run_id }}
           PROXY_IMG_ARCHIVE: ../../../telemetry-proxy-image.tar
           KEEP_OTLP_DATA: true
         run: go test -test.v -args -v 4
@@ -278,7 +278,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: kind-otlp-data
-          path: tests/kubernetes-distros/kind/resources/test-runs/${{ github.job }}
+          path: tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}
 
   all-tests:
     runs-on: ubuntu-latest
