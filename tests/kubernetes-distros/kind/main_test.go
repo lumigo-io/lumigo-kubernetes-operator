@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 
 	cwd, _ := os.Getwd()
 	tmpDir := filepath.Join(cwd, "resources", "test-runs", runId)
-	if err := os.MkdirAll(tmpDir, os.ModePerm); err != nil {
+	if err := createDir(tmpDir, os.ModePerm); err != nil {
 		logger.Fatalf("Cannot create test-run tmp dir at '%s': %v", tmpDir, err)
 	}
 
@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 	dataSinkConfigDir := filepath.Join(cwd, "resources", "otlp-sink", "config")
 
 	dataSinkDataDir := filepath.Join(tmpDir, "otlp-sink", "data")
-	if err := os.MkdirAll(dataSinkDataDir, os.ModePerm); err != nil {
+	if err := createDir(dataSinkDataDir, os.ModePerm); err != nil {
 		logger.Fatalf("Cannot create OTLP sink data directory at '%s': %v", dataSinkDataDir, err)
 	}
 
@@ -99,12 +99,12 @@ func TestMain(m *testing.M) {
 	)
 
 	kindLogsDir := filepath.Join(tmpDir, "kind", "logs")
-	if err := os.MkdirAll(kindLogsDir, os.ModePerm); err != nil {
+	if err := createDir(kindLogsDir, os.ModePerm); err != nil {
 		logger.Fatalf("Cannot create Kind logs directory at '%s': %v", kindLogsDir, err)
 	}
 
 	kindConfigDir := filepath.Join(tmpDir, "kind", "config")
-	if err := os.MkdirAll(kindConfigDir, os.ModePerm); err != nil {
+	if err := createDir(kindConfigDir, os.ModePerm); err != nil {
 		logger.Fatalf("Cannot create Kind config directory at '%s': %v", kindConfigDir, err)
 	}
 
@@ -188,6 +188,15 @@ func TestMain(m *testing.M) {
 	)
 
 	os.Exit(testEnv.Run(m))
+}
+
+func createDir(path string, fileMode os.FileMode) error {
+	if err := os.MkdirAll(path, fileMode); err != nil {
+		return err
+	}
+
+	// Ensure umask does not interfere with the permissions
+	return os.Chmod(path, fileMode)
 }
 
 func validatePath(relativePath string) (string, error) {
