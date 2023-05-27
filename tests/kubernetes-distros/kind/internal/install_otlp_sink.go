@@ -31,7 +31,6 @@ func OtlpSinkFeature(namespaceName string, deploymentName string, otlpCollectorI
 		// whatever comes through OTLP and dump it to file with a FileExporter, so that
 		// we can then validate which data would be sent upstream from the comfiness of
 		// Go test code :-)
-		runId := ctx.Value(ContextKeyRunId).(string)
 
 		labels := map[string]string{
 			"app": "otlp-sink",
@@ -78,11 +77,11 @@ func OtlpSinkFeature(namespaceName string, deploymentName string, otlpCollectorI
 									},
 									{
 										Name:  "LOGS_DUMP_PATH",
-										Value: fmt.Sprintf("%s/logs-%s.json", otlpSinkDataDir, runId),
+										Value: fmt.Sprintf("%s/logs.json", otlpSinkDataDir),
 									},
 									{
 										Name:  "TRACES_DUMP_PATH",
-										Value: fmt.Sprintf("%s/traces-%s.json", otlpSinkDataDir, runId),
+										Value: fmt.Sprintf("%s/traces.json", otlpSinkDataDir),
 									},
 								},
 								VolumeMounts: []corev1.VolumeMount{
