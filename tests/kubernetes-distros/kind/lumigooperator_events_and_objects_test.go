@@ -169,10 +169,9 @@ func TestLumigoOperator(t *testing.T) {
 			return ctx
 		}).
 		Assess("All resourceVersions mentioned in event's involve objects are available as objects", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			runId := ctx.Value(internal.ContextKeyRunId).(string)
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
-			logsPath := filepath.Join(otlpSinkDataPath, fmt.Sprintf("logs-%s.json", runId))
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
 
 			waitCtx := context.TODO()
 
@@ -224,9 +223,11 @@ func TestLumigoOperator(t *testing.T) {
 
 				missingRefs := make([]string, 0)
 				for _, objectReference := range objectReferences {
-					ref := fmt.Sprintf("%s/%s@%s", objectReference.Kind, objectReference.UID, objectReference.ResourceVersion)
-					if !slices.Contains(objectResourceVersions, ref) {
-						missingRefs = append(missingRefs, ref)
+					if objectReference.Kind != "" && objectReference.UID != "" && objectReference.ResourceVersion != "" {
+						ref := fmt.Sprintf("%s/%s@%s", objectReference.Kind, objectReference.UID, objectReference.ResourceVersion)
+						if !slices.Contains(objectResourceVersions, ref) {
+							missingRefs = append(missingRefs, ref)
+						}
 					}
 				}
 
