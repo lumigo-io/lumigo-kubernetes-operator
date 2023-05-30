@@ -70,7 +70,9 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          file: Dockerfile.proxy
+          context: telemetryproxy
+          file: telemetryproxy/Dockerfile.proxy
+          build-args: version=${{ github.sha }}
           tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
@@ -191,7 +193,9 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          file: Dockerfile.proxy
+          context: telemetryproxy
+          file: telemetryproxy/Dockerfile.proxy
+          build-args: version=${{ github.sha }}
           tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
@@ -261,7 +265,9 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          file: Dockerfile.proxy
+          context: telemetryproxy
+          file: telemetryproxy/Dockerfile.proxy
+          build-args: version=${{ github.sha }}
           tags: lumigo-operator/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Run Kind tests
@@ -367,7 +373,7 @@ jobs:
         env:
           CONTROLLER_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}
         run: |
-          make docker-buildx-manager
+          make VERSION=${{ needs.validate-release-increment.outputs.version }} docker-buildx-manager
 
   publish-telemetry-proxy-ecr-image:
     runs-on: ubuntu-latest

@@ -1,0 +1,1 @@
+# Telemetry-proxy build of the OpenTelemetry Collector
