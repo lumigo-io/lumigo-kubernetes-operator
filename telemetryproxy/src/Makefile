@@ -1,5 +1,6 @@
 MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 SRC_ROOT := $(dir $(MAKEFILE_PATH))
+VERSION := dev
 
 # build tags required by any component should be defined as an independent variables and later added to GO_BUILD_TAGS below
 GO_BUILD_TAGS=""
@@ -46,6 +47,6 @@ OTELCONTRIBCOL_FILENAME := "./otelcontribcol_$(GOOS)_$(GOARCH)$(EXTENSION)"
 .PHONY: otelcontribcolbuilder
 otelcontribcolbuilder: install-tools $(BUILDER)
 	mkdir -p ./dist
-	$(BUILDER) --skip-compilation --config ./builder/config.yaml
+	$(BUILDER) --skip-compilation --config ./builder/config.yaml --version $(VERSION)
 	cd ./dist/ && GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 $(GOCMD) build -trimpath -o $(OTELCONTRIBCOL_FILENAME) \
 		$(BUILD_INFO) -tags $(GO_BUILD_TAGS) .

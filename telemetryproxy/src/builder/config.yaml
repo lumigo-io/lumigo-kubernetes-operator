@@ -3,7 +3,7 @@ dist:
   name: lumigo-collector
   description: Lumigo OpenTelemetry collector
   otelcol_version: "0.71.0"
-  version: "0.71.0-dev"
+  version: "lumigo-dev"
   output_path: dist
 
 exporters:

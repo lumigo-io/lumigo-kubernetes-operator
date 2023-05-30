@@ -133,7 +133,7 @@ docker-buildx-telemetry-proxy: ## Build and push docker image for the manager fo
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross && \
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
-	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross --build-arg "lumigo_otel_collector_release=$(shell cat VERSION.otelcontibcol)" . && \
+	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross --build-arg "version=$(VERSION)" . && \
 	- docker buildx rm project-v3-builder && \
 	rm Dockerfile.proxy.cross )
 

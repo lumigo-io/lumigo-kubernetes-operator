@@ -1,12 +1,15 @@
 # Download our latest otelcollector release
 FROM golang:1.20-alpine AS telemetry-proxy-builder
 
+ARG version='dev'
+ENV VERSION=${version}
+
 RUN apk add --update make
 
 ADD ./src /src
 WORKDIR /src
 
-RUN make OTELCONTRIBCOL_FILENAME=otelcontribcol install-tools otelcontribcolbuilder
+RUN make VERSION=${VERSION} OTELCONTRIBCOL_FILENAME=otelcontribcol install-tools otelcontribcolbuilder
 
 FROM alpine:latest
 
