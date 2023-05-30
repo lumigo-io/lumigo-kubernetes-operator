@@ -1,0 +1,23 @@
+# Download our latest otelcollector release
+FROM golang:1.20-alpine AS telemetry-proxy-builder
+
+RUN apk add --update make
+
+ADD ./src /src
+WORKDIR /src
+
+RUN make OTELCONTRIBCOL_FILENAME=otelcontribcol install-tools otelcontribcolbuilder
+
+FROM alpine:latest
+
+# Be able to validate the TLS cert of the Lumigo SaaS endpoint
+RUN apk add ca-certificates
+# Update OtelCollector config on namespace file change
+RUN apk add bash gomplate procps 
+
+ADD --chown=1234:1234 ./docker/etc/config.yaml.tpl /lumigo/etc/otelcol-config.yaml.tpl
+ADD --chown=1234:1234 ./docker/*.sh /lumigo/bin/
+COPY --from=telemetry-proxy-builder --chown=1234:1234 /src/dist/otelcontribcol /lumigo/bin/otelcol
+
+ENTRYPOINT ["/bin/bash"]
+CMD ["/lumigo/bin/entrypoint.sh"]

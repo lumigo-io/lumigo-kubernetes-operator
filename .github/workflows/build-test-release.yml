@@ -70,8 +70,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          context: telemetryproxy/docker
-          file: Dockerfile.proxy
+          context: telemetryproxy
+          file: telemetryproxy/Dockerfile.proxy
           tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
@@ -192,8 +192,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          context: telemetryproxy/docker
-          file: Dockerfile.proxy
+          context: telemetryproxy
+          file: telemetryproxy/Dockerfile.proxy
           tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Push container images to local repository
@@ -263,8 +263,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          context: telemetryproxy/docker
-          file: Dockerfile.proxy
+          context: telemetryproxy
+          file: telemetryproxy/Dockerfile.proxy
           tags: lumigo-operator/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Run Kind tests

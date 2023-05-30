@@ -101,7 +101,7 @@ e2e-tests:
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
 	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.controller .
-	(cd telemetryproxy/docker && docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.proxy . )
+	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f telemetryproxy/Dockerfile.proxy telemetryproxy
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
@@ -129,7 +129,7 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
-	( cd telemetryproxy/docker && \
+	( cd telemetryproxy && \
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross && \
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
