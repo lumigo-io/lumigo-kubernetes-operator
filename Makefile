@@ -101,7 +101,7 @@ e2e-tests:
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
 	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.controller .
-	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.proxy .
+	(cd telemetryproxy/docker && docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.proxy . )
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
@@ -129,12 +129,13 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross
-	docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross --build-arg "lumigo_otel_collector_release=$(shell cat telemetryproxy/VERSION.otelcontibcol)" .
-	- docker buildx rm project-v3-builder
-	rm Dockerfile.proxy.cross
+	( cd telemetryproxy/docker && \
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross && \
+	docker buildx create --name project-v3-builder && \
+	docker buildx use project-v3-builder && \
+	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross --build-arg "lumigo_otel_collector_release=$(shell cat VERSION.otelcontibcol)" . && \
+	- docker buildx rm project-v3-builder && \
+	rm Dockerfile.proxy.cross )
 
 ##@ Deployment
 
