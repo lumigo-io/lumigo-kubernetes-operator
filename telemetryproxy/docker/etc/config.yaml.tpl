@@ -107,6 +107,7 @@ processors:
       metadata:
         # Core
         - k8s.namespace.name
+        - k8s.namespace.uid
         - k8s.pod.name
         - k8s.pod.start_time
         - k8s.node.name
@@ -114,12 +115,14 @@ processors:
         - k8s.daemonset.name
         - k8s.daemonset.uid
         - k8s.deployment.name
+        - k8s.deployment.uid
         - k8s.replicaset.name
         - k8s.replicaset.uid
         - k8s.statefulset.name
         - k8s.statefulset.uid
         # Batch
         - k8s.cronjob.name
+        - k8s.cronjob.uid
         - k8s.job.name
         - k8s.job.uid
     pod_association:
@@ -163,13 +166,6 @@ processors:
       statements:
       - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
       - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
-  transform/inject_nsuid_into_resource:
-    trace_statements:
-    - context: resource
-      statements:
-{{- range $i, $namespace := $namespaces }}
-      - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}") where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
-{{- end }}
 {{- range $i, $namespace := $namespaces }}
   transform/inject_ns_into_resource_{{ $namespace.name }}:
     log_statements:
@@ -199,7 +195,6 @@ service:
       - otlp
       processors:
       - k8sattributes
-      - transform/inject_nsuid_into_resource
       - transform/inject_operator_details_into_resource
       exporters:
       - otlphttp/lumigo

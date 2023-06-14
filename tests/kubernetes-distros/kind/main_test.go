@@ -2,14 +2,17 @@ package kind
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/go-logr/stdr"
+	gomplate "github.com/hairyhenderson/gomplate/v3"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/tests/kubernetes-distros/kind/internal"
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -26,6 +29,10 @@ const (
 	OTLP_SINK_OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector:0.76.1"
 	OTLP_SINK_NAMESPACE            = "otlp-sink"
 )
+
+type otlpSinkConfigDatasource struct {
+	LumigoToken string `json:"lumigo_token"`
+}
 
 func TestMain(m *testing.M) {
 	cfg, _ := envconf.NewFromFlags()
@@ -45,40 +52,81 @@ func TestMain(m *testing.M) {
 
 	logger := log.New(os.Stderr, "", 0)
 
+	lumigoTokenDatasourceValue := ""
+	lumigoToken, isLumigoTokenPresent := os.LookupEnv("LUMIGO_TRACER_TOKEN")
+	if !isLumigoTokenPresent {
+		lumigoToken = DEFAULT_LUMIGO_TOKEN
+	} else {
+		lumigoTokenDatasourceValue = lumigoToken
+	}
+
 	cwd, _ := os.Getwd()
 	tmpDir := filepath.Join(cwd, "resources", "test-runs", runId)
 	if err := createDir(tmpDir, os.ModePerm); err != nil {
 		logger.Fatalf("Cannot create test-run tmp dir at '%s': %v", tmpDir, err)
 	}
 
-	kindNodeImageVal, isPresent := os.LookupEnv("KIND_NODE_IMAGE")
-	if !isPresent {
+	kindNodeImageVal, isKindNodeImagePresent := os.LookupEnv("KIND_NODE_IMAGE")
+	if !isKindNodeImagePresent {
 		kindNodeImageVal = DEFAULT_KIND_NODE_IMAGE
 	}
 
-	imageVersionVal, isPresent := os.LookupEnv("IMG_VERSION")
-	if !isPresent {
-		imageVersionVal = internal.DEFAULT_IMG_VERSION
+	dataSinkConfigDir := filepath.Join(tmpDir, "otlp-sink", "config")
+	if err := createDir(dataSinkConfigDir, os.ModePerm); err != nil {
+		logger.Fatalf("Cannot create OTLP sink config directory at '%s': %v", dataSinkConfigDir, err)
 	}
-
-	controllerImageName, isPresent := os.LookupEnv("CONTROLLER_IMG")
-	if !isPresent {
-		controllerImageName = fmt.Sprintf("%s:%s", internal.DEFAULT_CONTROLLER_IMG_NAME, imageVersionVal)
-	}
-
-	telemetryProxyImageName, isPresent := os.LookupEnv("PROXY_IMG")
-	if !isPresent {
-		telemetryProxyImageName = fmt.Sprintf("%s:%s", internal.DEFAULT_PROXY_IMG_NAME, imageVersionVal)
-	}
-
-	logger.Printf("Using controller image '%s' and telemetry-proxy image '%s'", controllerImageName, telemetryProxyImageName)
-
-	dataSinkConfigDir := filepath.Join(cwd, "resources", "otlp-sink", "config")
 
 	dataSinkDataDir := filepath.Join(tmpDir, "otlp-sink", "data")
 	if err := createDir(dataSinkDataDir, os.ModePerm); err != nil {
 		logger.Fatalf("Cannot create OTLP sink data directory at '%s': %v", dataSinkDataDir, err)
 	}
+
+	otlpSinkConfigDatasourceFilePath := filepath.Join(dataSinkConfigDir, "config-datasource.json")
+	otlpSinkConfigDatasourceFile, err := os.Create(otlpSinkConfigDatasourceFilePath)
+	if err != nil {
+		logger.Fatalf("Cannot create OTLP sink config datasource file at '%s': %v", otlpSinkConfigDatasourceFilePath, err)
+	}
+
+	if otlpSinkConfigDatasource, err := json.Marshal(otlpSinkConfigDatasource{
+		LumigoToken: lumigoTokenDatasourceValue,
+	}); err != nil {
+		logger.Fatalf("Cannot create OTLP sink config datasource file at '%s': %v", otlpSinkConfigDatasourceFilePath, err)
+	} else {
+		fmt.Fprint(otlpSinkConfigDatasourceFile, string(otlpSinkConfigDatasource))
+	}
+
+	otlpSinkConfigDatasourceFileUrl, _ := url.Parse("file://" + otlpSinkConfigDatasourceFilePath)
+	renderer := gomplate.NewRenderer(gomplate.Options{
+		Datasources: map[string]gomplate.Datasource{
+			"config": {
+				URL: otlpSinkConfigDatasourceFileUrl,
+			},
+		},
+	})
+
+	otlpSinkConfigTemplateFilePath := filepath.Join(cwd, "resources", "otlp-sink", "config.yaml.tpl")
+	otlpSinkConfigTemplateText, err := os.ReadFile(otlpSinkConfigTemplateFilePath)
+	if err != nil {
+		logger.Fatalf("Cannot read the OTLP sink config template at '%s': %v", otlpSinkConfigTemplateFilePath, err)
+	}
+
+	otlpSinkConfigFilePath := filepath.Join(dataSinkConfigDir, "config.yaml")
+	otlpSinkConfigFile, err := os.Create(otlpSinkConfigFilePath)
+	if err != nil {
+		logger.Fatalf("Cannot create OTLP sink config file at '%s': %v", otlpSinkConfigFilePath, err)
+	}
+
+	otlpSinkConfigTemplate := gomplate.Template{
+		Name:   "OTLP sink configuration",
+		Text:   string(otlpSinkConfigTemplateText),
+		Writer: otlpSinkConfigFile,
+	}
+
+	if err := renderer.RenderTemplates(context.TODO(), []gomplate.Template{otlpSinkConfigTemplate}); err != nil {
+		logger.Fatalf("Cannot render with gomplate the OTLP sink config file at '%s': %v", otlpSinkConfigFilePath, err)
+	}
+
+	otlpSinkConfigFile.Close()
 
 	kindConfigTemplatePath := filepath.Join(cwd, "resources", "kind-config.yaml.tpl")
 	kindConfigTemplate, err := os.ReadFile(kindConfigTemplatePath)
@@ -115,55 +163,58 @@ func TestMain(m *testing.M) {
 
 	logger.Printf("Running tests on cluster '%s' using '%s' Kind image", kindClusterName, kindNodeImageVal)
 
-	lumigoToken, isPresent := os.LookupEnv("LUMIGO_TRACER_TOKEN")
-	if !isPresent {
-		lumigoToken = DEFAULT_LUMIGO_TOKEN
-	}
+	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
+
+	controllerImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_CONTROLLER_IMG_NAME, runId)
+	controllerImageArchivePath := filepath.Join(tmpDir, "operator-controller.tgz")
+
+	telemetryProxyImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_PROXY_IMG_NAME, runId)
+	telemetryProxyImageArchivePath := filepath.Join(tmpDir, "telemetry-proxy-controller.tgz")
+
+	testClientJsImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_CLIENT_IMG_NAME, runId)
+	testClientJsImageArchivePath := filepath.Join(tmpDir, "testClientJsImageName.tgz")
+
+	testServerJsImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_SERVER_IMG_NAME, runId)
+	testServerJsImageArchivePath := filepath.Join(tmpDir, "testJsAppServerImage.tgz")
 
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkDataPath, dataSinkDataDir)
+	ctx = context.WithValue(ctx, internal.ContextKeySendDataToLumigo, isLumigoTokenPresent)
 	ctx = context.WithValue(ctx, internal.ContextKeyLumigoToken, lumigoToken)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorControllerImage, controllerImageName)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorProxyImage, telemetryProxyImageName)
+	ctx = context.WithValue(ctx, internal.ContextTestAppJsClientImageName, testClientJsImageName)
+	ctx = context.WithValue(ctx, internal.ContextTestAppJsServerImageName, testServerJsImageName)
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
-	var loadControllerImageFunc, loadProxyImageFunc env.Func
-
-	if controllerImageArchive, isPresent := os.LookupEnv("CONTROLLER_IMG_ARCHIVE"); isPresent {
-		controllerImageArchiveAbsPath, err := validatePath(controllerImageArchive)
-		if err != nil {
-			logger.Fatalf("Failed to resolve absolute URL for %s image from archive %s: %v", controllerImageName, controllerImageArchive, err)
-		} else {
-			loadControllerImageFunc = wrapLoadImageArchiveWithLogging(kindClusterName, controllerImageArchiveAbsPath, *logger)
-		}
-	} else {
-		loadControllerImageFunc = wrapLoadImageWithLogging(kindClusterName, controllerImageName, *logger)
-	}
-
-	if telemetryProxyImageArchive, isPresent := os.LookupEnv("PROXY_IMG_ARCHIVE"); isPresent {
-		telemetryProxyImageArchiveAbsPath, err := validatePath(telemetryProxyImageArchive)
-		if err != nil {
-			logger.Fatalf("Failed to resolve absolute URL for %s image from archive %s: %v", telemetryProxyImageName, telemetryProxyImageArchive, err)
-		} else {
-			loadProxyImageFunc = wrapLoadImageArchiveWithLogging(kindClusterName, telemetryProxyImageArchiveAbsPath, *logger)
-		}
-	} else {
-		loadProxyImageFunc = wrapLoadImageWithLogging(kindClusterName, telemetryProxyImageName, *logger)
-	}
+	logrWrapper := stdr.New(logger)
+	otlpSinkFeature, otlpSinkK8sServiceUrl := internal.OtlpSinkEnvFunc(OTLP_SINK_NAMESPACE, "otlp-sink", OTLP_SINK_OTEL_COLLECTOR_IMAGE, logrWrapper)
+	lumigoOperatorFeature := internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, otlpSinkK8sServiceUrl, logrWrapper)
 
 	testEnv.Setup(
 		envfuncs.CreateKindClusterWithConfig(kindClusterName, kindNodeImageVal, kindConfigPath),
-		loadControllerImageFunc,
-		loadProxyImageFunc,
-		envfuncs.CreateNamespace(OTLP_SINK_NAMESPACE),
-		envfuncs.CreateNamespace(LUMIGO_SYSTEM_NAMESPACE),
+
+		// Build and import operator images
+		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, controllerImageArchivePath, logger),
+		internal.BuildDockerImageAndExportArchive(telemetryProxyImageName, filepath.Join(repoRoot, "telemetryproxy"), telemetryProxyImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, telemetryProxyImageArchivePath, logger),
+
+		// Build and import test app images
+		internal.BuildDockerImageAndExportArchive(testClientJsImageName, filepath.Join(cwd, "apps", "client"), testClientJsImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, testClientJsImageArchivePath, logger),
+		internal.BuildDockerImageAndExportArchive(testServerJsImageName, filepath.Join(cwd, "apps", "server"), testServerJsImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, testServerJsImageArchivePath, logger),
 		/*
 		 * Otel Collector image is on Docker hub, no need to pull it into Kind (pulling into Kind
 		 * works only for local image, in the local Docker daemon).
 		 */
 		// envfuncs.LoadDockerImageToCluster(kindClusterName, OTLP_SINK_OTEL_COLLECTOR_IMAGE),
+		envfuncs.CreateNamespace(OTLP_SINK_NAMESPACE),
+		otlpSinkFeature,
+		lumigoOperatorFeature,
 	)
 
 	testEnv.Finish(
@@ -197,33 +248,4 @@ func createDir(path string, fileMode os.FileMode) error {
 
 	// Ensure umask does not interfere with the permissions
 	return os.Chmod(path, fileMode)
-}
-
-func validatePath(relativePath string) (string, error) {
-	cwd, _ := os.Getwd()
-
-	absPath, err := filepath.Abs(filepath.Join(cwd, relativePath))
-	if err != nil {
-		return "", fmt.Errorf("Failed to resolve relative path '%s': %w", relativePath, err)
-	} else if _, err := os.Stat(absPath); errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("The resolved absolute path '%s' does not exist", absPath)
-	}
-
-	return absPath, nil
-}
-
-func wrapLoadImageArchiveWithLogging(kindClusterName, containerImageArchivePath string, logger log.Logger) env.Func {
-	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		logger.Printf("Loading the image archive '%[2]s' into the Kind cluster '%[1]v'\n", kindClusterName, containerImageArchivePath)
-		delegate := envfuncs.LoadImageArchiveToCluster(kindClusterName, containerImageArchivePath)
-		return delegate(ctx, cfg)
-	}
-}
-
-func wrapLoadImageWithLogging(kindClusterName, containerImageName string, logger log.Logger) env.Func {
-	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		logger.Printf("Loading the image '%[2]s' into the Kind cluster '%[1]v'\n", kindClusterName, containerImageName)
-		delegate := envfuncs.LoadDockerImageToCluster(kindClusterName, containerImageName)
-		return delegate(ctx, cfg)
-	}
 }

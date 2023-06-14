@@ -61,6 +61,8 @@ type k8sobjectsreceiver struct {
 	consumer        consumer.Logs
 	obsrecv         *obsreport.Receiver
 	mu              sync.Mutex
+	cache           *simplelru.LRU
+	cachemu         sync.Mutex
 }
 
 func newReceiver(params receiver.CreateSettings, config *Config, consumer consumer.Logs) (receiver.Logs, error) {
@@ -79,6 +81,10 @@ func newReceiver(params receiver.CreateSettings, config *Config, consumer consum
 		return nil, err
 	}
 
+	cache, _ := simplelru.NewLRU(1000, func(key interface{}, value interface{}) {
+		// Callback for key eviction. Anything to do?
+	})
+
 	return &k8sobjectsreceiver{
 		client:   client,
 		setting:  params,
@@ -86,6 +92,8 @@ func newReceiver(params receiver.CreateSettings, config *Config, consumer consum
 		objects:  config.Objects,
 		obsrecv:  obsrecv,
 		mu:       sync.Mutex{},
+		cache:    cache,
+		cachemu:  sync.Mutex{},
 	}, nil
 }
 
@@ -426,27 +434,42 @@ func (kr *k8sobjectsreceiver) ensureObjectReferenceIsKnown(ctx context.Context, 
 }
 
 func (kr *k8sobjectsreceiver) hasCacheEntry(apiVersion, kind, uid, resourceVersion string) bool {
-	return cache.Contains(toCacheKey(apiVersion, kind, uid, resourceVersion))
+	kr.cachemu.Lock()
+	defer kr.cachemu.Unlock()
+	return kr.cache.Contains(toCacheKey(apiVersion, kind, uid, resourceVersion))
 }
 
 func (kr *k8sobjectsreceiver) addCacheEntry(apiVersion, kind, uid, resourceVersion string) {
 	cacheKey := toCacheKey(apiVersion, kind, uid, resourceVersion)
 
-	if cache.Contains(cacheKey) {
+	addedCacheKeys := []string{}
+	kr.cachemu.Lock()
+
+	// We defer at the end of the function as all the operations in this function are
+	// quick and should be atomic from a cache standpoint
+	defer func() {
+		kr.cachemu.Unlock()
+		// Keep logging, which is potentially slow, outside of the lock
+		for _, cacheKey := range addedCacheKeys {
+			kr.setting.Logger.Debug("Added cache key", zap.Any("cacheKey", cacheKey))
+		}
+	}()
+
+	if kr.cache.Contains(cacheKey) {
 		return
 	}
 
-	cache.Add(cacheKey, true)
+	kr.cache.Add(cacheKey, true)
 
-	kr.setting.Logger.Debug("Added cache key", zap.Any("cacheKey", cacheKey))
+	addedCacheKeys = append(addedCacheKeys, cacheKey)
 
 	if resourceVersion != "" {
 		// Also add entry independent from resource version for owner references
 		objectCacheKey := toCacheKey(apiVersion, kind, uid, "")
 
-		if !cache.Contains(objectCacheKey) {
-			cache.Add(objectCacheKey, true)
-			kr.setting.Logger.Debug("Added cache key", zap.Any("cacheKey", objectCacheKey))
+		if !kr.cache.Contains(objectCacheKey) {
+			kr.cache.Add(objectCacheKey, true)
+			addedCacheKeys = append(addedCacheKeys, objectCacheKey)
 		}
 	}
 }

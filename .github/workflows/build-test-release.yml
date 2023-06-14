@@ -63,7 +63,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          file: Dockerfile.controller
+          context: controller
+          file: controller/Dockerfile
           tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
@@ -71,7 +72,7 @@ jobs:
         with:
           platforms: linux/amd64
           context: telemetryproxy
-          file: telemetryproxy/Dockerfile.proxy
+          file: telemetryproxy/Dockerfile
           build-args: version=${{ github.sha }}
           tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
@@ -186,7 +187,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           platforms: linux/amd64
-          file: Dockerfile.controller
+          context: controller
+          file: controller/Dockerfile
           tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
           outputs: type=oci,dest=controller-image.tar
       - name: Build telemetry-proxy image and save it to file
@@ -194,7 +196,7 @@ jobs:
         with:
           platforms: linux/amd64
           context: telemetryproxy
-          file: telemetryproxy/Dockerfile.proxy
+          file: telemetryproxy/Dockerfile
           build-args: version=${{ github.sha }}
           tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
@@ -254,30 +256,10 @@ jobs:
           fetch-depth: 1  # We do not need the git history
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Build controller image and save it to file
-        uses: docker/build-push-action@v3
-        with:
-          platforms: linux/amd64
-          file: Dockerfile.controller
-          tags: lumigo-operator/controller:${{ github.run_id }}
-          outputs: type=oci,dest=controller-image.tar
-      - name: Build telemetry-proxy image and save it to file
-        uses: docker/build-push-action@v3
-        with:
-          platforms: linux/amd64
-          context: telemetryproxy
-          file: telemetryproxy/Dockerfile.proxy
-          build-args: version=${{ github.sha }}
-          tags: lumigo-operator/telemetry-proxy:${{ github.run_id }}
-          outputs: type=oci,dest=telemetry-proxy-image.tar
       - name: Run Kind tests
         working-directory: tests/kubernetes-distros/kind
         run: go test -test.v -args -v 4
         env:
-          CONTROLLER_IMG: lumigo-operator/controller:${{ github.run_id }}
-          CONTROLLER_IMG_ARCHIVE: ../../../controller-image.tar
-          PROXY_IMG: lumigo-operator/telemetry-proxy:${{ github.run_id }}
-          PROXY_IMG_ARCHIVE: ../../../telemetry-proxy-image.tar
           KEEP_OTLP_DATA: true
       - run: ls -lR tests/kubernetes-distros/kind
         if: always()

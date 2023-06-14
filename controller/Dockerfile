@@ -4,19 +4,12 @@ ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /workspace
-# Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+# Copy the go source
+COPY src/ .
+
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
-
-# Copy the go source
-COPY main.go main.go
-COPY api/ api/
-COPY controllers/ controllers/
-COPY mutation/ mutation/
-COPY webhooks/ webhooks/
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
@@ -25,11 +18,14 @@ COPY webhooks/ webhooks/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+FROM alpine:latest
+
+# Be able to validate the TLS cert of the Lumigo SaaS endpoint
+RUN apk add bash procps 
+
 WORKDIR /
 COPY --from=builder --chown=65532:65532 /workspace/manager .
 USER 65532:65532
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/bin/bash"]
+CMD ["/lumigo/bin/entrypoint.sh"]

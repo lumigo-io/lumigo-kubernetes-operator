@@ -57,39 +57,33 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./api/...;./controllers/...;./mutation/...;./webhooks/..." output:crd:artifacts:config=config/crd/bases
+	(cd ./controller/src && $(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="." output:crd:artifacts:config=config/crd/bases )
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/...;./controllers/...;./mutation;./webhooks/..."
+	(cd ./controller/src && $(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="." )
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	$(GOCMD) fmt ./api/...
-	$(GOCMD) fmt ./controllers/...
-	$(GOCMD) fmt ./mutation/...
-	$(GOCMD) fmt ./webhooks/...
+	(cd ./controller/src && $(GOCMD) fmt .)
 
 .PHONY: vet
 vet: ## Run go vet against code.
-	$(GOCMD) vet ./api/...
-	$(GOCMD) vet ./controllers/...
-	$(GOCMD) vet ./mutation/...
-	$(GOCMD) vet ./webhooks/...
+	(cd ./controller/src && $(GOCMD) vet .)
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" $(GOCMD) test ./api/... ./controllers/... ./mutation/... ./webhooks/... -coverprofile cover.out
+	(cd ./controller/src && KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" $(GOCMD) test . -coverprofile cover.out )
 
 ##@ Build
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	$(GOCMD) build -o bin/manager main.go
+	$(GOCMD) build -o bin/manager ./controller/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	$(GOCMD) run ./main.go
+	$(GOCMD) run ./controller/main.go
 
 .PHONY: e2e-tests
 e2e-tests:
@@ -100,7 +94,7 @@ e2e-tests:
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f Dockerfile.controller .
+	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f controller/Dockerfile.controller controller
 	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f telemetryproxy/Dockerfile.proxy telemetryproxy
 
 .PHONY: docker-push
@@ -120,12 +114,14 @@ docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy ## Build
 
 .PHONY: docker-buildx-manager
 docker-buildx-manager: ## Build and push docker image for the manager for cross-platform support; this target does NOT run unit tests, it is meant for CI/CD
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.controller > Dockerfile.controller.cross
-	docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller.cross .
-	- docker buildx rm project-v3-builder
-	rm Dockerfile.controller.cross
+	(cd controller && \
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.controller > Dockerfile.controller.cross && \
+	docker buildx create --name project-v3-builder && \
+	docker buildx use project-v3-builder && \
+	docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller.cross . && \
+	- docker buildx rm project-v3-builder && \
+	rm Dockerfile.controller.cross && \
+	)
 
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support

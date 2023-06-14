@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/e2e-framework/klient"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -27,40 +28,65 @@ const (
 	DEFAULT_IMG_VERSION         = "latest"
 )
 
-func LumigoOperatorFeature(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) features.Feature {
-	return features.New("LumigoOperatorLocal").Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-		controllerImageName, controllerImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorControllerImage).(string))
-		telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorProxyImage).(string))
+func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfigFilePath string, lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) (context.Context, error) {
+	controllerImageName, controllerImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorControllerImage).(string))
+	telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorProxyImage).(string))
 
-		var curDir, _ = os.Getwd()
-		chartDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(curDir))), "charts", "lumigo-operator")
-		logger.Info("Installing Helm", "Chart dir", chartDir)
+	var curDir, _ = os.Getwd()
+	chartDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(curDir))), "charts", "lumigo-operator")
+	logger.Info("Installing Operator via Helm", "Chart dir", chartDir)
 
-		manager := helm.New(config.KubeconfigFile())
-		if err := manager.RunInstall(
-			helm.WithName("lumigo"),
-			helm.WithChart(chartDir),
-			helm.WithNamespace(lumigoNamespace),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.repository=%s", controllerImageName)),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
-			helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
-			helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
-			helm.WithArgs("--set debug.enabled=true"), // Operator debug logging at runtime
-			helm.WithArgs("--debug"), // Helm debug output on install
-			helm.WithWait(),
-			helm.WithTimeout("3m"),
-		); err != nil {
-			t.Fatal("failed to invoke helm install operation due to an error", err)
+	manager := helm.New(kubeconfigFilePath)
+	if err := manager.RunInstall(
+		helm.WithName("lumigo"),
+		helm.WithChart(chartDir),
+		helm.WithNamespace(lumigoNamespace),
+		helm.WithArgs("--create-namespace"),
+		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.repository=%s", controllerImageName)),
+		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
+		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
+		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
+		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
+		helm.WithArgs("--set debug.enabled=true"), // Operator debug logging at runtime
+		helm.WithArgs("--debug"), // Helm debug output on install
+		helm.WithWait(),
+		helm.WithTimeout("3m"),
+	); err != nil {
+		return ctx, fmt.Errorf("failed to invoke helm install operation due to an error: %w", err)
+	}
+
+	if err := wait.For(conditions.New(client.Resources()).DeploymentConditionMatch(&appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "lumigo-lumigo-operator-controller-manager",
+			Namespace: lumigoNamespace,
+		},
+	}, appsv1.DeploymentAvailable, corev1.ConditionTrue), wait.WithTimeout(time.Minute*5)); err != nil {
+		return ctx, err
+	}
+
+	return ctx, nil
+}
+
+func LumigoOperatorEnvFunc(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
+	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
+		client, err := config.NewClient()
+		if err != nil {
+			return ctx, err
 		}
 
-		client := config.Client()
-		if err := wait.For(conditions.New(client.Resources()).DeploymentConditionMatch(&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "lumigo-lumigo-operator-controller-manager",
-				Namespace: lumigoNamespace,
-			},
-		}, appsv1.DeploymentAvailable, corev1.ConditionTrue), wait.WithTimeout(time.Minute*5)); err != nil {
+		return installLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, logger)
+	}
+}
+
+func LumigoOperatorFeature(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) features.Feature {
+	return features.New("LumigoOperatorLocal").Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+		client, err := config.NewClient()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ctx, err = installLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, logger)
+		if err != nil {
 			t.Fatal(err)
 		}
 

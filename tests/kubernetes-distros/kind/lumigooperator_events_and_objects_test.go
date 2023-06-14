@@ -42,14 +42,8 @@ var (
 // 2. A Lumigo operator installed into the Kubernetes cluster referenced by the
 //    `kubectl` configuration
 
-func TestLumigoOperator(t *testing.T) {
+func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 	logger := testr.New(t)
-
-	// Specify the deployment of the OTLP Sink on Kind
-	otlpSinkFeature, otlpSinkServiceUrl := internal.OtlpSinkFeature(OTLP_SINK_NAMESPACE, "otlp-sink", OTLP_SINK_OTEL_COLLECTOR_IMAGE, logger)
-
-	// Specify the deployment of the Lumigo operator on Kind
-	lumigoOperatorFeature := internal.LumigoOperatorFeature(LUMIGO_SYSTEM_NAMESPACE, otlpSinkServiceUrl, logger)
 
 	testAppDeploymentFeature := features.New("TestApp").
 		Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
@@ -83,12 +77,7 @@ func TestLumigoOperator(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := newLumigo(namespaceName, "lumigo", operatorv1alpha1.Credentials{
-				SecretRef: operatorv1alpha1.KubernetesSecretRef{
-					Name: lumigoTokenName,
-					Key:  lumigoTokenKey,
-				},
-			}, true)
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {
@@ -173,9 +162,7 @@ func TestLumigoOperator(t *testing.T) {
 
 			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
 
-			waitCtx := context.TODO()
-
-			if err := apimachinerywait.PollImmediateUntilWithContext(waitCtx, time.Second*5, func(context.Context) (bool, error) {
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
 				logsBytes, err := os.ReadFile(logsPath)
 				if err != nil {
 					return false, err
@@ -253,25 +240,7 @@ func TestLumigoOperator(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, otlpSinkFeature, lumigoOperatorFeature, testAppDeploymentFeature)
-}
-
-func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool) *operatorv1alpha1.Lumigo {
-	return &operatorv1alpha1.Lumigo{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    map[string]string{},
-		},
-		Spec: operatorv1alpha1.LumigoSpec{
-			LumigoToken: lumigoToken,
-			Tracing: operatorv1alpha1.TracingSpec{
-				Injection: operatorv1alpha1.InjectionSpec{
-					Enabled: &injectionEnabled,
-				},
-			},
-		},
-	}
+	testEnv.Test(t, testAppDeploymentFeature)
 }
 
 func extractObjectReferences(eventLogs []plog.LogRecord) ([]corev1.ObjectReference, error) {

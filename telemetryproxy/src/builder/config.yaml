@@ -33,5 +33,6 @@ processors:
 
 replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.71.0 => ../extension/lumigoauthextension
+  - github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.71.0 => ../processor/k8sattributesprocessor
   - github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8seventsenricherprocessor v0.71.0 => ../processor/k8seventsenricherprocessor
   - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.71.0 => ../receiver/k8sobjectsreceiver
