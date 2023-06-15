@@ -164,8 +164,7 @@ func (kr *k8sobjectsreceiver) startPull(ctx context.Context, config *K8sObjectsC
 					// Fence modifications in a nested block for ease of rebasing
 					for _, item := range objects.Items {
 						object := item
-						moreLogs, err1 := kr.ensureReferencesAreKnown(ctx, &object)
-						if err1 != nil {
+						if moreLogs, err1 := kr.ensureReferencesAreKnown(ctx, &object); err1 != nil {
 							kr.setting.Logger.Error("Cannot retrieve resource versions and owner references", zap.Any("object", toObjectReference(&object)), zap.Error(err))
 						} else if moreLogs != nil && moreLogs.LogRecordCount() > 0 {
 							moreLogs.ResourceLogs().MoveAndAppendTo(logs.ResourceLogs())
@@ -214,8 +213,7 @@ func (kr *k8sobjectsreceiver) startWatch(ctx context.Context, config *K8sObjects
 			{
 				// Fence modifications in a nested block for ease of rebasing
 				object := (data.Object).(*unstructured.Unstructured)
-				moreLogs, err := kr.ensureReferencesAreKnown(ctx, object)
-				if err != nil {
+				if moreLogs, err := kr.ensureReferencesAreKnown(ctx, object); err != nil {
 					kr.setting.Logger.Error("Cannot retrieve resource versions and owner references", zap.Any("object", toObjectReference(object)), zap.Error(err))
 				} else if moreLogs != nil && moreLogs.LogRecordCount() > 0 {
 					moreLogs.ResourceLogs().MoveAndAppendTo(logs.ResourceLogs())
@@ -409,7 +407,6 @@ func (kr *k8sobjectsreceiver) ensureObjectReferenceIsKnown(ctx context.Context, 
 
 	res, err := resource.List(ctx, listOptions)
 	if err != nil {
-		kr.setting.Logger.Debug("Cannot retrieve object reference", zap.Any("objectReference", objectRef), zap.Any("listOptions", listOptions), zap.Error(err))
 		return nil, fmt.Errorf("cannot list %s/%s for resource version '%s': %w", objectRef.APIVersion, objectRef.Kind, objectRef.ResourceVersion, err)
 	}
 
