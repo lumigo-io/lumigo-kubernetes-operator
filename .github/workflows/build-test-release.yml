@@ -268,7 +268,10 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: kind-otlp-data
-          path: tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}
+          # Skip container images
+          path: |
+            tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}
+            !tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}/*.tgz
 
   all-tests:
     runs-on: ubuntu-latest
