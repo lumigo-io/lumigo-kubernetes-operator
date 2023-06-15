@@ -258,7 +258,7 @@ jobs:
         uses: docker/setup-buildx-action@v2
       - name: Run Kind tests
         working-directory: tests/kubernetes-distros/kind
-        run: go test -test.v -args -v 4
+        run: go test -timeout 15m -test.v -args -v 4
         env:
           KEEP_OTLP_DATA: true
       - run: ls -lR tests/kubernetes-distros/kind
