@@ -94,8 +94,8 @@ e2e-tests:
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f controller/Dockerfile.controller controller
-	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f telemetryproxy/Dockerfile.proxy telemetryproxy
+	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f controller/Dockerfile controller
+	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f telemetryproxy/Dockerfile telemetryproxy
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
@@ -115,23 +115,23 @@ docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy ## Build
 .PHONY: docker-buildx-manager
 docker-buildx-manager: ## Build and push docker image for the manager for cross-platform support; this target does NOT run unit tests, it is meant for CI/CD
 	(cd controller && \
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.controller > Dockerfile.controller.cross && \
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
-	docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.controller.cross . && \
+	docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.cross . && \
 	- docker buildx rm project-v3-builder && \
-	rm Dockerfile.controller.cross && \
+	rm Dockerfile.cross && \
 	)
 
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
 	( cd telemetryproxy && \
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.proxy > Dockerfile.proxy.cross && \
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
-	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.proxy.cross --build-arg "version=$(VERSION)" . && \
+	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
 	- docker buildx rm project-v3-builder && \
-	rm Dockerfile.proxy.cross )
+	rm Dockerfile.cross )
 
 ##@ Deployment
 

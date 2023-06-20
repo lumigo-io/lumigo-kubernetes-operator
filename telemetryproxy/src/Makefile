@@ -13,10 +13,10 @@ GOTEST=$(GOCMD) test
 GOOS=$(shell $(GOCMD) env GOOS)
 GOARCH=$(shell $(GOCMD) env GOARCH)
 
-TOOLS_MOD_DIR    := $(SRC_ROOT)/internal/tools
+TOOLS_MOD_DIR    := $(SRC_ROOT)internal/tools
 TOOLS_MOD_REGEX  := "\s+_\s+\".*\""
 TOOLS_PKG_NAMES  := $(shell grep -E $(TOOLS_MOD_REGEX) < $(TOOLS_MOD_DIR)/tools.go | tr -d " _\"")
-TOOLS_BIN_DIR    := $(SRC_ROOT)/.tools
+TOOLS_BIN_DIR    := $(SRC_ROOT).tools
 TOOLS_BIN_NAMES  := $(addprefix $(TOOLS_BIN_DIR)/, $(notdir $(TOOLS_PKG_NAMES)))
 
 .PHONY: install-tools

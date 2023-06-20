@@ -2,7 +2,8 @@ go 1.20
 
 use (
 	./controller/src
-	./telemetryproxy/src
+	// ./telemetryproxy/src/processor/k8sdataenricherprocessor
+	// ./telemetryproxy/src/internal/tools
 	./tests
 	./tools
 )

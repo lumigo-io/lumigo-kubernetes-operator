@@ -256,7 +256,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 					}
 
 					if len(traceBytes) < 1 {
-						return false, err
+						return false, nil
 					}
 
 					client := c.Client()
@@ -300,6 +300,10 @@ func TestLumigoOperatorTraces(t *testing.T) {
 						}
 					}
 
+					if err := scanner.Err(); err != nil {
+						return false, err
+					}
+
 					return spansFound, nil
 				})); err != nil {
 				t.Fatalf("Failed to wait for traces: %v", err)
@@ -322,7 +326,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 					}
 
 					if len(traceBytes) < 1 {
-						return false, err
+						return false, nil
 					}
 
 					client := c.Client()

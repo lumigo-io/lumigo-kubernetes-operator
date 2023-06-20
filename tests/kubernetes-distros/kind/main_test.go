@@ -26,7 +26,7 @@ var (
 const (
 	DEFAULT_KIND_NODE_IMAGE        = "kindest/node:v1.27.1"
 	LUMIGO_SYSTEM_NAMESPACE        = "lumigo-system"
-	OTLP_SINK_OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector:0.76.1"
+	OTLP_SINK_OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector:0.80.0"
 	OTLP_SINK_NAMESPACE            = "otlp-sink"
 )
 
@@ -171,11 +171,11 @@ func TestMain(m *testing.M) {
 	telemetryProxyImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_PROXY_IMG_NAME, runId)
 	telemetryProxyImageArchivePath := filepath.Join(tmpDir, "telemetry-proxy-controller.tgz")
 
-	testClientJsImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_CLIENT_IMG_NAME, runId)
-	testClientJsImageArchivePath := filepath.Join(tmpDir, "testClientJsImageName.tgz")
+	testJsClientImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_CLIENT_IMG_NAME, runId)
+	testJsClientImageArchivePath := filepath.Join(tmpDir, "test-js-client.tgz")
 
-	testServerJsImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_SERVER_IMG_NAME, runId)
-	testServerJsImageArchivePath := filepath.Join(tmpDir, "testJsAppServerImage.tgz")
+	testJsServerImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_SERVER_IMG_NAME, runId)
+	testJsServerImageArchivePath := filepath.Join(tmpDir, "test-js-server.tgz")
 
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
@@ -183,9 +183,9 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextKeySendDataToLumigo, isLumigoTokenPresent)
 	ctx = context.WithValue(ctx, internal.ContextKeyLumigoToken, lumigoToken)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorControllerImage, controllerImageName)
-	ctx = context.WithValue(ctx, internal.ContextKeyOperatorProxyImage, telemetryProxyImageName)
-	ctx = context.WithValue(ctx, internal.ContextTestAppJsClientImageName, testClientJsImageName)
-	ctx = context.WithValue(ctx, internal.ContextTestAppJsServerImageName, testServerJsImageName)
+	ctx = context.WithValue(ctx, internal.ContextKeyOperatorTelemetryProxyImage, telemetryProxyImageName)
+	ctx = context.WithValue(ctx, internal.ContextTestAppJsClientImageName, testJsClientImageName)
+	ctx = context.WithValue(ctx, internal.ContextTestAppJsServerImageName, testJsServerImageName)
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
@@ -194,19 +194,17 @@ func TestMain(m *testing.M) {
 	lumigoOperatorFeature := internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, otlpSinkK8sServiceUrl, logrWrapper)
 
 	testEnv.Setup(
+		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),
+		internal.BuildDockerImageAndExportArchive(telemetryProxyImageName, filepath.Join(repoRoot, "telemetryproxy"), telemetryProxyImageArchivePath, logger),
+		internal.BuildDockerImageAndExportArchive(testJsClientImageName, filepath.Join(cwd, "apps", "client"), testJsClientImageArchivePath, logger),
+		internal.BuildDockerImageAndExportArchive(testJsServerImageName, filepath.Join(cwd, "apps", "server"), testJsServerImageArchivePath, logger),
+
 		envfuncs.CreateKindClusterWithConfig(kindClusterName, kindNodeImageVal, kindConfigPath),
 
-		// Build and import operator images
-		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, controllerImageArchivePath, logger),
-		internal.BuildDockerImageAndExportArchive(telemetryProxyImageName, filepath.Join(repoRoot, "telemetryproxy"), telemetryProxyImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, telemetryProxyImageArchivePath, logger),
-
-		// Build and import test app images
-		internal.BuildDockerImageAndExportArchive(testClientJsImageName, filepath.Join(cwd, "apps", "client"), testClientJsImageArchivePath, logger),
-		internal.LoadDockerImageArchiveToCluster(kindClusterName, testClientJsImageArchivePath, logger),
-		internal.BuildDockerImageAndExportArchive(testServerJsImageName, filepath.Join(cwd, "apps", "server"), testServerJsImageArchivePath, logger),
-		internal.LoadDockerImageArchiveToCluster(kindClusterName, testServerJsImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, testJsClientImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, testJsServerImageArchivePath, logger),
 		/*
 		 * Otel Collector image is on Docker hub, no need to pull it into Kind (pulling into Kind
 		 * works only for local image, in the local Docker daemon).

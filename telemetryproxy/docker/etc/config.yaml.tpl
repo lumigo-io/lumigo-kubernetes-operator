@@ -100,36 +100,29 @@ exporters:
 {{- end }}
 
 processors:
-  k8sattributes:
+  k8sdataenricherprocessor:
     auth_type: serviceAccount
-    passthrough: false
-    extract:
-      metadata:
-        # Core
-        - k8s.namespace.name
-        - k8s.namespace.uid
-        - k8s.pod.name
-        - k8s.pod.start_time
-        - k8s.node.name
-        # Apps
-        - k8s.daemonset.name
-        - k8s.daemonset.uid
-        - k8s.deployment.name
-        - k8s.deployment.uid
-        - k8s.replicaset.name
-        - k8s.replicaset.uid
-        - k8s.statefulset.name
-        - k8s.statefulset.uid
-        # Batch
-        - k8s.cronjob.name
-        - k8s.cronjob.uid
-        - k8s.job.name
-        - k8s.job.uid
-    pod_association:
-    - sources:
-      - from: resource_attribute
-        name: k8s.pod.uid
-  k8seventsenricherprocessor: {}
+{{- range $i, $namespace := $namespaces }}
+  transform/add_ns_attributes_ns_{{ $namespace.name }}:
+    log_statements:
+    - context: resource
+      statements:
+      - set(attributes["k8s.namespace.name"], "{{ $namespace.name }}")
+      - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}")
+{{- end }}
+  filter/only_monitored_namespaces:
+    error_mode: ignore
+    logs:
+      include:
+        match_type: regexp
+        resource_attributes:
+        # We add k8s.namespace.name in the 'transform/add_ns_attributes_ns_<$namespace.name>' processor
+{{- $namespaceNames := slice }}
+{{- range $i, $namespace := $namespaces }}
+{{- $namespaceNames = $namespaceNames | append $namespace.name }}
+{{- end }}
+        - key: k8s.namespace.name
+          value: "{{ join $namespaceNames "|" }}"
   transform/set_k8s_objects_scope:
     log_statements:
     - context: scope
@@ -156,24 +149,16 @@ processors:
       statements:
       - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
       - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
-    metric_statements:
-    - context: resource
-      statements:
-      - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
-      - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
+#   metric_statements:
+#   - context: resource
+#     statements:
+#     - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
+#     - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
     log_statements:
     - context: resource
       statements:
       - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
       - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
-{{- range $i, $namespace := $namespaces }}
-  transform/inject_ns_into_resource_{{ $namespace.name }}:
-    log_statements:
-    - context: resource
-      statements:
-      - set(attributes["k8s.namespace.name"], "{{ $namespace.name }}")
-      - set(attributes["k8s.namespace.uid"], "{{ $namespace.uid }}")
-{{- end }}
 
 service:
   telemetry:
@@ -194,7 +179,7 @@ service:
       receivers:
       - otlp
       processors:
-      - k8sattributes
+      - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
       exporters:
       - otlphttp/lumigo
@@ -208,7 +193,9 @@ service:
       - k8sobjects/objects_ns_{{ $namespace.name }}
       processors:
       - transform/set_k8s_objects_scope
-      - transform/inject_ns_into_resource_{{ $namespace.name }}
+      - k8sdataenricherprocessor
+      - transform/add_ns_attributes_ns_{{ $namespace.name }}
+      - filter/only_monitored_namespaces
       - transform/inject_operator_details_into_resource
       - batch/k8s_objects_ns_{{ $namespace.name }}
       exporters:
@@ -221,8 +208,9 @@ service:
       - k8sobjects/events_ns_{{ $namespace.name }}
       processors:
       - transform/set_k8s_events_scope
-      - k8seventsenricherprocessor
-      - transform/inject_ns_into_resource_{{ $namespace.name }}
+      - k8sdataenricherprocessor
+      - transform/add_ns_attributes_ns_{{ $namespace.name }}
+      - filter/only_monitored_namespaces
       - transform/inject_operator_details_into_resource
       - batch/k8s_events_ns_{{ $namespace.name }}
       exporters:

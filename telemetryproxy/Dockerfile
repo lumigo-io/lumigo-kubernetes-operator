@@ -4,7 +4,7 @@ FROM golang:1.20-alpine AS telemetry-proxy-builder
 ARG version='dev'
 ENV VERSION=${version}
 
-RUN apk add --update make
+RUN apk add --update make git
 
 ADD ./src /src
 WORKDIR /src

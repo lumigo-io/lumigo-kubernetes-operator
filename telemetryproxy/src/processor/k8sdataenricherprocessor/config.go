@@ -1,4 +1,4 @@
-// Copyright 2019 OpenTelemetry Authors
+// Copyright 2023 Lumigo
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,4 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package observability
+package k8sdataenricherprocessor // import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor"
+
+import (
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
+)
+
+type Config struct {
+	k8sconfig.APIConfig `mapstructure:",squash"`
+}
