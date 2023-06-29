@@ -65,7 +65,7 @@ Deploy the Lumigo Kubernetes operator with:
 
 ```sh
 make docker-build docker-push
-helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "debug.enabled=true"
 ```
 
 To avoid strange issues with Docker caching the wrong images in your test environment, it is usually a better to always build a new image tag:
@@ -73,9 +73,10 @@ To avoid strange issues with Docker caching the wrong images in your test enviro
 ```sh
 export IMG_VERSION=1 # Incremend this every time to try a deploy
 make docker-build docker-push
-helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}"
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" --set "debug.enabled=true"
 ```
 
+(Notice that the `--set "debug.enabled=true"` is of course optional, but in development is very handy, as it will, among other things, make the `telemetry-proxy` container log which OTLP data it sends upstream.)
 Changing the target Lumigo backend is _not_ supported with Helm (because we do not expect end users ever to have to).
 
 ### Deploy with Kustomize
@@ -175,3 +176,25 @@ The Helm website has a [handy guide to the basics](https://helm.sh/docs/chart_te
 ## Change version of the OpenTelemetry Collector Contrib to be used as telemetry-proxy
 
 The [telemetryproxy/VERSION.otelcontibcol](./telemetryproxy/VERSION.otelcontibcol) file contains the _release name_ of the OpenTelemetry Collector Contrib to be used from the [lumigo-io/opentelemetry-collector-contrib](https://github.com/lumigo-io/opentelemetry-collector-contrib/releases) repository.
+
+## Automated tests
+
+### Unit tests
+
+The unit tests for the controller are run from the root of the repository with:
+
+```sh
+make test
+```
+
+### End-to-end Kind tests
+
+End-to-end tests run the entire operator using [Kind](https://github.com/kubernetes-sigs/kind/) via the [E2E-Framework](https://github.com/kubernetes-sigs/e2e-framework) and are run from the root of the repository with:
+
+```sh
+export IMG_VERSION=<incremental_number> # Avoid image cache issues
+make docker-build docker-push
+(cd tests/kubernetes-distros/kind && go test)
+```
+
+**Note:** The build of the `controller` and `telemetry-proxy` images assume the local repository setup documented in the [Local testing with Minikube](#local-testing-with-minikube) section.

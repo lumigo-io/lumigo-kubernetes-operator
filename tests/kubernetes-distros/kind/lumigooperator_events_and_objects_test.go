@@ -1,7 +1,6 @@
 package kind
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,14 +42,8 @@ var (
 // 2. A Lumigo operator installed into the Kubernetes cluster referenced by the
 //    `kubectl` configuration
 
-func TestLumigoOperator(t *testing.T) {
+func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 	logger := testr.New(t)
-
-	// Specify the deployment of the OTLP Sink on Kind
-	otlpSinkFeature, otlpSinkServiceUrl := internal.OtlpSinkFeature(OTLP_SINK_NAMESPACE, "otlp-sink", OTLP_SINK_OTEL_COLLECTOR_IMAGE, logger)
-
-	// Specify the deployment of the Lumigo operator on Kind
-	lumigoOperatorFeature := internal.LumigoOperatorFeature(LUMIGO_SYSTEM_NAMESPACE, otlpSinkServiceUrl, logger)
 
 	testAppDeploymentFeature := features.New("TestApp").
 		Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
@@ -83,12 +77,7 @@ func TestLumigoOperator(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := newLumigo(namespaceName, "lumigo", operatorv1alpha1.Credentials{
-				SecretRef: operatorv1alpha1.KubernetesSecretRef{
-					Name: lumigoTokenName,
-					Key:  lumigoTokenKey,
-				},
-			}, true)
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {
@@ -168,14 +157,86 @@ func TestLumigoOperator(t *testing.T) {
 
 			return ctx
 		}).
-		Assess("All resourceVersions mentioned in event's involve objects are available as objects", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+		Assess("All events have rootOwnerReferences", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
 			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
 
-			waitCtx := context.TODO()
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
 
-			if err := apimachinerywait.PollImmediateUntilWithContext(waitCtx, time.Second*5, func(context.Context) (bool, error) {
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				eventLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if e, _, err := exportRequestToLogRecords(exportRequest); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						eventLogs = append(eventLogs, e...)
+					}
+				}
+
+				if len(eventLogs) < 1 {
+					// No events received yet
+					return false, nil
+				}
+
+				eventLogsMissingRootOwnerReferences := make([]eventWithRootOwnerReference, 0)
+				for _, eventLog := range eventLogs {
+					event := eventWithRootOwnerReference{}
+					if err := json.Unmarshal([]byte(eventLog.Body().AsString()), &event); err != nil {
+						t.Fatalf("Cannot extract root owner reference from event log: %v; %v", eventLog.Body().AsRaw(), err)
+					}
+
+					// We skip the Watch events
+					if event.TypeMeta.APIVersion == "v1" && event.TypeMeta.Kind == "Event" && event.RootOwnerReference.APIVersion == "" {
+						eventLogsMissingRootOwnerReferences = append(eventLogsMissingRootOwnerReferences, event)
+					} else if event.InvolvedObject.APIVersion == "v1" && event.InvolvedObject.Kind == "Pod" {
+						if !((event.RootOwnerReference.APIVersion == "apps/v1" && event.RootOwnerReference.Kind == "Deployment") ||
+							(event.RootOwnerReference.APIVersion == "batch/v1" && event.RootOwnerReference.Kind == "CronJob")) {
+							t.Fatalf("Wrong root-owner reference on pod event, points to neither deployment nor cronjob: %v", event.RootOwnerReference)
+						}
+					}
+				}
+
+				if len(eventLogsMissingRootOwnerReferences) > 0 {
+					var buffer bytes.Buffer
+					buffer.WriteString(fmt.Sprintf("Missing %d root-owner references out of %d events\n", len(eventLogsMissingRootOwnerReferences), len(eventLogs)))
+					for _, event := range eventLogsMissingRootOwnerReferences {
+						buffer.Write([]byte(fmt.Sprintf("* %s\n", event.UID)))
+					}
+
+					return false, fmt.Errorf(buffer.String())
+				}
+
+				t.Logf("All %d events have root-owner references", len(eventLogs))
+				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for logs: %v", err)
+			}
+
+			return ctx
+		}).
+		Assess("All resourceVersions referred to as in event involved objects are sent as objects in the 'lumigo-operator.k8s-objects' logs scope", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
 				logsBytes, err := os.ReadFile(logsPath)
 				if err != nil {
 					return false, err
@@ -189,12 +250,13 @@ func TestLumigoOperator(t *testing.T) {
 				objectLogs := make([]plog.LogRecord, 0)
 
 				/*
-				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'
+				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
 				 */
-				logsScanner := bufio.NewScanner(bytes.NewBuffer(logsBytes))
-				for logsScanner.Scan() {
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
 					exportRequest := plogotlp.NewExportRequest()
-					exportRequest.UnmarshalJSON(logsScanner.Bytes())
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
 					e, o, err := exportRequestToLogRecords(exportRequest)
 					if err != nil {
@@ -204,6 +266,11 @@ func TestLumigoOperator(t *testing.T) {
 					objectLogs = append(objectLogs, o...)
 				}
 
+				if len(eventLogs) < 1 {
+					// No events received yet
+					return false, nil
+				}
+
 				// We will have repetitions in this one, when we get multiple events on
 				// the same uid+resourceVersion combo
 				objects, err := extractUnstructuredObjects(objectLogs)
@@ -211,9 +278,21 @@ func TestLumigoOperator(t *testing.T) {
 					t.Fatalf("cannot extract unstructured objects from object logs: %v", err)
 				}
 
-				objectResourceVersions := make([]string, len(objects))
-				for i, object := range objects {
-					objectResourceVersions[i] = object.GetKind() + "/" + string(object.GetUID()) + "@" + object.GetResourceVersion()
+				objectResourceVersions := make([]string, 0)
+				for _, object := range objects {
+					versionedObject := object
+					if object.GetKind() == "" {
+						// Likely we are looking at a Watch event
+						raw := object.Object
+						if nestedObject, found := raw["object"]; found {
+							versionedObject = unstructured.Unstructured{
+								Object: nestedObject.(map[string]interface{}),
+							}
+						}
+					}
+
+					objectResourceVersion := string(versionedObject.GetUID()) + "@" + versionedObject.GetResourceVersion()
+					objectResourceVersions = append(objectResourceVersions, objectResourceVersion)
 				}
 
 				objectReferences, err := extractObjectReferences(eventLogs)
@@ -224,9 +303,9 @@ func TestLumigoOperator(t *testing.T) {
 				missingRefs := make([]string, 0)
 				for _, objectReference := range objectReferences {
 					if objectReference.Kind != "" && objectReference.UID != "" && objectReference.ResourceVersion != "" {
-						ref := fmt.Sprintf("%s/%s@%s", objectReference.Kind, objectReference.UID, objectReference.ResourceVersion)
+						ref := fmt.Sprintf("%s@%s", objectReference.UID, objectReference.ResourceVersion)
 						if !slices.Contains(objectResourceVersions, ref) {
-							missingRefs = append(missingRefs, ref)
+							missingRefs = append(missingRefs, fmt.Sprintf("%s/%s@%s", objectReference.Kind, objectReference.UID, objectReference.ResourceVersion))
 						}
 					}
 				}
@@ -240,7 +319,8 @@ func TestLumigoOperator(t *testing.T) {
 						buffer.Write([]byte(fmt.Sprintf("* %s\n", missingRef)))
 					}
 
-					return false, fmt.Errorf(buffer.String())
+					t.Errorf(buffer.String())
+					return false, nil
 				}
 
 				t.Logf("Found all references out of %d events", len(eventLogs))
@@ -253,25 +333,12 @@ func TestLumigoOperator(t *testing.T) {
 		}).
 		Feature()
 
-	testEnv.Test(t, otlpSinkFeature, lumigoOperatorFeature, testAppDeploymentFeature)
+	testEnv.Test(t, testAppDeploymentFeature)
 }
 
-func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool) *operatorv1alpha1.Lumigo {
-	return &operatorv1alpha1.Lumigo{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    map[string]string{},
-		},
-		Spec: operatorv1alpha1.LumigoSpec{
-			LumigoToken: lumigoToken,
-			Tracing: operatorv1alpha1.TracingSpec{
-				Injection: operatorv1alpha1.InjectionSpec{
-					Enabled: &injectionEnabled,
-				},
-			},
-		},
-	}
+type eventWithRootOwnerReference struct {
+	corev1.Event
+	RootOwnerReference corev1.ObjectReference `json:"rootOwnerReference,omitempty"`
 }
 
 func extractObjectReferences(eventLogs []plog.LogRecord) ([]corev1.ObjectReference, error) {

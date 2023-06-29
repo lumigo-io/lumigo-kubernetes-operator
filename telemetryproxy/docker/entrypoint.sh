@@ -11,19 +11,20 @@ readonly NAMESPACES_FILE_SHA_PATH="${NAMESPACES_FILE_PATH}.sha1"
 readonly DEFAULT_MEMORY_LIMIT_MIB=4000
 readonly NO_MEMORY_LIMIT=9223372036854771712
 
-if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
-    memory_limit_bytes=$(</sys/fs/cgroup/memory/memory.limit_in_bytes)
+readonly CGROUPS_V1_MAX_MEMORY_PATH="/sys/fs/cgroup/memory/memory.limit_in_bytes"
+readonly CGROUPS_V2_MAX_MEMORY_PATH="/sys/fs/cgroup/memory.max"
 
-    if [ -n "${memory_limit_bytes}" ] && [ "${memory_limit_bytes}" != "${NO_MEMORY_LIMIT}" ]; then
-        # Memory limits are set in the container
-        memory_limit_mib=$(( ${memory_limit_bytes} / 1048576 ))
-    
-        if [ -n "${RESERVED_MEMORY_MIB}" ]; then
-            # TODO Check memory limit bigger than 100
-            reserved_memory=${RESERVED_MEMORY_MIB}
-            memory_limit_mib=$(( a - reserved_memory ))
-        fi
-    fi
+if [ -f "${CGROUPS_V1_MAX_MEMORY_PATH}" ]; then
+    # cgroups v1
+    memory_limit_bytes=$(<${CGROUPS_V1_MAX_MEMORY_PATH})
+elif [ -f "${CGROUPS_V2_MAX_MEMORY_PATH}" ]; then
+    # cgroups v2
+    memory_limit_bytes=$(<${CGROUPS_V2_MAX_MEMORY_PATH})
+fi
+
+if [ -n "${memory_limit_bytes}" ] && [ "${memory_limit_bytes}" != "${NO_MEMORY_LIMIT}" ]; then
+    # Memory limits are set in the container
+    memory_limit_mib=$(( ${memory_limit_bytes} / 1048576 ))
 fi
 
 if [ -n "${memory_limit_mib}" ]; then
