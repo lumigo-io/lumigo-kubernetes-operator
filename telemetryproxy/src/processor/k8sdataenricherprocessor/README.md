@@ -10,12 +10,50 @@ This processor ensures that we send a variety of necessary data to the downstrea
 
 ## Enhancements
 
-## Trace data
+### Trace data
 
-For trace data, it ensures that the `k8s.namespace.uid`, `k8s.deployment.uid` and `k8s.cronjob.uid` resource attributes are set if the `k8s.namespace.name`, `k8s.deployment.name` and `k8s.cronjob.name` are, respectively.
-This addresses a limitation of the [`k8sattributesprocessor`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/k8sattributesprocessor) that, since it only uses the owner-reference data from the pod, rather than also keeping track of `apps/v1.Deployment` and `apps/v1.CronJob` object, can guess the name of the deployment and the cronjob by parsing the name of the `apps/v1.ReplicaSet` and `batch/v1.Job`, but not find their UIDs.
+For trace data, it ensures that the following resource attributes are set:
 
-## Log data
+* `k8s.pod.name`
+* `k8s.pod.uid` (this is should be provided by the Lumigo OpenTelemetry distros through resource detectors, but this processor has a fallback implementation of pod identification based on the ip address of the connection to the collector, borrowed from [`k8sattributesprocessor`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/k8sattributesprocessor))
+* `k8s.namespace.name`
+* `k8s.namespace.uid`
+
+Other attributes are set depending on the owner-reference chain originating in the pod.
+
+If the the pod belongs to a daemon set, the following attributes are set:
+
+* `k8s.daemonset.name`
+* `k8s.daemonset.uid`
+
+If the the pod belongs to a replica set, the following attributes are set:
+
+* `k8s.replicaset.name`
+* `k8s.replicaset.uid`
+
+If the pod's replica set is owned by a deployment, the following attributes are set:
+
+* `k8s.deployment.name`
+* `k8s.deployment.uid`
+
+If the the pod belongs to a stateful set, the following attributes are set:
+
+* `k8s.stateful.name`
+* `k8s.stateful.uid`
+
+If the the pod belongs to a job, the following attributes are set:
+
+* `k8s.job.name`
+* `k8s.job.uid`
+
+If the pod's job is owned by a cronjob, the following attributes are set:
+
+* `k8s.cronjob.name`
+* `k8s.cronjob.uid`
+
+These capabilities (and more) are also nominally present in the [`k8sattributesprocessor`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/k8sattributesprocessor), but our tests hsowed that to be entirely unreliable in the face of the Kube API's eventual consistency and the configuration reload of the telemetry-proxy.
+
+### Log data
 
 The goal is to ensure we can have smooth and easy correlation of issues (e.g., `v1.Event` objects with `WARNING` type) with the history of the objects they affect (which, in `v1.Event` terms, it's the object referenced to by the `involvedObject` field).
 Here we do two things:
@@ -25,6 +63,7 @@ Here we do two things:
   For example, if the `involvedObject` points to a `v1.Pod`, and the pod is scheduled by a `v1.ReplicaSet` owned by a `v1.Deployment`, the `rootOwnerReference` is the deployment.
   In cases in which the hierarchy has only one level (e.g., an event affecting a deployment or a standalone pod), the `rootOwnerReference` will be equivalent to the `involvedObject`.
   In Lumigo, the `rootOwnerReference` allows us to group events into issues that make immediate sense for the user: for example, if multiple pods in the same deployment crash, the issue is almost always to be found in its [`v1.PodTemplateSpec`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-template-v1/#PodTemplateSpec) rather than the single pods.
+
 2. If a specific [`resourceVersion`](https://kubernetes.io/docs/reference/using-api/api-concepts/#efficient-detection-of-changes) of an object is sent downstream through as an `involvedObject` of an `v1.Event`, this processor will try _really hard_ to ensure that that specific `resourceVersion` is sent downstream in its entirety in the same format as used by [`k8sobjectsreceiver`](https://github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver).
   In the Lumigo backend, this allows us to bridge the gap between `resourceVersions` and [`generations`](https://stackoverflow.com/a/66092577/6188451) (that is, the "versions" of the workload resources with changes that actually affect which pods are scheduled), and know what was the actual structure of an object affected by an issue.
 

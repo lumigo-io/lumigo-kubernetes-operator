@@ -3,14 +3,18 @@ package internal // import "github.com/open-telemetry/opentelemetry-collector-co
 import (
 	"context"
 	"fmt"
+	"net"
 	"reflect"
+	"strings"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.opentelemetry.io/collector/client"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -34,6 +38,8 @@ type KubeClient struct {
 	logger *zap.Logger
 
 	namespaceInformer cache.SharedInformer
+
+	podUIDCache *lru.Cache[types.UID, corev1.Pod]
 
 	podCache    lruWithIndexer[corev1.Pod]
 	podInformer cache.SharedInformer
@@ -75,7 +81,7 @@ type lruWithIndexer[V any] struct {
 }
 
 func (l *lruWithIndexer[V]) Add(object V) bool {
-	objectKey, objectResourceVersionKey := l.indexFunc(&object)
+	objectResourceVersionKey, objectKey := l.indexFunc(&object)
 	// For eviction we check only the key with the specific resource version;
 	// we expect the object-generic key to be evicted very often
 
@@ -116,6 +122,14 @@ func (l *lruWithIndexer[V]) Keys() []string {
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface) (*KubeClient, error) {
+	// We are going to store only pods for now (we need it for the mapping of k8s.pod.uid
+	// to other data for traces), and we keep this cache larger, so that we have less chance
+	// to evict even on large clusters
+	uidToObjectCache, err := lru.New[types.UID, corev1.Pod](defaultCacheMaxEntries * 15)
+	if err != nil {
+		return nil, err
+	}
+
 	// There's usually many more pods than anything else
 	podLRU, err := lru.New[string, corev1.Pod](defaultCacheMaxEntries * 10)
 	if err != nil {
@@ -155,8 +169,9 @@ func New(logger *zap.Logger, client kubernetes.Interface) (*KubeClient, error) {
 	objectResourceVersions := make(chan runtime.Object, 200)
 
 	return &KubeClient{
-		client: client,
-		logger: logger,
+		client:      client,
+		logger:      logger,
+		podUIDCache: uidToObjectCache,
 		namespaceInformer: cache.NewSharedInformer(
 			&cache.ListWatch{
 				ListFunc:  namespaceInformerListFunc(client),
@@ -336,8 +351,8 @@ func compactObjectMeta(o metav1.ObjectMeta) metav1.ObjectMeta {
 }
 
 func metadataToCacheKeys(objectMeta metav1.ObjectMeta) (string, string) {
-	return fmt.Sprintf("%s/%s", objectMeta.Namespace, objectMeta.Name),
-		fmt.Sprintf("%s/%s@%s", objectMeta.Namespace, objectMeta.Name, objectMeta.ResourceVersion)
+	return fmt.Sprintf("%s/%s@%s", objectMeta.Namespace, objectMeta.Name, objectMeta.ResourceVersion),
+		fmt.Sprintf("%s/%s", objectMeta.Namespace, objectMeta.Name)
 }
 
 func cachedEventHandler[T any](c *lruWithIndexer[T], newObjects chan runtime.Object, logger *zap.Logger) cache.ResourceEventHandler {
@@ -425,116 +440,6 @@ func (c *KubeClient) Start() error {
 func (c *KubeClient) Stop() {
 	// Nothing to do: the Kube client does not stop when the processor utilizing it does,
 	// or we loose all the caches
-}
-
-func (c *KubeClient) EnsureObjectReferenceIsKnown(objectReference corev1.ObjectReference) error {
-	c.logger.Debug("Ensuring object reference is known", zap.Any("object-reference", objectReference))
-	switch objectReference.GroupVersionKind() {
-	case V1Pod:
-		if _, err := c.getPod(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
-			return err
-		}
-	case AppsV1DaemonSet:
-		if _, err := c.getDaemonSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
-			return err
-		}
-	case AppsV1Deployment:
-		if _, err := c.getDeployment(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
-			return err
-		}
-	case AppsV1ReplicaSet:
-		if _, err := c.getReplicaSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
-			return err
-		}
-	case AppsV1StatefulSet:
-		if _, err := c.getStatefulSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
-			return err
-		}
-	case BatchV1CronJob:
-		if _, err := c.getCronJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
-			return err
-		}
-	case BatchV1Job:
-		if _, err := c.getJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
-			return err
-		}
-	default:
-		c.logger.Debug("Unexpected GVK of object reference", zap.Any("object-reference", objectReference))
-	}
-
-	return nil
-}
-
-func (c *KubeClient) RegisterNamespace(namespace *corev1.Namespace) {
-	registerObject(c.namespaceInformer, c.logger, "namespace", namespace)
-}
-
-func (c *KubeClient) RegisterPod(pod *corev1.Pod) {
-	c.podCache.Add(*pod)
-}
-
-func (c *KubeClient) RegisterDaemonSet(daemonSet *appsv1.DaemonSet) {
-	c.daemonSetCache.Add(*daemonSet)
-}
-
-func (c *KubeClient) RegisterDeployment(deployment *appsv1.Deployment) {
-	c.deploymentCache.Add(*deployment)
-}
-
-func (c *KubeClient) RegisterReplicaSet(replicaSet *appsv1.ReplicaSet) {
-	c.replicaSetCache.Add(*replicaSet)
-}
-
-func (c *KubeClient) RegisterStatefulSet(statefulSet *appsv1.StatefulSet) {
-	c.statefulSetCache.Add(*statefulSet)
-}
-
-func (c *KubeClient) RegisterCronJob(cronJob *batchv1.CronJob) {
-	c.cronJobCache.Add(*cronJob)
-}
-
-func (c *KubeClient) RegisterJob(job *batchv1.Job) {
-	c.jobCache.Add(*job)
-}
-
-func registerObject(informer cache.SharedInformer, logger *zap.Logger, kind string, object runtime.Object) {
-	store := informer.GetStore()
-	if err := store.Add(object); err != nil {
-		logger.Debug("Error while manually registering "+kind+" in "+kind+"'s store", zap.Any(kind, object), zap.Error(err))
-	} else {
-		logger.Debug("Manually registered "+kind+" in "+kind+"'s store", zap.Any(kind, object))
-	}
-}
-
-func (c *KubeClient) GetNamespaceUID(namespaceName string) (types.UID, error) {
-	// TODO Harden with retry
-	if ns, exists, err := c.namespaceInformer.GetStore().GetByKey(namespaceName); err != nil {
-		return types.UID(""), fmt.Errorf("cannot retrieve '%s' v1.Namespace: %w", namespaceName, err)
-	} else if exists {
-		if namespace, ok := ns.(*corev1.Namespace); !ok {
-			return types.UID(""), fmt.Errorf("object found in the namespace cache for the '%s' key is not a v1.Namespace object: %+v", namespaceName, ns)
-		} else {
-			return namespace.UID, nil
-		}
-	} else {
-		return types.UID(""), fmt.Errorf("namespace '%s' not found", namespaceName)
-	}
-}
-
-func (c *KubeClient) GetCronJobUID(cronJobName, namespaceName string) (types.UID, error) {
-	if cronJob, err := c.getCronJob(cronJobName, namespaceName, ""); err != nil {
-		return types.UID(""), err
-	} else {
-		return cronJob.UID, nil
-	}
-}
-
-func (c *KubeClient) GetDeploymentUID(deploymentName, namespaceName string) (types.UID, error) {
-	if deployment, err := c.getDeployment(deploymentName, namespaceName, ""); err != nil {
-		return types.UID(""), err
-	} else {
-		return deployment.UID, nil
-	}
 }
 
 func namespaceInformerListFunc(client kubernetes.Interface) cache.ListFunc {
@@ -647,6 +552,303 @@ func createEventHandler(logger *zap.Logger, kind string) cache.ResourceEventHand
 	}
 }
 
+func (c *KubeClient) EnsureObjectReferenceIsKnown(objectReference corev1.ObjectReference) error {
+	c.logger.Debug("Ensuring object reference is known", zap.Any("object-reference", objectReference))
+	gvk := objectReference.GroupVersionKind()
+	switch gvk {
+	case V1Pod:
+		if _, found, err := c.getPod(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+			return err
+		} else if !found {
+			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
+		}
+	case AppsV1DaemonSet:
+		if _, found, err := c.getDaemonSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+			return err
+		} else if !found {
+			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
+		}
+	case AppsV1Deployment:
+		if _, found, err := c.getDeployment(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+			return err
+		} else if !found {
+			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
+		}
+	case AppsV1ReplicaSet:
+		if _, found, err := c.getReplicaSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+			return err
+		} else if !found {
+			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
+		}
+	case AppsV1StatefulSet:
+		if _, found, err := c.getStatefulSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+			return err
+		} else if !found {
+			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
+		}
+	case BatchV1CronJob:
+		if _, found, err := c.getCronJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+			return err
+		} else if !found {
+			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
+		}
+	case BatchV1Job:
+		if _, found, err := c.getJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+			return err
+		} else if !found {
+			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
+		}
+	default:
+		c.logger.Debug("Unexpected GVK of object reference", zap.Any("object-reference", objectReference))
+	}
+
+	return nil
+}
+
+func (c *KubeClient) RegisterNamespace(namespace *corev1.Namespace) {
+	registerObject(c.namespaceInformer, c.logger, "namespace", namespace)
+}
+
+func (c *KubeClient) RegisterPod(pod *corev1.Pod) {
+	c.podCache.Add(*pod)
+	c.podUIDCache.Add(pod.UID, *pod)
+}
+
+func (c *KubeClient) RegisterDaemonSet(daemonSet *appsv1.DaemonSet) {
+	c.daemonSetCache.Add(*daemonSet)
+}
+
+func (c *KubeClient) RegisterDeployment(deployment *appsv1.Deployment) {
+	c.deploymentCache.Add(*deployment)
+}
+
+func (c *KubeClient) RegisterReplicaSet(replicaSet *appsv1.ReplicaSet) {
+	c.replicaSetCache.Add(*replicaSet)
+}
+
+func (c *KubeClient) RegisterStatefulSet(statefulSet *appsv1.StatefulSet) {
+	c.statefulSetCache.Add(*statefulSet)
+}
+
+func (c *KubeClient) RegisterCronJob(cronJob *batchv1.CronJob) {
+	c.cronJobCache.Add(*cronJob)
+}
+
+func (c *KubeClient) RegisterJob(job *batchv1.Job) {
+	c.jobCache.Add(*job)
+}
+
+func registerObject(informer cache.SharedInformer, logger *zap.Logger, kind string, object runtime.Object) {
+	store := informer.GetStore()
+	if err := store.Add(object); err != nil {
+		logger.Debug(
+			"Error while manually registering "+kind+" in "+kind+"'s store",
+			zap.Any(kind, object),
+			zap.Error(err),
+		)
+	} else {
+		logger.Debug(
+			"Manually registered "+kind+" in "+kind+"'s store",
+			zap.Any(kind, object),
+		)
+	}
+}
+
+func (c *KubeClient) GetPodByUID(uid types.UID) (*corev1.Pod, bool) {
+	if pod, found := c.podUIDCache.Get(uid); found {
+		return &pod, true
+	}
+
+	return nil, false
+}
+
+func (c *KubeClient) GetPodByNetworkConnection(ctx context.Context) (*corev1.Pod, bool) {
+	podIpAddress := connectionIP(ctx)
+
+	if pod, err := retry(
+		fmt.Sprintf("Get v1.Pod with IP address '%s' from the Kube API", podIpAddress),
+		retryAttempts,
+		retryAttempStep,
+		func() (*corev1.Pod, error) {
+			if podList, err := c.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+				FieldSelector: fmt.Sprintf("status.podIP=%s", podIpAddress),
+			}); err != nil {
+				return nil, err
+			} else if len(podList.Items) > 0 {
+				pod := podList.Items[0]
+				return &pod, nil
+			} else {
+				return nil, fmt.Errorf("Unexpected length of podlist: %v", podList.Items)
+			}
+		},
+		c.logger,
+	); err != nil {
+		if !errors.IsNotFound(err) {
+			c.logger.Error(
+				"Cannot lookup pod by ip address",
+				zap.String("ip-address", podIpAddress),
+				zap.Error(err),
+			)
+		}
+		return nil, false
+	} else {
+		c.RegisterPod(pod)
+		return pod, true
+	}
+}
+
+func connectionIP(ctx context.Context) string {
+	// From https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/fbd85e02bd03a144a6b96d4b5fd6b6b4c6e1594c/processor/k8sattributesprocessor/pod_association.go#L101
+	c := client.FromContext(ctx)
+	if c.Addr == nil {
+		return ""
+	}
+	switch addr := c.Addr.(type) {
+	case *net.UDPAddr:
+		return addr.IP.String()
+	case *net.TCPAddr:
+		return addr.IP.String()
+	case *net.IPAddr:
+		return addr.IP.String()
+	}
+
+	// If this is not a known address type, check for known "untyped" formats.
+	// 1.1.1.1:<port>
+
+	lastColonIndex := strings.LastIndex(c.Addr.String(), ":")
+	if lastColonIndex != -1 {
+		ipString := c.Addr.String()[:lastColonIndex]
+		ip := net.ParseIP(ipString)
+		if ip != nil {
+			return ip.String()
+		}
+	}
+
+	return c.Addr.String()
+
+}
+
+func (c *KubeClient) GetNamespaceByName(name string) (*corev1.Namespace, bool) {
+	// TODO Trigger fetch of this namespace from the API if we don't have it in the cache
+	if namespace, err := retry(
+		fmt.Sprintf("Get v1.Namespace '%s' from the namespaces cache", name),
+		retryAttempts,
+		retryAttempStep,
+		func() (*corev1.Namespace, error) {
+			if namespace, found, err := c.namespaceInformer.GetStore().GetByKey(name); err != nil {
+				return nil, err
+			} else if !found {
+				// TODO It's a bit silly that we create this error here and unpack it at the next level,
+				// but it will do for now.
+				return nil, errors.NewNotFound(gvkToGroupResource(V1Namespace), name)
+			} else if ns, ok := namespace.(*corev1.Namespace); ok {
+				return ns, nil
+			} else {
+				return nil, fmt.Errorf(
+					"object returned from namespace cache store is not an instance of *corev1.Namespace: %v",
+					namespace,
+				)
+			}
+		},
+		c.logger,
+	); err != nil {
+		if !errors.IsNotFound(err) {
+			c.logger.Error(
+				"Unexpected error while looking up namespace by name",
+				zap.String("namespace", name),
+				zap.Error(err),
+			)
+		}
+
+		return nil, false
+	} else {
+		return namespace, true
+	}
+}
+
+func (c *KubeClient) ResolveRelevantOwnerReference(ctx context.Context, object runtime.Object) (runtime.Object, bool, error) {
+	objectReference, err := runtimeObjectToObjectReference(object)
+	if err != nil {
+		return nil, false, err
+	}
+
+	objectMeta, err := runtimeObjectToObjectMeta(object)
+	if err != nil {
+		return nil, false, err
+	}
+
+	ownerReference := getFirstRelevantOwnerReference(objectMeta.OwnerReferences)
+	if ownerReference == nil {
+		return nil, false, nil
+	}
+
+	if ownerObject, found, err := c.resolveObject(
+		schema.FromAPIVersionAndKind(ownerReference.APIVersion, ownerReference.Kind),
+		ownerReference.Name,
+		// Owner references always point to objects in the same namespace as the owned one
+		objectReference.Namespace,
+	); err != nil {
+		return nil, false, fmt.Errorf("cannot resolve owner reference %v in namespace %s; error: %w", ownerReference, objectReference.Namespace, err)
+	} else if found {
+		return ownerObject, true, nil
+	} else {
+		return nil, false, nil
+	}
+}
+
+func runtimeObjectToObjectMeta(object runtime.Object) (metav1.ObjectMeta, error) {
+	switch o := object.(type) {
+	case *corev1.Pod:
+		{
+			return o.ObjectMeta, nil
+		}
+	case *appsv1.DaemonSet:
+		{
+			return o.ObjectMeta, nil
+		}
+	case *appsv1.Deployment:
+		{
+			return o.ObjectMeta, nil
+		}
+	case *appsv1.ReplicaSet:
+		{
+			return o.ObjectMeta, nil
+		}
+	case *appsv1.StatefulSet:
+		{
+			return o.ObjectMeta, nil
+		}
+	case *batchv1.CronJob:
+		{
+			return o.ObjectMeta, nil
+		}
+	case *batchv1.Job:
+		{
+			return o.ObjectMeta, nil
+		}
+	default:
+		return metav1.ObjectMeta{}, fmt.Errorf("unsupported type to extract object meta: %s", reflect.TypeOf(object).String())
+	}
+}
+
+func runtimeObjectToObjectReference(object runtime.Object) (corev1.ObjectReference, error) {
+	objectMeta, err := runtimeObjectToObjectMeta(object)
+	if err != nil {
+		return corev1.ObjectReference{}, err
+	}
+
+	gvk := object.GetObjectKind().GroupVersionKind()
+	apiVersion, kind := gvk.ToAPIVersionAndKind()
+	return corev1.ObjectReference{
+		Kind:            kind,
+		APIVersion:      apiVersion,
+		Name:            objectMeta.Name,
+		Namespace:       objectMeta.Namespace,
+		UID:             objectMeta.UID,
+		ResourceVersion: objectMeta.ResourceVersion,
+	}, nil
+}
+
 func (c *KubeClient) GetRootOwnerReference(ctx context.Context, event *corev1.Event) (map[string]interface{}, error) {
 	currentObjectReference := &event.InvolvedObject
 	for currentObjectReference != nil {
@@ -671,6 +873,112 @@ func (c *KubeClient) GetRootOwnerReference(ctx context.Context, event *corev1.Ev
 	return nil, nil
 }
 
+func (c *KubeClient) resolveObject(gvk schema.GroupVersionKind, name, namespace string) (runtime.Object, bool, error) {
+	switch gvk {
+	case V1Pod:
+		{
+			return c.getPod(name, namespace, "")
+		}
+	case AppsV1DaemonSet:
+		{
+			return c.getDaemonSet(name, namespace, "")
+		}
+	case AppsV1Deployment:
+		{
+			return c.getDeployment(name, namespace, "")
+		}
+	case AppsV1ReplicaSet:
+		{
+			return c.getReplicaSet(name, namespace, "")
+		}
+	case AppsV1StatefulSet:
+		{
+			return c.getStatefulSet(name, namespace, "")
+		}
+	case BatchV1CronJob:
+		{
+			return c.getCronJob(name, namespace, "")
+		}
+	case BatchV1Job:
+		{
+			return c.getJob(name, namespace, "")
+		}
+	default:
+		{
+			// GVK of the object reference is not relevant
+			return nil, false, nil
+		}
+	}
+}
+
+func (c *KubeClient) resolveOwnerReferences(gvk schema.GroupVersionKind, name, namespace string) ([]metav1.OwnerReference, error) {
+	switch gvk {
+	case V1Pod:
+		{
+			if pod, found, err := c.getPod(name, namespace, ""); err != nil {
+				return []metav1.OwnerReference{}, err
+			} else if found {
+				return pod.OwnerReferences, nil
+			}
+		}
+	case AppsV1DaemonSet:
+		{
+			if daemonset, found, err := c.getDaemonSet(name, namespace, ""); err != nil {
+				return []metav1.OwnerReference{}, err
+			} else if found {
+				return daemonset.OwnerReferences, nil
+			}
+		}
+	case AppsV1Deployment:
+		{
+			if deployment, found, err := c.getDeployment(name, namespace, ""); err != nil {
+				return []metav1.OwnerReference{}, err
+			} else if found {
+				return deployment.OwnerReferences, nil
+			}
+		}
+	case AppsV1ReplicaSet:
+		{
+			if replicaSet, found, err := c.getReplicaSet(name, namespace, ""); err != nil {
+				return []metav1.OwnerReference{}, err
+			} else if found {
+				return replicaSet.OwnerReferences, nil
+			}
+		}
+	case AppsV1StatefulSet:
+		{
+			if statefulSet, found, err := c.getStatefulSet(name, namespace, ""); err != nil {
+				return []metav1.OwnerReference{}, err
+			} else if found {
+				return statefulSet.OwnerReferences, nil
+			}
+		}
+	case BatchV1CronJob:
+		{
+			if cronJob, found, err := c.getCronJob(name, namespace, ""); err != nil {
+				return []metav1.OwnerReference{}, err
+			} else if found {
+				return cronJob.OwnerReferences, nil
+			}
+		}
+	case BatchV1Job:
+		{
+			if job, found, err := c.getJob(name, namespace, ""); err != nil {
+				return []metav1.OwnerReference{}, err
+			} else if found {
+				return job.OwnerReferences, nil
+			}
+		}
+	default:
+		{
+			// GVK of the object reference is not relevant
+			return []metav1.OwnerReference{}, fmt.Errorf("unsupported GVK: %s", gvk.String())
+		}
+	}
+
+	return []metav1.OwnerReference{}, nil
+}
+
 func (c *KubeClient) getFirstRelevantOwnerReferenceAsObjectReference(ctx context.Context, objectReference *corev1.ObjectReference) (*corev1.ObjectReference, error) {
 	/*
 	 * Check via GVK if the object pointed at by the object reference is relevant for us and,
@@ -679,90 +987,39 @@ func (c *KubeClient) getFirstRelevantOwnerReferenceAsObjectReference(ctx context
 	 */
 	objRefGvk := objectReference.GroupVersionKind()
 
-	var ownerReferences []metav1.OwnerReference
-	switch objRefGvk {
-	case V1Pod:
-		{
-			if pod, err := c.getPod(objectReference.Name, objectReference.Namespace, ""); err != nil {
-				return nil, err
-			} else {
-				ownerReferences = pod.OwnerReferences
-			}
-		}
-	case AppsV1DaemonSet:
-		{
-			if daemonset, err := c.getDaemonSet(objectReference.Name, objectReference.Namespace, ""); err != nil {
-				return nil, err
-			} else {
-				ownerReferences = daemonset.OwnerReferences
-			}
-		}
-	case AppsV1Deployment:
-		{
-			if deployment, err := c.getDeployment(objectReference.Name, objectReference.Namespace, ""); err != nil {
-				return nil, err
-			} else {
-				ownerReferences = deployment.OwnerReferences
-			}
-		}
-	case AppsV1ReplicaSet:
-		{
-			if replicaSet, err := c.getReplicaSet(objectReference.Name, objectReference.Namespace, ""); err != nil {
-				return nil, err
-			} else {
-				ownerReferences = replicaSet.OwnerReferences
-			}
-		}
-	case AppsV1StatefulSet:
-		{
-			if statefulSet, err := c.getStatefulSet(objectReference.Name, objectReference.Namespace, ""); err != nil {
-				return nil, err
-			} else {
-				ownerReferences = statefulSet.OwnerReferences
-			}
-		}
-	case BatchV1CronJob:
-		{
-			if cronJob, err := c.getCronJob(objectReference.Name, objectReference.Namespace, ""); err != nil {
-				return nil, err
-			} else {
-				ownerReferences = cronJob.OwnerReferences
-			}
-		}
-	case BatchV1Job:
-		{
-			if job, err := c.getJob(objectReference.Name, objectReference.Namespace, ""); err != nil {
-				return nil, err
-			} else {
-				ownerReferences = job.OwnerReferences
-			}
-		}
-	default:
-		{
-			// GVK of the object reference is not relevant
-			return nil, nil
-		}
+	ownerReferences, err := c.resolveOwnerReferences(objRefGvk, objectReference.Name, objectReference.Namespace)
+	if err != nil {
+		return nil, err
 	}
 
+	ownerReference := getFirstRelevantOwnerReference(ownerReferences)
+	if ownerReference == nil {
+		return nil, nil
+	}
+
+	return &corev1.ObjectReference{
+		APIVersion: ownerReference.APIVersion,
+		Kind:       ownerReference.Kind,
+		// Owner references are always in the same namespace as the owned object
+		Namespace: objectReference.Namespace,
+		Name:      ownerReference.Name,
+		UID:       ownerReference.UID,
+	}, nil
+}
+
+func getFirstRelevantOwnerReference(ownerReferences []metav1.OwnerReference) *metav1.OwnerReference {
 	for _, ownerReference := range ownerReferences {
 		ownerReferenceGvk := schema.FromAPIVersionAndKind(ownerReference.APIVersion, ownerReference.Kind)
 
 		if isGVKRelevant(ownerReferenceGvk) {
-			return &corev1.ObjectReference{
-				APIVersion: ownerReference.APIVersion,
-				Kind:       ownerReference.Kind,
-				// Owner references are always in the same namespace as the owned object
-				Namespace: objectReference.Namespace,
-				Name:      ownerReference.Name,
-				UID:       ownerReference.UID,
-			}, nil
+			return &ownerReference
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func (c *KubeClient) getPod(name, namespace, resourceVersion string) (*corev1.Pod, error) {
+func (c *KubeClient) getPod(name, namespace, resourceVersion string) (*corev1.Pod, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -771,7 +1028,7 @@ func (c *KubeClient) getPod(name, namespace, resourceVersion string) (*corev1.Po
 	}
 
 	if pod, found := c.podCache.Get(cacheKey); found {
-		return &pod, nil
+		return &pod, true, nil
 	}
 
 	// Try fetch from the Kubernetes API then
@@ -780,7 +1037,6 @@ func (c *KubeClient) getPod(name, namespace, resourceVersion string) (*corev1.Po
 		zap.String("name", name),
 		zap.String("namespace", namespace),
 		zap.String("resourceVersion", resourceVersion),
-		zap.Any("known-keys", c.podCache.Keys()),
 	)
 
 	if pod, err := retry(
@@ -793,15 +1049,19 @@ func (c *KubeClient) getPod(name, namespace, resourceVersion string) (*corev1.Po
 			})
 		},
 		c.logger,
-	); err == nil {
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
 		c.RegisterPod(pod)
-		return pod, nil
+		return pod, true, nil
 	}
-
-	return nil, fmt.Errorf("no '%s/%s' pod found in the local cache or in Kube API", namespace, name)
 }
 
-func (c *KubeClient) getDaemonSet(name, namespace, resourceVersion string) (*appsv1.DaemonSet, error) {
+func (c *KubeClient) getDaemonSet(name, namespace, resourceVersion string) (*appsv1.DaemonSet, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -809,15 +1069,8 @@ func (c *KubeClient) getDaemonSet(name, namespace, resourceVersion string) (*app
 		cacheKey = fmt.Sprintf("%s/%s@%s", namespace, name, resourceVersion)
 	}
 
-	store := c.daemonSetInformer.GetStore()
-	if object, found, err := store.GetByKey(cacheKey); err != nil {
-		return nil, err
-	} else if found {
-		if daemonSet, isOk := object.(*appsv1.DaemonSet); isOk {
-			return daemonSet, nil
-		} else {
-			return nil, fmt.Errorf("object returned key '%s' from the local cache is not a apps/v1.DaemonSet: %v", cacheKey, object)
-		}
+	if daemonSet, found := c.daemonSetCache.Get(cacheKey); found {
+		return &daemonSet, true, nil
 	}
 
 	// Try fetch from the Kubernetes API then
@@ -826,7 +1079,6 @@ func (c *KubeClient) getDaemonSet(name, namespace, resourceVersion string) (*app
 		zap.String("name", name),
 		zap.String("namespace", namespace),
 		zap.String("resourceVersion", resourceVersion),
-		zap.Any("known-keys", store.ListKeys()),
 	)
 
 	if daemonSet, err := retry(
@@ -839,15 +1091,19 @@ func (c *KubeClient) getDaemonSet(name, namespace, resourceVersion string) (*app
 			})
 		},
 		c.logger,
-	); err == nil {
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
 		c.RegisterDaemonSet(daemonSet)
-		return daemonSet, nil
+		return daemonSet, true, nil
 	}
-
-	return nil, fmt.Errorf("no '%s/%s' daemonset found in the local cache or in Kube API", namespace, name)
 }
 
-func (c *KubeClient) getDeployment(name, namespace, resourceVersion string) (*appsv1.Deployment, error) {
+func (c *KubeClient) getDeployment(name, namespace, resourceVersion string) (*appsv1.Deployment, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -856,7 +1112,7 @@ func (c *KubeClient) getDeployment(name, namespace, resourceVersion string) (*ap
 	}
 
 	if deployment, found := c.deploymentCache.Get(cacheKey); found {
-		return &deployment, nil
+		return &deployment, true, nil
 	}
 
 	// Try fetch from the Kubernetes API then
@@ -878,15 +1134,19 @@ func (c *KubeClient) getDeployment(name, namespace, resourceVersion string) (*ap
 			})
 		},
 		c.logger,
-	); err == nil {
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
 		c.RegisterDeployment(deployment)
-		return deployment, nil
+		return deployment, true, nil
 	}
-
-	return nil, fmt.Errorf("no '%s/%s' deployment found in the local cache or in Kube API", namespace, name)
 }
 
-func (c *KubeClient) getReplicaSet(name, namespace, resourceVersion string) (*appsv1.ReplicaSet, error) {
+func (c *KubeClient) getReplicaSet(name, namespace, resourceVersion string) (*appsv1.ReplicaSet, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -895,7 +1155,7 @@ func (c *KubeClient) getReplicaSet(name, namespace, resourceVersion string) (*ap
 	}
 
 	if replicaSet, found := c.replicaSetCache.Get(cacheKey); found {
-		return &replicaSet, nil
+		return &replicaSet, true, nil
 	}
 
 	// Try fetch from the Kubernetes API then
@@ -917,15 +1177,19 @@ func (c *KubeClient) getReplicaSet(name, namespace, resourceVersion string) (*ap
 			})
 		},
 		c.logger,
-	); err == nil {
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
 		c.RegisterReplicaSet(replicaSet)
-		return replicaSet, nil
+		return replicaSet, true, nil
 	}
-
-	return nil, fmt.Errorf("no '%s/%s' replicaset found in the local cache or in Kube API", namespace, name)
 }
 
-func (c *KubeClient) getStatefulSet(name, namespace, resourceVersion string) (*appsv1.StatefulSet, error) {
+func (c *KubeClient) getStatefulSet(name, namespace, resourceVersion string) (*appsv1.StatefulSet, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -933,15 +1197,8 @@ func (c *KubeClient) getStatefulSet(name, namespace, resourceVersion string) (*a
 		cacheKey = fmt.Sprintf("%s/%s@%s", namespace, name, resourceVersion)
 	}
 
-	store := c.statefulSetInformer.GetStore()
-	if object, found, err := store.GetByKey(cacheKey); err != nil {
-		return nil, err
-	} else if found {
-		if statefulSet, isOk := object.(*appsv1.StatefulSet); isOk {
-			return statefulSet, nil
-		} else {
-			return nil, fmt.Errorf("object returned key '%s' from the local cache is not a apps/v1.StatefulSet: %v", cacheKey, object)
-		}
+	if statefulSet, found := c.statefulSetCache.Get(cacheKey); found {
+		return &statefulSet, true, nil
 	}
 
 	// Try fetch from the Kubernetes API then
@@ -950,7 +1207,6 @@ func (c *KubeClient) getStatefulSet(name, namespace, resourceVersion string) (*a
 		zap.String("name", name),
 		zap.String("namespace", namespace),
 		zap.String("resourceVersion", resourceVersion),
-		zap.Any("known-keys", store.ListKeys()),
 	)
 
 	if statefulSet, err := retry(
@@ -963,15 +1219,19 @@ func (c *KubeClient) getStatefulSet(name, namespace, resourceVersion string) (*a
 			})
 		},
 		c.logger,
-	); err == nil {
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
 		c.RegisterStatefulSet(statefulSet)
-		return statefulSet, nil
+		return statefulSet, true, nil
 	}
-
-	return nil, fmt.Errorf("no '%s/%s' statefulset found in the local cache or in Kube API", namespace, name)
 }
 
-func (c *KubeClient) getCronJob(name, namespace, resourceVersion string) (*batchv1.CronJob, error) {
+func (c *KubeClient) getCronJob(name, namespace, resourceVersion string) (*batchv1.CronJob, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -979,15 +1239,8 @@ func (c *KubeClient) getCronJob(name, namespace, resourceVersion string) (*batch
 		cacheKey = fmt.Sprintf("%s/%s@%s", namespace, name, resourceVersion)
 	}
 
-	store := c.cronJobInformer.GetStore()
-	if object, found, err := store.GetByKey(cacheKey); err != nil {
-		return nil, err
-	} else if found {
-		if cronJob, isOk := object.(*batchv1.CronJob); isOk {
-			return cronJob, nil
-		} else {
-			return nil, fmt.Errorf("object returned key '%s' from the local cache is not a batchv1.CronJob: %v", cacheKey, object)
-		}
+	if cronJob, found := c.cronJobCache.Get(cacheKey); found {
+		return &cronJob, true, nil
 	}
 
 	// Try fetch from the Kubernetes API then
@@ -996,7 +1249,6 @@ func (c *KubeClient) getCronJob(name, namespace, resourceVersion string) (*batch
 		zap.String("name", name),
 		zap.String("namespace", namespace),
 		zap.String("resourceVersion", resourceVersion),
-		zap.Any("known-keys", store.ListKeys()),
 	)
 
 	if cronJob, err := retry(
@@ -1009,15 +1261,19 @@ func (c *KubeClient) getCronJob(name, namespace, resourceVersion string) (*batch
 			})
 		},
 		c.logger,
-	); err == nil {
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
 		c.RegisterCronJob(cronJob)
-		return cronJob, nil
+		return cronJob, true, nil
 	}
-
-	return nil, fmt.Errorf("no '%s/%s' cronjob found in the local cache or in Kube API", namespace, name)
 }
 
-func (c *KubeClient) getJob(name, namespace, resourceVersion string) (*batchv1.Job, error) {
+func (c *KubeClient) getJob(name, namespace, resourceVersion string) (*batchv1.Job, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -1025,15 +1281,8 @@ func (c *KubeClient) getJob(name, namespace, resourceVersion string) (*batchv1.J
 		cacheKey = fmt.Sprintf("%s/%s@%s", namespace, name, resourceVersion)
 	}
 
-	store := c.jobInformer.GetStore()
-	if object, found, err := store.GetByKey(cacheKey); err != nil {
-		return nil, err
-	} else if found {
-		if job, isOk := object.(*batchv1.Job); isOk {
-			return job, nil
-		} else {
-			return nil, fmt.Errorf("object returned key '%s' from the local cache is not a batchv1.Job: %v", cacheKey, object)
-		}
+	if job, found := c.jobCache.Get(cacheKey); found {
+		return &job, true, nil
 	}
 
 	// Try fetch from the Kubernetes API then
@@ -1042,7 +1291,6 @@ func (c *KubeClient) getJob(name, namespace, resourceVersion string) (*batchv1.J
 		zap.String("name", name),
 		zap.String("namespace", namespace),
 		zap.String("resourceVersion", resourceVersion),
-		zap.Any("known-keys", store.ListKeys()),
 	)
 
 	if job, err := retry(
@@ -1055,12 +1303,16 @@ func (c *KubeClient) getJob(name, namespace, resourceVersion string) (*batchv1.J
 			})
 		},
 		c.logger,
-	); err == nil {
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
 		c.RegisterJob(job)
-		return job, nil
+		return job, true, nil
 	}
-
-	return nil, fmt.Errorf("no '%s/%s' job found in the local cache or in Kube API", namespace, name)
 }
 
 func retry[T any](desc string, maxAttempts int, sleep time.Duration, f func() (T, error), logger *zap.Logger) (result T, err error) {
@@ -1090,4 +1342,11 @@ func isGVKRelevant(gvk schema.GroupVersionKind) bool {
 	}
 
 	return false
+}
+
+func gvkToGroupResource(gvk schema.GroupVersionKind) schema.GroupResource {
+	return schema.GroupResource{
+		Group:    gvk.Group,
+		Resource: fmt.Sprintf("%ss", strings.ToLower(gvk.Kind)),
+	}
 }

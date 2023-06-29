@@ -20,6 +20,7 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor/internal"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
@@ -29,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type kubernetesprocessor struct {
@@ -49,57 +51,140 @@ func (kp *kubernetesprocessor) Shutdown(_ context.Context) error {
 }
 
 func (kp *kubernetesprocessor) processTraces(ctx context.Context, tr ptrace.Traces) (ptrace.Traces, error) {
-	// kp.logger.Debug("Is LumigoToken there?", zap.Any("lumigo-token", ctx.Value("lumigo-token"))) // Seems that no: it is not there
-
 	resourceSpans := tr.ResourceSpans()
-	for i := 0; i < resourceSpans.Len(); i++ {
+	resourceSpanLength := resourceSpans.Len()
+	for i := 0; i < resourceSpanLength; i++ {
+		resource := resourceSpans.At(i).Resource()
+		pod, found := kp.getPod(ctx, &resource)
+
 		resourceAttributes := resourceSpans.At(i).Resource().Attributes()
+		if !found {
+			kp.logger.Debug(
+				"Cannot find pod by 'k8s.pod.uid' of by connection ip",
+				zap.Any("resource-attributes", resourceAttributes.AsRaw()),
+			)
+			continue
+		}
 
-		if namespaceName, hasNamespaceName := resourceAttributes.Get(string(semconv.K8SNamespaceNameKey)); hasNamespaceName {
-			if namespaceUID, err := kp.kube.GetNamespaceUID(namespaceName.AsString()); err != nil {
-				kp.logger.Error(
-					"v1.Namespace not found when enriching trace data",
-					zap.String("namespace-name", namespaceName.AsString()),
-					zap.Any("resource-attributes", resourceAttributes.AsRaw()),
-					zap.Error(err),
-				)
-			} else {
-				resourceAttributes.PutStr("k8s.namespace.uid", string(namespaceUID))
+		// Ensure 'k8s.pod.uid' is set (we might have found the pod via the network connection ip)
+		if _, found := resourceAttributes.Get(string(semconv.K8SPodUIDKey)); !found {
+			resourceAttributes.PutStr(string(semconv.K8SPodUIDKey), string(pod.UID))
+		}
 
-				if deploymentName, hasDeploymentName := resourceAttributes.Get(string(semconv.K8SDeploymentNameKey)); hasDeploymentName {
-					if deploymentUID, err := kp.kube.GetDeploymentUID(deploymentName.AsString(), namespaceName.AsString()); err != nil {
+		resourceAttributes.PutStr(string(semconv.K8SPodNameKey), pod.Name)
+
+		resourceAttributes.PutStr(string(semconv.K8SNamespaceNameKey), pod.Namespace)
+		if namespace, nsFound := kp.kube.GetNamespaceByName(pod.Namespace); nsFound {
+			resourceAttributes.PutStr("k8s.namespace.uid", string(namespace.UID))
+		} else {
+			kp.logger.Error(
+				"Cannot add namespace resource attributes to traces, namespace not found",
+				zap.String("namespace", pod.Namespace),
+			)
+		}
+
+		ownerObject, found, err := kp.kube.ResolveRelevantOwnerReference(ctx, pod)
+		if err != nil {
+			kp.logger.Error(
+				"Cannot look up owner reference for pod",
+				zap.Any("pod", pod),
+				zap.Error(err),
+			)
+		}
+
+		if !found {
+			kp.logger.Debug(
+				"Pod has no owner reference we can use to add other resource attributes",
+				zap.Any("pod", pod),
+			)
+			continue
+		}
+
+		switch podOwner := ownerObject.(type) {
+		case *appsv1.DaemonSet:
+			{
+				resourceAttributes.PutStr(string(semconv.K8SDaemonSetNameKey), podOwner.Name)
+				resourceAttributes.PutStr(string(semconv.K8SDaemonSetUIDKey), string(podOwner.UID))
+			}
+		case *appsv1.ReplicaSet:
+			{
+				resourceAttributes.PutStr(string(semconv.K8SReplicaSetNameKey), podOwner.Name)
+				resourceAttributes.PutStr(string(semconv.K8SReplicaSetUIDKey), string(podOwner.UID))
+
+				if replicaSetOwner, found, err := kp.kube.ResolveRelevantOwnerReference(ctx, podOwner); found {
+					if deployment, ok := replicaSetOwner.(*appsv1.Deployment); ok {
+						resourceAttributes.PutStr(string(semconv.K8SDeploymentNameKey), deployment.Name)
+						resourceAttributes.PutStr(string(semconv.K8SDeploymentUIDKey), string(deployment.UID))
+					} else {
 						kp.logger.Error(
-							"apps/v1.Deployment not found when enriching trace data",
-							zap.String("namespace-name", namespaceName.AsString()),
-							zap.String("deployment-name", deploymentName.AsString()),
-							zap.Any("resource-attributes", resourceAttributes.AsRaw()),
+							"Cannot add deployment resource attributes to traces, replicaset's owner object is not a *apps/v1.Deployment",
+							zap.Any("owner-object", ownerObject),
 							zap.Error(err),
 						)
-					} else {
-						resourceAttributes.PutStr(string(semconv.K8SDeploymentUIDKey), string(deploymentUID))
 					}
-				}
-
-				if cronJobName, hasCronJobName := resourceAttributes.Get(string(semconv.K8SCronJobNameKey)); hasCronJobName {
-					if cronJobUID, err := kp.kube.GetCronJobUID(cronJobName.AsString(), namespaceName.AsString()); err != nil {
-						kp.logger.Error(
-							"batch/v1.CronJob not found when enriching trace data",
-							zap.String("namespace-name", namespaceName.AsString()),
-							zap.String("cronjob-name", cronJobName.AsString()),
-							zap.Any("resource-attributes", resourceAttributes),
-						)
-
-					} else {
-						resourceAttributes.PutStr(string(semconv.K8SCronJobUIDKey), string(cronJobUID))
-					}
+				} else {
+					kp.logger.Debug(
+						"Cannot add deployment resource attributes to traces, replicaset has no deployment owner",
+						zap.Any("replicaset", podOwner),
+						zap.Error(err),
+					)
 				}
 			}
-		} else {
-			kp.logger.Error(fmt.Sprintf("Resource attribute '%s' not found when enriching trace data", semconv.K8SNamespaceNameKey), zap.Any("resource-attributes", resourceAttributes))
+		case *appsv1.StatefulSet:
+			{
+				resourceAttributes.PutStr(string(semconv.K8SStatefulSetNameKey), podOwner.Name)
+				resourceAttributes.PutStr(string(semconv.K8SStatefulSetUIDKey), string(podOwner.UID))
+			}
+		case *batchv1.Job:
+			{
+				resourceAttributes.PutStr(string(semconv.K8SJobNameKey), podOwner.Name)
+				resourceAttributes.PutStr(string(semconv.K8SJobUIDKey), string(podOwner.UID))
+
+				if jobOwner, found, err := kp.kube.ResolveRelevantOwnerReference(ctx, podOwner); found {
+					if cronJob, ok := jobOwner.(*batchv1.CronJob); ok {
+						resourceAttributes.PutStr(string(semconv.K8SCronJobNameKey), cronJob.Name)
+						resourceAttributes.PutStr(string(semconv.K8SCronJobUIDKey), string(cronJob.UID))
+					} else {
+						kp.logger.Error(
+							"Cannot add cronjob resource attributes to traces, job's object is not a *batch/v1.CronJob",
+							zap.Any("owner-object", ownerObject),
+							zap.Error(err),
+						)
+					}
+				} else {
+					kp.logger.Debug(
+						"Cannot add cronjob resource attributes to traces, job has no cronjob owner",
+						zap.Any("job", podOwner),
+						zap.Error(err),
+					)
+				}
+			}
+		default:
+			{
+				kp.logger.Error("Unexpected owner-object for pod", zap.Any("pod", pod), zap.Any("owner-object", ownerObject))
+			}
 		}
 	}
 
 	return tr, nil
+}
+
+func (kp *kubernetesprocessor) getPod(ctx context.Context, resource *pcommon.Resource) (*corev1.Pod, bool) {
+	// Try to look for k8s.pod.uid and see if we have a match in our cache
+	if podUID, found := resource.Attributes().Get(string(semconv.K8SPodUIDKey)); found {
+		podUISAsStr := podUID.AsString()
+
+		if pod, found := kp.kube.GetPodByUID(types.UID(podUISAsStr)); found {
+			return pod, true
+		}
+	}
+
+	// Try to look by connection ip, matching the pod ips known by the Kube API
+	if pod, found := kp.kube.GetPodByNetworkConnection(ctx); found {
+		return pod, true
+	}
+
+	return nil, false
 }
 
 func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
@@ -252,7 +337,12 @@ func (kp *kubernetesprocessor) processKubernetesObjectScopeLogs(ctx context.Cont
 		logRecord := logRecords.At(j)
 
 		if err := kp.processKubernetesObjectLogRecord(ctx, &logRecord); err != nil {
-			kp.logger.Error("An error occurred while processing a log record", zap.Any("logRecord attributes", logRecord.Attributes().AsRaw()), zap.Any("logRecord body", logRecord.Body().AsRaw()), zap.Error(err))
+			kp.logger.Error(
+				"An error occurred while processing a log record",
+				zap.Any("logRecord attributes", logRecord.Attributes().AsRaw()),
+				zap.Any("logRecord body", logRecord.Body().AsRaw()),
+				zap.Error(err),
+			)
 		}
 	}
 }
