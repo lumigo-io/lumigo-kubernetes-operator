@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/go-logr/logr"
 )
@@ -36,17 +37,14 @@ func updateTelemetryProxyMonitoringOfNamespace(ctx context.Context, telemetryPro
 	var namespaces []NamespaceMonitoringConfig
 	namespacesFileBytes, err := os.ReadFile(telemetryProxyNamespaceConfigurationsPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// namespacesFileBytes = make([]byte, 0)
-			namespaces = make([]NamespaceMonitoringConfig, 0)
-		} else {
+		if !os.IsNotExist(err) {
 			return false, fmt.Errorf("cannot read namespace configuration file '%s': %w", telemetryProxyNamespaceConfigurationsPath, err)
 		}
 	} else if err := json.Unmarshal(namespacesFileBytes, &namespaces); err != nil {
 		return false, fmt.Errorf("cannot unmarshal namespace configuration file '%s': %w", telemetryProxyNamespaceConfigurationsPath, err)
 	}
 
-	newNamespaces := make([]NamespaceMonitoringConfig, 0)
+	var newNamespaces []NamespaceMonitoringConfig
 	// Keep all other namespaces to the new file
 	for _, namespace := range namespaces {
 		if namespace.Name != namespaceMonitoringConfig.Name && len(namespaceMonitoringConfig.Name) > 0 {
@@ -57,6 +55,11 @@ func updateTelemetryProxyMonitoringOfNamespace(ctx context.Context, telemetryPro
 	if upsert {
 		newNamespaces = append(newNamespaces, *namespaceMonitoringConfig)
 	}
+
+	// Sort namespace structs by namespace name
+	sort.Slice(newNamespaces, func(i, j int) bool {
+		return newNamespaces[i].Name < newNamespaces[j].Name
+	})
 
 	// The marhsalling is with sorted keys, so the resulting bytes are deterministic
 	updatedNamespacesFileBytes, err := json.Marshal(newNamespaces)

@@ -66,7 +66,7 @@ function generate_configs() {
        cat "${OTELCOL_CONFIG_FILE_PATH}"
     fi
 
-    sha1sum "${NAMESPACES_FILE_PATH}" > "${NAMESPACES_FILE_SHA_PATH}"
+    sha1sum -b "${NAMESPACES_FILE_PATH}" > "${NAMESPACES_FILE_SHA_PATH}"
 }
 
 function trigger_config_reload() {
@@ -89,7 +89,8 @@ function watch_namespaces_file() {
             # Config changed
             if [ "${debug}" == 'true' ]; then
                 echo 'Namespace file change detected'
-                cat "${NAMESPACES_FILE_SHA_PATH}"
+                cat "${NAMESPACES_FILE_PATH}"
+                echo
             fi
             generate_configs
             trigger_config_reload
