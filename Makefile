@@ -114,14 +114,13 @@ docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy ## Build
 
 .PHONY: docker-buildx-manager
 docker-buildx-manager: ## Build and push docker image for the manager for cross-platform support; this target does NOT run unit tests, it is meant for CI/CD
-	(cd controller && \
+	( cd controller && \
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
 	docker buildx build --push --platform=$(PLATFORMS) --tag ${CONTROLLER_IMG} -f Dockerfile.cross . && \
-	- docker buildx rm project-v3-builder && \
-	rm Dockerfile.cross && \
-	)
+	docker buildx rm project-v3-builder && \
+	rm Dockerfile.cross )
 
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
@@ -130,7 +129,7 @@ docker-buildx-telemetry-proxy: ## Build and push docker image for the manager fo
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
 	docker buildx build --push --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
-	- docker buildx rm project-v3-builder && \
+	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 
 ##@ Deployment
