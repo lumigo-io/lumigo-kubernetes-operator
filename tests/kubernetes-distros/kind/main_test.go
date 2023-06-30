@@ -52,6 +52,11 @@ func TestMain(m *testing.M) {
 
 	logger := log.New(os.Stderr, "", 0)
 
+	isLumigoOperatorDebug := true
+	if val, isPresent := os.LookupEnv("LUMIGO_DEBUG"); isPresent && val == "false" {
+		isLumigoOperatorDebug = false
+	}
+
 	lumigoTokenDatasourceValue := ""
 	lumigoToken, isLumigoTokenPresent := os.LookupEnv("LUMIGO_TRACER_TOKEN")
 	if !isLumigoTokenPresent {
@@ -181,6 +186,7 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkDataPath, dataSinkDataDir)
 	ctx = context.WithValue(ctx, internal.ContextKeySendDataToLumigo, isLumigoTokenPresent)
+	ctx = context.WithValue(ctx, internal.ContextKeyLumigoOperatorDebug, isLumigoOperatorDebug)
 	ctx = context.WithValue(ctx, internal.ContextKeyLumigoToken, lumigoToken)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorControllerImage, controllerImageName)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorTelemetryProxyImage, telemetryProxyImageName)
