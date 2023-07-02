@@ -14,5 +14,10 @@
 
 package k8sanalyticsreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sanalyticsreceiver"
 
+import (
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
+)
+
 type Config struct {
+	k8sconfig.APIConfig `mapstructure:",squash"`
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"go.opentelemetry.io/collector/component"
+	"k8s.io/client-go/kubernetes"
 )
 
 type k8sanalyticsReceiver struct {
+	kube   kubernetes.Interface
 	config *Config
 }
 
