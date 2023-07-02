@@ -173,13 +173,17 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
+    logs:
+      receivers:
+      - k8sanalytics
+      exporters:
+      - logging
     traces:
       # We cannot add a Batch processor to this pipeline as it would break the
       # `headers_setter/lumigo` extension.
       # See https://github.com/open-telemetry/opentelemetry-collector/issues/4544
       receivers:
       - otlp
-      - k8sanalytics
       processors:
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource

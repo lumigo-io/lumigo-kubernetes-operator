@@ -15,23 +15,23 @@ func createDefaultConfig() component.Config {
 	return &Config{}
 }
 
-func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSettings, baseCfg component.Config, consumer consumer.Traces) (receiver.Traces, error) {
+func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSettings, baseCfg component.Config, consumer consumer.Logs) (receiver.Logs, error) {
 	if consumer == nil {
 		return nil, component.ErrNilNextConsumer
 	}
 
 	cfg := baseCfg.(*Config)
 
-	traceRcvr := &k8sanalyticsReceiver{
+	logsRcvr := &k8sanalyticsReceiver{
 		config: cfg,
 	}
 
-	return traceRcvr, nil
+	return logsRcvr, nil
 }
 
 func NewFactory() receiver.Factory {
 	return receiver.NewFactory(
 		typeStr,
 		createDefaultConfig,
-		receiver.WithTraces(createK8sanalyticsReceiver, component.StabilityLevelAlpha))
+		receiver.WithLogs(createK8sanalyticsReceiver, component.StabilityLevelAlpha))
 }
