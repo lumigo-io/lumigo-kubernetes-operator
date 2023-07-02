@@ -7,6 +7,7 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
+  k8sanalytics:
 {{- range $i, $namespace := $namespaces }}
   k8sobjects/objects_ns_{{ $namespace.name }}:
     auth_type: serviceAccount
@@ -178,6 +179,7 @@ service:
       # See https://github.com/open-telemetry/opentelemetry-collector/issues/4544
       receivers:
       - otlp
+      - k8sanalytics
       processors:
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
