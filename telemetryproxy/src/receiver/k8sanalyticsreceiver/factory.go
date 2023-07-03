@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/dynamic"
 	"sync"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	singletonKube      kubernetes.Interface
+	singletonKube      dynamic.Interface
 	singletonKubeMutex sync.Mutex
 )
 
@@ -52,7 +52,7 @@ func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSetting
 	return logsRcvr, nil
 }
 
-func initKubeClient(k8sConfig k8sconfig.APIConfig) (kubernetes.Interface, error) {
+func initKubeClient(k8sConfig k8sconfig.APIConfig) (dynamic.Interface, error) {
 	// Synchronize singleton instantiation, as there might be multiple
 	// instances of the processor being bootstrapped on different pipelines
 	if singletonKube != nil {
@@ -62,7 +62,7 @@ func initKubeClient(k8sConfig k8sconfig.APIConfig) (kubernetes.Interface, error)
 	singletonKubeMutex.Lock()
 	defer singletonKubeMutex.Unlock()
 
-	client, err := k8sconfig.MakeClient(k8sConfig)
+	client, err := k8sconfig.MakeDynamicClient(k8sConfig)
 	if err != nil {
 		return nil, err
 	}
