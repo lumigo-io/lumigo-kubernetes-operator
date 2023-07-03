@@ -4,15 +4,22 @@ import (
 	"context"
 	"fmt"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/obsreport"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"os"
+	"time"
 )
 
 type k8sanalyticsReceiver struct {
-	kube   dynamic.Interface
-	config *Config
+	kube     dynamic.Interface
+	config   *Config
+	consumer consumer.Logs
+	obsrecv  *obsreport.Receiver
 }
 
 func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host component.Host) error {
@@ -48,6 +55,39 @@ func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host co
 
 	for _, n := range customResourceList.Items {
 		fmt.Println("k8sanalyticsReceiver found resource: " + n.GetName())
+	}
+
+	//outputLogs := plog.NewLogs()
+	//resourceLogs := outputLogs.ResourceLogs()
+	//rl := resourceLogs.AppendEmpty()
+	//resourceAttrs := rl.Resource().Attributes()
+	//resourceAttrs.PutStr("k8s.resource.some_new_attr", "my_attr_value")
+	//sl := rl.ScopeLogs().AppendEmpty()
+	//logSlice := sl.LogRecords()
+	//record := logSlice.AppendEmpty()
+	//record.SetObservedTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	//record.Attributes().PutStr("k8s.resource.record_new_attr", "record_attr_value")
+	//dest := record.Body()
+	//dest.SetStr("body as string???")
+
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	resourceAttrs := rl.Resource().Attributes()
+	resourceAttrs.PutStr("some_attre_1", "some_attre_1_val")
+	lr.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	lr.Body().SetStr("body of message!")
+	attrs := lr.Attributes()
+	attrs.PutStr("lr_some_atribute", "lr_some_atribute_val")
+
+	obsCtx := k8sanalyticsRcvr.obsrecv.StartLogsOp(ctx)
+	err = k8sanalyticsRcvr.consumer.ConsumeLogs(obsCtx, ld)
+	k8sanalyticsRcvr.obsrecv.EndLogsOp(obsCtx, "k8sanalytics", 1, err)
+
+	if err != nil {
+		fmt.Printf("Failed to retrieve custom resource list: %v", err)
+		os.Exit(1)
 	}
 	return nil
 }

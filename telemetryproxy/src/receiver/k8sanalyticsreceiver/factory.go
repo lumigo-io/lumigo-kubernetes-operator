@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/obsreport"
 	"go.opentelemetry.io/collector/receiver"
 	"k8s.io/client-go/dynamic"
 	"sync"
@@ -44,9 +45,20 @@ func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSetting
 		return nil, err
 	}
 
+	obsrecv, err := obsreport.NewReceiver(obsreport.ReceiverSettings{
+		ReceiverID:             params.ID,
+		Transport:              "http",
+		ReceiverCreateSettings: params,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cant create NewReceiver")
+	}
+
 	logsRcvr := &k8sanalyticsReceiver{
-		kube:   kubeClient,
-		config: cfg,
+		kube:     kubeClient,
+		config:   cfg,
+		consumer: consumer,
+		obsrecv:  obsrecv,
 	}
 
 	return logsRcvr, nil
