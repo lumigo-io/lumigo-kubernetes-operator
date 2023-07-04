@@ -22,6 +22,8 @@ import (
 )
 
 const (
+	DEFAULT_LUMIGO_ENDPOINT = "https://ga-otlp.lumigo-tracer-edge.golumigo.com"
+
 	otlpSinkPort        = int32(4318)
 	otlpSinkServiceName = "otlp-sink"
 )

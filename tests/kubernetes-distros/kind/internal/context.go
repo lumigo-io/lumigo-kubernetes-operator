@@ -6,6 +6,7 @@ var (
 	ContextKeyRunId                       = ContextKey("run-id")
 	ContextKeyOtlpSinkConfigPath          = ContextKey("otlp-sink/config")
 	ContextKeyOtlpSinkDataPath            = ContextKey("otlp-sink/data")
+	ContextKeyLumigoEndpoint              = ContextKey("lumigo/endpoint")
 	ContextKeyLumigoToken                 = ContextKey("lumigo/token")
 	ContextKeyOperatorControllerImage     = ContextKey("lumigo/operator/images/controller")
 	ContextKeyOperatorTelemetryProxyImage = ContextKey("lumigo/operator/images/proxy")

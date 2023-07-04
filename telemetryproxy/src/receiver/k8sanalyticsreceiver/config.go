@@ -20,4 +20,5 @@ import (
 
 type Config struct {
 	k8sconfig.APIConfig `mapstructure:",squash"`
+	Namespace           string `mapstructure:"namespace"`
 }

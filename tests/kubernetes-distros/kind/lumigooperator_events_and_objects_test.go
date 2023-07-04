@@ -406,10 +406,6 @@ func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord,
 			{
 				objectLogRecords = append(objectLogRecords, logRecords...)
 			}
-		default:
-			{
-				return nil, nil, fmt.Errorf("unknown scope name: %s", scopeName)
-			}
 		}
 	}
 	return eventLogRecords, objectLogRecords, nil

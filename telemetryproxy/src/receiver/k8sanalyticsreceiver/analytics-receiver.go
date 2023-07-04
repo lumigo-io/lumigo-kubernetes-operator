@@ -23,7 +23,7 @@ type k8sanalyticsReceiver struct {
 }
 
 func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host component.Host) error {
-	fmt.Println("k8sanalyticsReceiver start function")
+	fmt.Println("k8sanalyticsReceiver start function " + k8sanalyticsRcvr.config.Namespace)
 	//namespaces, err := k8sanalyticsRcvr.kube.CoreV1().Namespaces().List(context.Background(), v1.ListOptions{})
 	//if err != nil {
 	//	err = fmt.Errorf("error getting pods: %v\n", err)
@@ -47,7 +47,7 @@ func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host co
 	}
 
 	// Retrieve the list of custom resources
-	customResourceList, err := k8sanalyticsRcvr.kube.Resource(gvr).Namespace("").List(context.Background(), v1.ListOptions{})
+	customResourceList, err := k8sanalyticsRcvr.kube.Resource(gvr).Namespace(k8sanalyticsRcvr.config.Namespace).List(context.Background(), v1.ListOptions{})
 	if err != nil {
 		fmt.Printf("Failed to retrieve custom resource list: %v", err)
 		os.Exit(1)

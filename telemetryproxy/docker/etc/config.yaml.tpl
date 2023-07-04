@@ -7,7 +7,10 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
-  k8sanalytics:
+{{- range $i, $namespace := $namespaces }}
+  k8sanalytics/ns_{{ $namespace.name }}:
+    namespace: {{ $namespace.name }}
+{{- end }}
 {{- range $i, $namespace := $namespaces }}
   k8sobjects/objects_ns_{{ $namespace.name }}:
     auth_type: serviceAccount
@@ -124,6 +127,11 @@ processors:
 {{- end }}
         - key: k8s.namespace.name
           value: "{{ join $namespaceNames "|" }}"
+  transform/add_heartbeat_attributes:
+    log_statements:
+    - context: scope
+      statements:
+      - set(name, "lumigo-operator.namespace_heartbeat")
   transform/set_k8s_objects_scope:
     log_statements:
     - context: scope
@@ -173,11 +181,6 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
-    logs:
-      receivers:
-      - k8sanalytics
-      exporters:
-      - logging
     traces:
       # We cannot add a Batch processor to this pipeline as it would break the
       # `headers_setter/lumigo` extension.
@@ -192,8 +195,19 @@ service:
 {{- if $config.debug }}
       - logging
 {{- end }}
-
 {{- range $i, $namespace := $namespaces }}
+    logs/usage_analytics_ns_{{ $namespace.name }}:
+      receivers:
+      - k8sanalytics/ns_{{ $namespace.name }}
+      processors:
+      - transform/add_heartbeat_attributes
+      - transform/add_ns_attributes_ns_{{ $namespace.name }}
+      - transform/inject_operator_details_into_resource
+      exporters:
+{{- if $config.debug }}
+      - logging
+{{- end }}
+      - otlphttp/lumigo_ns_{{ $namespace.name }}
     logs/k8s_objects_ns_{{ $namespace.name }}:
       receivers:
       - k8sobjects/objects_ns_{{ $namespace.name }}
