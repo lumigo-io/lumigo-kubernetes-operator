@@ -88,12 +88,8 @@ func (k8sanalyticsRcvr *k8sanalyticsReceiver) SendUsage() {
 		rl := ld.ResourceLogs().AppendEmpty()
 		sl := rl.ScopeLogs().AppendEmpty()
 		lr := sl.LogRecords().AppendEmpty()
-		resourceAttrs := rl.Resource().Attributes()
-		resourceAttrs.PutStr("some_attre_1", "some_attre_1_val")
 		lr.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		lr.Body().SetStr(lumigoStatusBody)
-		attrs := lr.Attributes()
-		attrs.PutStr("lr_some_atribute", "lr_some_atribute_val")
 
 		obsCtx := k8sanalyticsRcvr.obsrecv.StartLogsOp(k8sanalyticsRcvr.ctx)
 		err = k8sanalyticsRcvr.consumer.ConsumeLogs(obsCtx, ld)
