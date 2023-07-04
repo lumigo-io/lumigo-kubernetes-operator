@@ -23,9 +23,7 @@ var (
 )
 
 func createDefaultConfig() component.Config {
-	return &Config{
-		APIConfig: k8sconfig.APIConfig{AuthType: k8sconfig.AuthTypeServiceAccount},
-	}
+	return &Config{}
 }
 
 func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSettings, baseCfg component.Config, consumer consumer.Logs) (receiver.Logs, error) {
@@ -35,12 +33,7 @@ func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSetting
 
 	cfg := baseCfg.(*Config)
 
-	apiConfig := cfg.APIConfig
-	if apiConfig.AuthType != k8sconfig.AuthTypeServiceAccount {
-		return nil, fmt.Errorf("The only type of AuthConfig supported is '%s'; found: '%s'", k8sconfig.AuthTypeServiceAccount, apiConfig.AuthType)
-	}
-
-	kubeClient, err := initKubeClient(apiConfig)
+	kubeClient, err := initKubeClient()
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +57,7 @@ func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSetting
 	return logsRcvr, nil
 }
 
-func initKubeClient(k8sConfig k8sconfig.APIConfig) (dynamic.Interface, error) {
+func initKubeClient() (dynamic.Interface, error) {
 	// Synchronize singleton instantiation, as there might be multiple
 	// instances of the processor being bootstrapped on different pipelines
 	if singletonKube != nil {
@@ -74,7 +67,7 @@ func initKubeClient(k8sConfig k8sconfig.APIConfig) (dynamic.Interface, error) {
 	singletonKubeMutex.Lock()
 	defer singletonKubeMutex.Unlock()
 
-	client, err := k8sconfig.MakeDynamicClient(k8sConfig)
+	client, err := k8sconfig.MakeDynamicClient(k8sconfig.APIConfig{AuthType: k8sconfig.AuthTypeServiceAccount})
 	if err != nil {
 		return nil, err
 	}
