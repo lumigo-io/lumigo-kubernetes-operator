@@ -2,6 +2,7 @@ package k8sanalyticsreceiver // import "github.com/open-telemetry/opentelemetry-
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -21,10 +22,12 @@ type k8sanalyticsReceiver struct {
 	consumer consumer.Logs
 	obsrecv  *obsreport.Receiver
 	ticker   *time.Ticker
+	ctx      context.Context
 }
 
 func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host component.Host) error {
 	fmt.Println("k8sanalyticsReceiver start function " + k8sanalyticsRcvr.config.Namespace)
+	k8sanalyticsRcvr.ctx = ctx
 	//namespaces, err := k8sanalyticsRcvr.kube.CoreV1().Namespaces().List(context.Background(), v1.ListOptions{})
 	//if err != nil {
 	//	err = fmt.Errorf("error getting pods: %v\n", err)
@@ -113,35 +116,52 @@ func (k8sanalyticsRcvr *k8sanalyticsReceiver) RunScheduler() {
 		k8sanalyticsRcvr.ticker.Reset(time.Minute)
 		for {
 			fmt.Println("scheduler running!!! "+k8sanalyticsRcvr.config.Namespace, time.Now())
+			k8sanalyticsRcvr.SendUsage()
 			<-k8sanalyticsRcvr.ticker.C
 		}
 	}()
 }
 
 func (k8sanalyticsRcvr *k8sanalyticsReceiver) SendUsage() {
-	//gvr := schema.GroupVersionResource{
-	//	Group:    "operator.lumigo.io",
-	//	Version:  "v1alpha1",
-	//	Resource: "lumigoes",
-	//}
-	//customResourceList, err := dynamicClient.Resource(gvr).Namespace("").List(context.Background(), v1.ListOptions{})
-	//if err != nil {
-	//	fmt.Printf("Failed to retrieve custom resource list: %v", err)
-	//	os.Exit(1)
-	//}
-	//
-	//for _, n := range customResourceList.Items {
-	//	fmt.Println("k8sanalyticsReceiver found resource: " + n.GetNamespace())
-	//	lumigoResource, err := dynamicClient.Resource(gvr).Namespace(n.GetNamespace()).Get(context.Background(), n.GetName(), v1.GetOptions{})
-	//	if err != nil {
-	//		fmt.Printf("Failed to retrieve custom resource list: %v", err)
-	//		os.Exit(1)
-	//	}
-	//	jsonStr, err := json.Marshal(lumigoResource.UnstructuredContent())
-	//	if err != nil {
-	//		fmt.Printf("Error: %s", err.Error())
-	//	} else {
-	//		fmt.Println(string(jsonStr))
-	//	}
-	//}
+	gvr := schema.GroupVersionResource{
+		Group:    "operator.lumigo.io",
+		Version:  "v1alpha1",
+		Resource: "lumigoes",
+	}
+	customResourceList, err := k8sanalyticsRcvr.kube.Resource(gvr).Namespace(k8sanalyticsRcvr.config.Namespace).List(context.Background(), v1.ListOptions{})
+	if err != nil {
+		fmt.Printf("Failed to retrieve custom resource list: %v", err)
+		return
+	}
+
+	for _, n := range customResourceList.Items {
+		fmt.Println("k8sanalyticsReceiver found lumigo resource in namespace: " + k8sanalyticsRcvr.config.Namespace)
+		lumigoResource, err := k8sanalyticsRcvr.kube.Resource(gvr).Namespace(k8sanalyticsRcvr.config.Namespace).Get(context.Background(), n.GetName(), v1.GetOptions{})
+		if err != nil {
+			fmt.Printf("Failed to retrieve custom resource list: %v", err)
+			return
+		}
+		jsonStr, err := json.Marshal(lumigoResource.UnstructuredContent())
+		if err != nil {
+			fmt.Printf("Error creating json from resource description: %s", err.Error())
+			return
+		}
+		lumigoStatusBody := string(jsonStr)
+		fmt.Println("k8sanalyticsReceiver sending lumigo status: " + lumigoStatusBody)
+
+		ld := plog.NewLogs()
+		rl := ld.ResourceLogs().AppendEmpty()
+		sl := rl.ScopeLogs().AppendEmpty()
+		lr := sl.LogRecords().AppendEmpty()
+		resourceAttrs := rl.Resource().Attributes()
+		resourceAttrs.PutStr("some_attre_1", "some_attre_1_val")
+		lr.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+		lr.Body().SetStr(lumigoStatusBody)
+		attrs := lr.Attributes()
+		attrs.PutStr("lr_some_atribute", "lr_some_atribute_val")
+
+		obsCtx := k8sanalyticsRcvr.obsrecv.StartLogsOp(k8sanalyticsRcvr.ctx)
+		err = k8sanalyticsRcvr.consumer.ConsumeLogs(obsCtx, ld)
+		k8sanalyticsRcvr.obsrecv.EndLogsOp(obsCtx, "k8sanalytics", 1, err)
+	}
 }
