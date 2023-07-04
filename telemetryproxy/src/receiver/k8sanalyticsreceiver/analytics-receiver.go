@@ -15,16 +15,12 @@ import (
 	"time"
 )
 
-var (
-	ticker   *time.Ticker
-	shutdown = false
-)
-
 type k8sanalyticsReceiver struct {
 	kube     dynamic.Interface
 	config   *Config
 	consumer consumer.Logs
 	obsrecv  *obsreport.Receiver
+	ticker   *time.Ticker
 }
 
 func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host component.Host) error {
@@ -94,41 +90,58 @@ func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host co
 		fmt.Printf("Failed to retrieve custom resource list: %v", err)
 		os.Exit(1)
 	}
-	runScheduler(k8sanalyticsRcvr.config.Namespace)
+	k8sanalyticsRcvr.RunScheduler()
 	return nil
 }
 
 func (k8sanalyticsRcvr *k8sanalyticsReceiver) Shutdown(ctx context.Context) error {
 	fmt.Println("k8sanalyticsReceiver shutdown function")
-	shutdown = true
-	if ticker != nil {
+	if k8sanalyticsRcvr.ticker != nil {
 		fmt.Println("k8sanalyticsReceiver shutdown function - stopping ticker")
-		ticker.Stop()
-
+		k8sanalyticsRcvr.ticker.Stop()
 	}
 	return nil
 }
 
-func runScheduler(namespace string) {
+func (k8sanalyticsRcvr *k8sanalyticsReceiver) RunScheduler() {
 	duration := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
-	ticker = time.NewTicker(duration)
+	k8sanalyticsRcvr.ticker = time.NewTicker(duration)
 
 	go func() {
-		<-ticker.C
-		ticker.Stop()
-		if shutdown {
-			fmt.Println("scheduler running shutdown true in the first check "+namespace, time.Now())
-			return
-		}
-		ticker = time.NewTicker(time.Minute)
-
+		<-k8sanalyticsRcvr.ticker.C
+		k8sanalyticsRcvr.ticker.Stop()
+		k8sanalyticsRcvr.ticker.Reset(time.Minute)
 		for {
-			if shutdown {
-				fmt.Println("scheduler running shutdown true "+namespace, time.Now())
-				return
-			}
-			fmt.Println("scheduler running!!! "+namespace, time.Now())
-			<-ticker.C
+			fmt.Println("scheduler running!!! "+k8sanalyticsRcvr.config.Namespace, time.Now())
+			<-k8sanalyticsRcvr.ticker.C
 		}
 	}()
+}
+
+func (k8sanalyticsRcvr *k8sanalyticsReceiver) SendUsage() {
+	//gvr := schema.GroupVersionResource{
+	//	Group:    "operator.lumigo.io",
+	//	Version:  "v1alpha1",
+	//	Resource: "lumigoes",
+	//}
+	//customResourceList, err := dynamicClient.Resource(gvr).Namespace("").List(context.Background(), v1.ListOptions{})
+	//if err != nil {
+	//	fmt.Printf("Failed to retrieve custom resource list: %v", err)
+	//	os.Exit(1)
+	//}
+	//
+	//for _, n := range customResourceList.Items {
+	//	fmt.Println("k8sanalyticsReceiver found resource: " + n.GetNamespace())
+	//	lumigoResource, err := dynamicClient.Resource(gvr).Namespace(n.GetNamespace()).Get(context.Background(), n.GetName(), v1.GetOptions{})
+	//	if err != nil {
+	//		fmt.Printf("Failed to retrieve custom resource list: %v", err)
+	//		os.Exit(1)
+	//	}
+	//	jsonStr, err := json.Marshal(lumigoResource.UnstructuredContent())
+	//	if err != nil {
+	//		fmt.Printf("Error: %s", err.Error())
+	//	} else {
+	//		fmt.Println(string(jsonStr))
+	//	}
+	//}
 }
