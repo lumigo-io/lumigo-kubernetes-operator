@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+var (
+	ticker   *time.Ticker
+	shutdown = false
+)
+
 type k8sanalyticsReceiver struct {
 	kube     dynamic.Interface
 	config   *Config
@@ -89,10 +94,41 @@ func (k8sanalyticsRcvr *k8sanalyticsReceiver) Start(ctx context.Context, host co
 		fmt.Printf("Failed to retrieve custom resource list: %v", err)
 		os.Exit(1)
 	}
+	runScheduler(k8sanalyticsRcvr.config.Namespace)
 	return nil
 }
 
 func (k8sanalyticsRcvr *k8sanalyticsReceiver) Shutdown(ctx context.Context) error {
 	fmt.Println("k8sanalyticsReceiver shutdown function")
+	shutdown = true
+	if ticker != nil {
+		fmt.Println("k8sanalyticsReceiver shutdown function - stopping ticker")
+		ticker.Stop()
+
+	}
 	return nil
+}
+
+func runScheduler(namespace string) {
+	duration := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
+	ticker = time.NewTicker(duration)
+
+	go func() {
+		<-ticker.C
+		ticker.Stop()
+		if shutdown {
+			fmt.Println("scheduler running shutdown true in the first check "+namespace, time.Now())
+			return
+		}
+		ticker = time.NewTicker(time.Minute)
+
+		for {
+			if shutdown {
+				fmt.Println("scheduler running shutdown true "+namespace, time.Now())
+				return
+			}
+			fmt.Println("scheduler running!!! "+namespace, time.Now())
+			<-ticker.C
+		}
+	}()
 }
