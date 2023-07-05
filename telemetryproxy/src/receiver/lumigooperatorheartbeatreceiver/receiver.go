@@ -42,13 +42,13 @@ func (lumigooperatorheartbeatRcvr *lumigooperatorheartbeatReceiver) Shutdown(ctx
 }
 
 func (lumigooperatorheartbeatRcvr *lumigooperatorheartbeatReceiver) RunScheduler() {
-	duration := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
+	duration := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
 	lumigooperatorheartbeatRcvr.ticker = time.NewTicker(duration)
 
 	go func() {
 		<-lumigooperatorheartbeatRcvr.ticker.C
 		lumigooperatorheartbeatRcvr.ticker.Stop()
-		lumigooperatorheartbeatRcvr.ticker.Reset(time.Minute)
+		lumigooperatorheartbeatRcvr.ticker.Reset(time.Hour)
 		for {
 			fmt.Println("scheduler running "+lumigooperatorheartbeatRcvr.config.Namespace, time.Now())
 			lumigooperatorheartbeatRcvr.SendUsage()
