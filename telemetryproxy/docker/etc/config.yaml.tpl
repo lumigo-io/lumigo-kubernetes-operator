@@ -9,7 +9,7 @@ receivers:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
 {{- range $i, $namespace := $namespaces }}
-  k8sanalytics/ns_{{ $namespace.name }}:
+  lumigooperatorheartbeat/ns_{{ $namespace.name }}:
     namespace: {{ $namespace.name }}
 {{- end }}
 {{- range $i, $namespace := $namespaces }}
@@ -199,7 +199,7 @@ service:
 {{- range $i, $namespace := $namespaces }}
     logs/usage_analytics_ns_{{ $namespace.name }}:
       receivers:
-      - k8sanalytics/ns_{{ $namespace.name }}
+      - lumigooperatorheartbeat/ns_{{ $namespace.name }}
       processors:
       - transform/add_heartbeat_attributes
       - transform/add_ns_attributes_ns_{{ $namespace.name }}

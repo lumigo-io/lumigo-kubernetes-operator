@@ -1,4 +1,4 @@
-package k8sanalyticsreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sanalyticsreceiver"
+package lumigooperatorheartbeatreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver"
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	typeStr = "k8sanalytics"
+	typeStr = "lumigooperatorheartbeat"
 )
 
 var (
@@ -26,7 +26,7 @@ func createDefaultConfig() component.Config {
 	return &Config{}
 }
 
-func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSettings, baseCfg component.Config, consumer consumer.Logs) (receiver.Logs, error) {
+func createLumigooperatorheartbeatReceiver(_ context.Context, params receiver.CreateSettings, baseCfg component.Config, consumer consumer.Logs) (receiver.Logs, error) {
 	if consumer == nil {
 		return nil, component.ErrNilNextConsumer
 	}
@@ -47,7 +47,7 @@ func createK8sanalyticsReceiver(_ context.Context, params receiver.CreateSetting
 		return nil, fmt.Errorf("cant create NewReceiver")
 	}
 
-	logsRcvr := &k8sanalyticsReceiver{
+	logsRcvr := &lumigooperatorheartbeatReceiver{
 		kube:     kubeClient,
 		config:   cfg,
 		consumer: consumer,
@@ -81,5 +81,5 @@ func NewFactory() receiver.Factory {
 	return receiver.NewFactory(
 		typeStr,
 		createDefaultConfig,
-		receiver.WithLogs(createK8sanalyticsReceiver, component.StabilityLevelAlpha))
+		receiver.WithLogs(createLumigooperatorheartbeatReceiver, component.StabilityLevelAlpha))
 }
