@@ -90,9 +90,26 @@ func (lumigooperatorheartbeatRcvr *lumigooperatorheartbeatReceiver) SendUsage() 
 		lr := sl.LogRecords().AppendEmpty()
 		lr.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 		lr.Body().SetStr(lumigoStatusBody)
+		resourceAttrs := rl.Resource().Attributes()
+		resourceAttrs.PutStr("cluster_id", lumigooperatorheartbeatRcvr.getClusterUid())
 
 		obsCtx := lumigooperatorheartbeatRcvr.obsrecv.StartLogsOp(lumigooperatorheartbeatRcvr.ctx)
 		err = lumigooperatorheartbeatRcvr.consumer.ConsumeLogs(obsCtx, ld)
 		lumigooperatorheartbeatRcvr.obsrecv.EndLogsOp(obsCtx, "lumigooperatorheartbeat", 1, err)
 	}
+}
+
+func (lumigooperatorheartbeatRcvr *lumigooperatorheartbeatReceiver) getClusterUid() string {
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	}
+	namespaceObj, err := lumigooperatorheartbeatRcvr.kube.Resource(gvr).Namespace("").Get(context.Background(), "kube-system", v1.GetOptions{})
+	if err != nil {
+		fmt.Printf("Failed to load Namespace: %v", err)
+		return ""
+	}
+
+	return string(namespaceObj.GetUID())
 }
