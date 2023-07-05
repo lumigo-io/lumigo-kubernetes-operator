@@ -92,6 +92,7 @@ func (lumigooperatorheartbeatRcvr *lumigooperatorheartbeatReceiver) SendUsage() 
 		lr.Body().SetStr(lumigoStatusBody)
 		resourceAttrs := rl.Resource().Attributes()
 		resourceAttrs.PutStr("cluster_id", lumigooperatorheartbeatRcvr.getClusterUid())
+		resourceAttrs.PutStr("heartbeat_timestamp", time.Now().Format("2006-01-02 15:04:05"))
 
 		obsCtx := lumigooperatorheartbeatRcvr.obsrecv.StartLogsOp(lumigooperatorheartbeatRcvr.ctx)
 		err = lumigooperatorheartbeatRcvr.consumer.ConsumeLogs(obsCtx, ld)
