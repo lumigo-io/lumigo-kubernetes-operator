@@ -201,6 +201,7 @@ service:
       receivers:
       - lumigooperatorheartbeat/ns_{{ $namespace.name }}
       processors:
+      - k8sdataenricherprocessor
       - transform/add_heartbeat_attributes
       - transform/add_ns_attributes_ns_{{ $namespace.name }}
       - transform/inject_operator_details_into_resource

@@ -3,12 +3,14 @@ package lumigooperatorheartbeatreceiver // import "github.com/open-telemetry/ope
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/obsreport"
 	"go.opentelemetry.io/collector/receiver"
+	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
-	"sync"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
 )
@@ -44,7 +46,7 @@ func createLumigooperatorheartbeatReceiver(_ context.Context, params receiver.Cr
 		ReceiverCreateSettings: params,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("cant create NewReceiver")
+		return nil, fmt.Errorf("cannot create a new receiver: %w", err)
 	}
 
 	logsRcvr := &lumigooperatorheartbeatReceiver{
@@ -52,6 +54,7 @@ func createLumigooperatorheartbeatReceiver(_ context.Context, params receiver.Cr
 		config:   cfg,
 		consumer: consumer,
 		obsrecv:  obsrecv,
+		logger:   params.Logger.With(zap.String("namespace", cfg.Namespace)),
 	}
 
 	return logsRcvr, nil

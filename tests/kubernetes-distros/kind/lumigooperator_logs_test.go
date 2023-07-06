@@ -331,6 +331,97 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 
 			return ctx
 		}).
+		Assess("All logs have the 'k8s.cluster.uid' set to the UID of the 'kube-system' namespace", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			kubeSystemNamespace := corev1.Namespace{}
+			if err := c.Client().Resources().Get(ctx, "kube-system", "", &kubeSystemNamespace); err != nil {
+				t.Fatal(fmt.Errorf("cannot retrieve the 'kube-system' namespace: %w", err))
+			}
+			expectedClusterUID := string(kubeSystemNamespace.UID)
+
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			logsBytes, err := os.ReadFile(logsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(logsBytes) < 1 {
+				t.Fatalf("No log data found in '%s'", logsPath)
+			}
+
+			/*
+			 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+			 * bufio.NewScanner fails because our lines are "too long" (LOL).
+			 */
+			exportRequests := strings.Split(string(logsBytes), "\n")
+			for _, exportRequestJson := range exportRequests {
+				exportRequest := plogotlp.NewExportRequest()
+				exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+				l := exportRequest.Logs().ResourceLogs().Len()
+				for i := 0; i < l; i++ {
+					resourceLogs := exportRequest.Logs().ResourceLogs().At(i)
+					resourceAttributes := resourceLogs.Resource().Attributes().AsRaw()
+
+					if actualClusterUID, found := resourceAttributes["k8s.cluster.uid"]; !found {
+						t.Fatalf("found spans without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
+					} else if actualClusterUID != expectedClusterUID {
+						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
+					}
+				}
+			}
+
+			return ctx
+		}).
+		Assess("Usage heartbeat is sent for instrumented namespaces", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				eventLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if e, err := exportRequestToHeartbeatLogRecords(exportRequest); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						eventLogs = append(eventLogs, e...)
+					}
+				}
+
+				if len(eventLogs) < 1 {
+					// No events received yet
+					t.Fatalf("No heartbeat logs were sent: %v", err)
+					return false, nil
+				}
+
+				t.Logf("Found heartbeat logs: %d", len(eventLogs))
+				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for logs: %v", err)
+			}
+
+			return ctx
+		}).
 		Feature()
 
 	testEnv.Test(t, testAppDeploymentFeature)
@@ -436,4 +527,39 @@ func removeDuplicateStrings(s []string) []string {
 	}
 
 	return s[:prev]
+}
+
+func exportRequestToHeartbeatLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
+	eventLogs := make([]plog.LogRecord, 0)
+	logs := exportRequest.Logs()
+
+	l := logs.ResourceLogs().Len()
+	for i := 0; i < l; i++ {
+		e, err := resourceLogsToHeartbeatLogRecords(logs.ResourceLogs().At(i))
+		if err != nil {
+			return nil, err
+		}
+
+		eventLogs = append(eventLogs, e...)
+	}
+
+	return eventLogs, nil
+}
+
+func resourceLogsToHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	l := resourceLogs.ScopeLogs().Len()
+	heartbeatLogRecords := make([]plog.LogRecord, 0)
+	for i := 0; i < l; i++ {
+		scopeLogs := resourceLogs.ScopeLogs().At(i)
+		scopeName := scopeLogs.Scope().Name()
+		logRecords := scopeLogsToLogRecords(scopeLogs)
+
+		switch scopeName {
+		case "lumigo-operator.namespace_heartbeat":
+			{
+				heartbeatLogRecords = append(heartbeatLogRecords, logRecords...)
+			}
+		}
+	}
+	return heartbeatLogRecords, nil
 }

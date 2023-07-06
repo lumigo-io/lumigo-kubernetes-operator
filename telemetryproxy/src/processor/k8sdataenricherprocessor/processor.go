@@ -33,15 +33,30 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+const (
+	// Exists in https://opentelemetry.io/docs/specs/otel/resource/semantic_conventions/k8s/ as of 2023/07/06,
+	// but not in go.opentelemetry.io/otel/semconv/v1.20.0
+	K8SClusterUIDKey = "k8s.cluster.uid"
+)
+
 type kubernetesprocessor struct {
-	kube   *internal.KubeClient
-	logger *zap.Logger
+	kube       *internal.KubeClient
+	logger     *zap.Logger
+	clusterUid types.UID
 }
 
 func (kp *kubernetesprocessor) Start(_ context.Context, _ component.Host) error {
 	if err := kp.kube.Start(); err != nil {
 		return fmt.Errorf("cannot start Kube client: %w", err)
 	}
+
+	clusterUid, clusterUidFound := kp.kube.GetClusterUid()
+	if !clusterUidFound {
+		return fmt.Errorf("cannot add cluster uid resource attributes to traces, 'kube-system' namespace not found")
+	}
+
+	kp.clusterUid = clusterUid
+
 	return nil
 }
 
@@ -55,9 +70,11 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, tr ptrace.Trac
 	resourceSpanLength := resourceSpans.Len()
 	for i := 0; i < resourceSpanLength; i++ {
 		resource := resourceSpans.At(i).Resource()
-		pod, found := kp.getPod(ctx, &resource)
-
 		resourceAttributes := resourceSpans.At(i).Resource().Attributes()
+
+		resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+
+		pod, found := kp.getPod(ctx, &resource)
 		if !found {
 			kp.logger.Debug(
 				"Cannot find pod by 'k8s.pod.uid' of by connection ip",
@@ -189,8 +206,10 @@ func (kp *kubernetesprocessor) getPod(ctx context.Context, resource *pcommon.Res
 
 func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	resourceLogs := ld.ResourceLogs()
+
 	for i := 0; i < resourceLogs.Len(); i++ {
 		rl := resourceLogs.At(i)
+		rl.Resource().Attributes().PutStr(K8SClusterUIDKey, string(kp.clusterUid))
 		kp.processResourceLogs(ctx, &rl)
 	}
 
@@ -203,6 +222,10 @@ func (kp *kubernetesprocessor) processResourceLogs(ctx context.Context, resource
 		sl := scopeLogs.At(i)
 
 		switch sl.Scope().Name() {
+		case "lumigo-operator.heartbeat":
+			{
+				return
+			}
 		case "lumigo-operator.k8s-events":
 			{
 				kp.processKubernetesEventScopeLogs(ctx, &sl)
