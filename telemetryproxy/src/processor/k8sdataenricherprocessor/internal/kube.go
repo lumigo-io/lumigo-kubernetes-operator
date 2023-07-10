@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -36,6 +37,8 @@ const (
 type KubeClient struct {
 	client kubernetes.Interface
 	logger *zap.Logger
+
+	providerId string
 
 	namespaceInformer cache.SharedInformer
 
@@ -390,6 +393,18 @@ func (c *KubeClient) Start() error {
 		return nil
 	}
 
+	// Look up the EC2 identifier of the node on top of which this pod runs
+	if currentNodeName, isSet := os.LookupEnv("LUMIGO_OPERATOR_NODE_NAME"); isSet {
+		if node, err := c.client.CoreV1().Nodes().Get(context.Background(), currentNodeName, metav1.GetOptions{}); err != nil {
+			return fmt.Errorf("look up the EC2 identifier of the node running this pod: %w", err)
+		} else {
+			// If it is EKS, the provider ID matches this example: `"aws:///eu-central-1a/i-0ae2ea64455a24a5a"`
+			c.providerId = node.Spec.ProviderID
+		}
+	} else {
+		return fmt.Errorf("the LUMIGO_OPERATOR_NODE_NAME env var is not set, cannot look up the EC2 identifier of the node running this pod")
+	}
+
 	if _, err := c.namespaceInformer.AddEventHandler(createEventHandler(c.logger, "namespace")); err != nil {
 		return fmt.Errorf("cannot register event handler for namespace informer: %w", err)
 	}
@@ -733,6 +748,10 @@ func (c *KubeClient) GetClusterUid() (types.UID, bool) {
 	} else {
 		return types.UID(""), false
 	}
+}
+
+func (c *KubeClient) GetProviderId() string {
+	return c.providerId
 }
 
 func (c *KubeClient) GetNamespaceByName(name string) (*corev1.Namespace, bool) {

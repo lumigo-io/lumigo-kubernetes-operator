@@ -121,6 +121,10 @@ spec:
         - name: telemetry-proxy
           image: host.docker.internal:5000/telemetry-proxy:latest
           env:
+            - name: LUMIGO_OPERATOR_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: LUMIGO_OPERATOR_VERSION
               value: latest
             - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD

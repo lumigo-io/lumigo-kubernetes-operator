@@ -229,6 +229,10 @@ spec:
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
           value: "Helm-{{ .Capabilities.HelmVersion.Version }}"
+        - name: LUMIGO_OPERATOR_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         ports:
         - containerPort: 4318
           name: otlphttp
