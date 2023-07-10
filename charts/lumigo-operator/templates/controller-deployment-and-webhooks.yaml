@@ -221,6 +221,12 @@ spec:
       - name: telemetry-proxy
         image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
         env:
+{{- if .Values.cluster }}
+{{- if .Values.cluster.name }}
+        - name: KUBERNETES_CLUSTER_NAME
+          value: "{{ .Values.cluster.name }}"
+{{- end }}
+{{- end }}
         - name: LUMIGO_DEBUG
           value: "{{ .Values.debug.enabled | default false }}"
         - name: LUMIGO_ENDPOINT
