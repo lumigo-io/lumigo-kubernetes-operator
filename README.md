@@ -31,6 +31,16 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 
 ### Upgrading
 
+You can check which version of the Lumigo Kubernetes operator you have deployed in your cluster as follows:
+
+```sh
+$ helm ls -A      
+NAME  	NAMESPACE    	REVISION	UPDATED                              	STATUS  	CHART             	APP VERSION
+lumigo	lumigo-system	2       	2023-07-10 09:20:04.233825 +0200 CEST	deployed	lumigo-operator-13	13         
+```
+
+The Lumigo Kubernetes operator is reported as `APP VERSION`.
+
 To upgrade to a newer version of the Lumigo Kubernetes operator, run:
 
 ```sh
