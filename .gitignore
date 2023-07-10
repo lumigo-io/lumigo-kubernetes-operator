@@ -22,3 +22,5 @@ test.out
 
 # Temporary files created by make docker-buildx
 Dockerfile.*.cross
+
+.idea
