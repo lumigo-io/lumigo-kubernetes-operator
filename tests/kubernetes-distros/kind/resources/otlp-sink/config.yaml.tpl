@@ -8,7 +8,7 @@ receivers:
 exporters:
 {{- if $config.lumigo_token }}
   otlphttp/lumigo:
-    endpoint: "https://ga-otlp.lumigo-tracer-edge.golumigo.com"
+    endpoint: {{ $config.lumigo_endpoint | default "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     headers:
       Authorization: "LumigoToken {{ $config.lumigo_token }}"
 {{ end }}

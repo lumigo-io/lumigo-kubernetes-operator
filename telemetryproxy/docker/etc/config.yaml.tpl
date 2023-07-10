@@ -9,6 +9,10 @@ receivers:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
 {{- range $i, $namespace := $namespaces }}
+  lumigooperatorheartbeat/ns_{{ $namespace.name }}:
+    namespace: {{ $namespace.name }}
+{{- end }}
+{{- range $i, $namespace := $namespaces }}
   k8sobjects/objects_ns_{{ $namespace.name }}:
     auth_type: serviceAccount
     objects:
@@ -124,6 +128,11 @@ processors:
 {{- end }}
         - key: k8s.namespace.name
           value: "{{ join $namespaceNames "|" }}"
+  transform/add_heartbeat_attributes:
+    log_statements:
+    - context: scope
+      statements:
+      - set(name, "lumigo-operator.namespace_heartbeat")
   transform/set_k8s_objects_scope:
     log_statements:
     - context: scope
@@ -187,8 +196,20 @@ service:
 {{- if $debug }}
       - logging
 {{- end }}
-
 {{- range $i, $namespace := $namespaces }}
+    logs/usage_analytics_ns_{{ $namespace.name }}:
+      receivers:
+      - lumigooperatorheartbeat/ns_{{ $namespace.name }}
+      processors:
+      - k8sdataenricherprocessor
+      - transform/add_heartbeat_attributes
+      - transform/add_ns_attributes_ns_{{ $namespace.name }}
+      - transform/inject_operator_details_into_resource
+      exporters:
+{{- if $config.debug }}
+      - logging
+{{- end }}
+      - otlphttp/lumigo_ns_{{ $namespace.name }}
     logs/k8s_objects_ns_{{ $namespace.name }}:
       receivers:
       - k8sobjects/objects_ns_{{ $namespace.name }}

@@ -725,44 +725,22 @@ func connectionIP(ctx context.Context) string {
 	}
 
 	return c.Addr.String()
+}
 
+func (c *KubeClient) GetClusterUid() (types.UID, bool) {
+	if kubeSystemNamespace, found := c.GetNamespaceByName("kube-system"); found {
+		return kubeSystemNamespace.UID, true
+	} else {
+		return types.UID(""), false
+	}
 }
 
 func (c *KubeClient) GetNamespaceByName(name string) (*corev1.Namespace, bool) {
-	// TODO Trigger fetch of this namespace from the API if we don't have it in the cache
-	if namespace, err := retry(
-		fmt.Sprintf("Get v1.Namespace '%s' from the namespaces cache", name),
-		retryAttempts,
-		retryAttempStep,
-		func() (*corev1.Namespace, error) {
-			if namespace, found, err := c.namespaceInformer.GetStore().GetByKey(name); err != nil {
-				return nil, err
-			} else if !found {
-				// TODO It's a bit silly that we create this error here and unpack it at the next level,
-				// but it will do for now.
-				return nil, errors.NewNotFound(gvkToGroupResource(V1Namespace), name)
-			} else if ns, ok := namespace.(*corev1.Namespace); ok {
-				return ns, nil
-			} else {
-				return nil, fmt.Errorf(
-					"object returned from namespace cache store is not an instance of *corev1.Namespace: %v",
-					namespace,
-				)
-			}
-		},
-		c.logger,
-	); err != nil {
-		if !errors.IsNotFound(err) {
-			c.logger.Error(
-				"Unexpected error while looking up namespace by name",
-				zap.String("namespace", name),
-				zap.Error(err),
-			)
-		}
-
+	if namespace, found, err := c.getNamespace(name); err != nil {
+		c.logger.Error("Cannot find namespace", zap.String("name", name), zap.Error(err))
 		return nil, false
 	} else {
-		return namespace, true
+		return namespace, found
 	}
 }
 
@@ -1017,6 +995,43 @@ func getFirstRelevantOwnerReference(ownerReferences []metav1.OwnerReference) *me
 	}
 
 	return nil
+}
+
+func (c *KubeClient) getNamespace(namespace string) (*corev1.Namespace, bool, error) {
+	if namespace, found, err := c.namespaceInformer.GetStore().GetByKey(namespace); err != nil {
+		return nil, false, err
+	} else if found {
+		if ns, ok := namespace.(*corev1.Namespace); ok {
+			return ns, true, nil
+		} else {
+			return nil, false, fmt.Errorf("Object returned from the namespace informer's store is not a *v1.Namespace: %s", reflect.TypeOf(namespace))
+		}
+	}
+
+	// Try fetch from the Kubernetes API then
+	c.logger.Debug(
+		"Cannot find namespace in local cache, looking remotely",
+		zap.String("namespace", namespace),
+	)
+
+	if namespace, err := retry(
+		fmt.Sprintf("Get v1.Namespace '%s' from the Kube API", namespace),
+		retryAttempts,
+		retryAttempStep,
+		func() (*corev1.Namespace, error) {
+			return c.client.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
+		},
+		c.logger,
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	} else {
+		c.RegisterNamespace(namespace)
+		return namespace, true, nil
+	}
 }
 
 func (c *KubeClient) getPod(name, namespace, resourceVersion string) (*corev1.Pod, bool, error) {

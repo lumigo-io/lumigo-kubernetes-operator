@@ -31,7 +31,8 @@ const (
 )
 
 type otlpSinkConfigDatasource struct {
-	LumigoToken string `json:"lumigo_token"`
+	LumigoEndpoint string `json:"lumigo_endpoint"`
+	LumigoToken    string `json:"lumigo_token"`
 }
 
 func TestMain(m *testing.M) {
@@ -52,6 +53,12 @@ func TestMain(m *testing.M) {
 
 	logger := log.New(os.Stderr, "", 0)
 
+	lumigoEndpoint, isLumigoEndpointPresent := os.LookupEnv("LUMIGO_ENDPOINT")
+	if !isLumigoEndpointPresent {
+		lumigoEndpoint = internal.DEFAULT_LUMIGO_ENDPOINT
+	}
+	logger.Printf("Lumigo endpoint: %s", lumigoEndpoint)
+
 	isLumigoOperatorDebug := true
 	if val, isPresent := os.LookupEnv("LUMIGO_DEBUG"); isPresent && val == "false" {
 		isLumigoOperatorDebug = false
@@ -64,6 +71,7 @@ func TestMain(m *testing.M) {
 	} else {
 		lumigoTokenDatasourceValue = lumigoToken
 	}
+	logger.Printf("Lumigo token: %s", lumigoToken)
 
 	cwd, _ := os.Getwd()
 	tmpDir := filepath.Join(cwd, "resources", "test-runs", runId)
@@ -93,7 +101,8 @@ func TestMain(m *testing.M) {
 	}
 
 	if otlpSinkConfigDatasource, err := json.Marshal(otlpSinkConfigDatasource{
-		LumigoToken: lumigoTokenDatasourceValue,
+		LumigoEndpoint: lumigoEndpoint,
+		LumigoToken:    lumigoTokenDatasourceValue,
 	}); err != nil {
 		logger.Fatalf("Cannot create OTLP sink config datasource file at '%s': %v", otlpSinkConfigDatasourceFilePath, err)
 	} else {
@@ -186,6 +195,7 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkDataPath, dataSinkDataDir)
 	ctx = context.WithValue(ctx, internal.ContextKeySendDataToLumigo, isLumigoTokenPresent)
+	ctx = context.WithValue(ctx, internal.ContextKeyLumigoEndpoint, lumigoEndpoint)
 	ctx = context.WithValue(ctx, internal.ContextKeyLumigoOperatorDebug, isLumigoOperatorDebug)
 	ctx = context.WithValue(ctx, internal.ContextKeyLumigoToken, lumigoToken)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorControllerImage, controllerImageName)

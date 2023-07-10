@@ -19,6 +19,7 @@ extensions:
 
 receivers:
   - gomod: "go.opentelemetry.io/collector/receiver/otlpreceiver v0.79.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.79.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.79.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.79.0"
 
@@ -33,3 +34,4 @@ processors:
 replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.79.0 => github.com/lumigo-io/opentelemetry-collector-contrib/extension/lumigoauthextension lumigo-main
   - github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor v0.79.0 => ../processor/k8sdataenricherprocessor
+  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.79.0 => ../receiver/lumigooperatorheartbeatreceiver

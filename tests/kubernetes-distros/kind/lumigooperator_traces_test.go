@@ -21,7 +21,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -49,7 +49,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 			client := config.Client()
 
-			if err := client.Resources().Create(ctx, &v1.Namespace{
+			if err := client.Resources().Create(ctx, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: namespaceName,
 				},
@@ -62,7 +62,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			lumigoTokenName := "lumigo-credentials"
 			lumigoTokenKey := "token"
 
-			secret := v1.Secret{
+			secret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespaceName,
 					Name:      lumigoTokenName,
@@ -113,16 +113,16 @@ func TestLumigoOperatorTraces(t *testing.T) {
 						MatchLabels: deploymentLabels,
 					},
 					Replicas: &replicas,
-					Template: v1.PodTemplateSpec{
+					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: deploymentLabels,
 						},
-						Spec: v1.PodSpec{
-							Containers: []v1.Container{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
 								{
 									Name:  "server",
 									Image: testJsAppServerImage,
-									Env: []v1.EnvVar{
+									Env: []corev1.EnvVar{
 										{
 											Name:  "SERVER_PORT",
 											Value: fmt.Sprintf("%d", deploymentPort),
@@ -137,10 +137,10 @@ func TestLumigoOperatorTraces(t *testing.T) {
 											Value: "console:log",
 										},
 									},
-									Ports: []v1.ContainerPort{
+									Ports: []corev1.ContainerPort{
 										{
 											Name:          "app",
-											Protocol:      v1.ProtocolTCP,
+											Protocol:      corev1.ProtocolTCP,
 											ContainerPort: int32(deploymentPort),
 										},
 									},
@@ -156,17 +156,17 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			}
 
 			servicePort := int32(8080)
-			service := &v1.Service{
+			service := &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespaceName,
 					Name:      "app",
 				},
-				Spec: v1.ServiceSpec{
+				Spec: corev1.ServiceSpec{
 					Selector: deploymentLabels,
-					Ports: []v1.ServicePort{
+					Ports: []corev1.ServicePort{
 						{
 							Name:       "app",
-							Protocol:   v1.ProtocolTCP,
+							Protocol:   corev1.ProtocolTCP,
 							Port:       servicePort,
 							TargetPort: intstr.FromInt(deploymentPort),
 						},
@@ -196,20 +196,20 @@ func TestLumigoOperatorTraces(t *testing.T) {
 					Schedule: "* * * * *", // Every minute
 					JobTemplate: batchv1.JobTemplateSpec{
 						Spec: batchv1.JobSpec{
-							Template: v1.PodTemplateSpec{
+							Template: corev1.PodTemplateSpec{
 								ObjectMeta: metav1.ObjectMeta{
 									Labels: map[string]string{
 										"app":  cronJobName,
 										"type": "cronjob",
 									},
 								},
-								Spec: v1.PodSpec{
-									RestartPolicy: v1.RestartPolicyNever,
-									Containers: []v1.Container{
+								Spec: corev1.PodSpec{
+									RestartPolicy: corev1.RestartPolicyNever,
+									Containers: []corev1.Container{
 										{
 											Name:  "client",
 											Image: testJsAppClientImage,
-											Env: []v1.EnvVar{
+											Env: []corev1.EnvVar{
 												{
 													Name:  "TARGET_URL",
 													Value: fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", service.Name, service.Namespace, servicePort),
@@ -244,13 +244,13 @@ func TestLumigoOperatorTraces(t *testing.T) {
 		Assess("CronJob traces have the 'k8s.cronjob.id' resource attribute set", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
-			logsPath := filepath.Join(otlpSinkDataPath, "traces.json")
+			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
 
 			if err := apimachinerywait.PollImmediateUntilWithContext(
 				ctx,
 				time.Second*5,
 				wrapWithLogging(t, "CronJob traces have the 'k8s.cronjob.id' resource attribute set", func(context.Context) (bool, error) {
-					traceBytes, err := os.ReadFile(logsPath)
+					traceBytes, err := os.ReadFile(tracesPath)
 					if err != nil {
 						return false, err
 					}
@@ -311,16 +311,16 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 			return ctx
 		}).
-		Assess("Deployment spans have the 'k8s.deployment.uid' resource attribute set", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+		Assess("Deployment traces have the 'k8s.deployment.uid' resource attribute set", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
-			logsPath := filepath.Join(otlpSinkDataPath, "traces.json")
+			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
 
 			if err := apimachinerywait.PollImmediateUntilWithContext(
 				ctx,
 				time.Second*5,
 				wrapWithLogging(t, "Deployment spans have the 'k8s.deployment.uid' resource attribute set", func(context.Context) (bool, error) {
-					traceBytes, err := os.ReadFile(logsPath)
+					traceBytes, err := os.ReadFile(tracesPath)
 					if err != nil {
 						return false, err
 					}
@@ -371,6 +371,52 @@ func TestLumigoOperatorTraces(t *testing.T) {
 					return spansFound, nil
 				})); err != nil {
 				t.Fatalf("Failed to wait for traces: %v", err)
+			}
+
+			return ctx
+		}).
+		Assess("All traces have the 'k8s.cluster.uid' set to the UID of the 'kube-system' namespace", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			kubeSystemNamespace := corev1.Namespace{}
+			if err := c.Client().Resources().Get(ctx, "kube-system", "", &kubeSystemNamespace); err != nil {
+				t.Fatal(fmt.Errorf("cannot retrieve the 'kube-system' namespace: %w", err))
+			}
+
+			expectedClusterUID := string(kubeSystemNamespace.UID)
+
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
+
+			traceBytes, err := os.ReadFile(tracesPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(traceBytes) < 1 {
+				t.Fatalf("No trace data found in '%s'", tracesPath)
+			}
+
+			scanner := bufio.NewScanner(bytes.NewBuffer(traceBytes))
+			for scanner.Scan() {
+				exportRequest := ptraceotlp.NewExportRequest()
+				exportRequest.UnmarshalJSON(scanner.Bytes())
+
+				if exportRequest.Traces().SpanCount() < 1 {
+					continue
+				}
+
+				l := exportRequest.Traces().ResourceSpans().Len()
+				for i := 0; i < l; i++ {
+					resourceSpans := exportRequest.Traces().ResourceSpans().At(i)
+
+					resourceAttributes := resourceSpans.Resource().Attributes().AsRaw()
+
+					if actualClusterUID, found := resourceAttributes["k8s.cluster.uid"]; !found {
+						t.Fatalf("found spans without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
+					} else if actualClusterUID != expectedClusterUID {
+						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
+					}
+				}
 			}
 
 			return ctx
