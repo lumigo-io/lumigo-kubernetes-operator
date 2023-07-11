@@ -15,7 +15,7 @@ import { KubectlV26Layer } from '@aws-cdk/lambda-layer-kubectl-v26';
 export class EksOperatorTestCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-    const token = "t_186eb52a329344cdb0d6c";
+    const token = "t_";
     const endpoint = "https://mosheshaham-edge-app-us-west-2.mosheshaham.golumigo.com";
 
     const vpc = new Vpc(this, 'EksOperatorTestVpc');
