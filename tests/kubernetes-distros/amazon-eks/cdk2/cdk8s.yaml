@@ -1,3 +1,0 @@
-imports:
-  - ../../config/crd/bases/operator.lumigo.io_lumigoes.yaml
-language: typescript
