@@ -428,6 +428,49 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 			return ctx
 		}).
+		Assess("All traces have the 'k8s.provider.id' resource attribute set correctly", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
+			runId := ctx.Value(internal.ContextKeyRunId).(string)
+
+			expectedProvider := fmt.Sprintf("kind://docker/lumigo-operator-%s/lumigo-operator-%s-control-plane", runId, runId)
+
+			traceBytes, err := os.ReadFile(tracesPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(traceBytes) < 1 {
+				t.Fatalf("No trace data found in '%s'", tracesPath)
+			}
+
+			scanner := bufio.NewScanner(bytes.NewBuffer(traceBytes))
+			for scanner.Scan() {
+				exportRequest := ptraceotlp.NewExportRequest()
+				exportRequest.UnmarshalJSON(scanner.Bytes())
+
+				if exportRequest.Traces().SpanCount() < 1 {
+					continue
+				}
+
+				l := exportRequest.Traces().ResourceSpans().Len()
+				for i := 0; i < l; i++ {
+					resourceSpans := exportRequest.Traces().ResourceSpans().At(i)
+
+					resourceAttributes := resourceSpans.Resource().Attributes().AsRaw()
+
+					if actualClusterUID, found := resourceAttributes["k8s.provider.id"]; !found {
+						t.Fatalf("found spans without the 'k8s.provider.id' resource attribute: %+v", resourceAttributes)
+					} else if actualClusterUID != expectedProvider {
+						t.Fatalf("wrong 'k8s.provider.id' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedProvider, resourceAttributes)
+					}
+				}
+			}
+
+			return ctx
+		}).
 		Feature()
 
 	testEnv.Test(t, testAppDeploymentFeature)

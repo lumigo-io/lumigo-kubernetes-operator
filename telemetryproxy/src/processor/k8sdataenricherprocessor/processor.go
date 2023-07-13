@@ -37,6 +37,7 @@ const (
 	// Exists in https://opentelemetry.io/docs/specs/otel/resource/semantic_conventions/k8s/ as of 2023/07/06,
 	// but not in go.opentelemetry.io/otel/semconv/v1.20.0
 	K8SClusterUIDKey = "k8s.cluster.uid"
+	K8SProviderIdKey = "k8s.provider.id"
 )
 
 type kubernetesprocessor struct {
@@ -70,8 +71,9 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, tr ptrace.Trac
 	resourceSpanLength := resourceSpans.Len()
 	for i := 0; i < resourceSpanLength; i++ {
 		resource := resourceSpans.At(i).Resource()
-		resourceAttributes := resourceSpans.At(i).Resource().Attributes()
+		resourceAttributes := resource.Attributes()
 
+		resourceAttributes.PutStr(K8SProviderIdKey, kp.kube.GetProviderId())
 		resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
 
 		pod, found := kp.getPod(ctx, &resource)
@@ -209,7 +211,11 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 
 	for i := 0; i < resourceLogs.Len(); i++ {
 		rl := resourceLogs.At(i)
-		rl.Resource().Attributes().PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+
+		resourceAttributes := rl.Resource().Attributes()
+		resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+		resourceAttributes.PutStr(K8SProviderIdKey, kp.kube.GetProviderId())
+
 		kp.processResourceLogs(ctx, &rl)
 	}
 

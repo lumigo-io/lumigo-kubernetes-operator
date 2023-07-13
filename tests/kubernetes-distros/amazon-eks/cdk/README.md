@@ -5,7 +5,6 @@
 ### Software to have on hand
 
 1. Node.js v14+ installed
-1. Yarn installed
 1. A local Docker daemon installed that can run `docker build` as the user that you are running the commands in the [Run](#run) section
 1. AWS CLI ([installation instructions](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html))
 1. Local setup of the AWS CLI:
@@ -14,13 +13,13 @@
    ```
 1. AWS Cloud Development Kit (CDK) v2 ([installation instructions](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html))
 
-### AWS account
+### Pre-run setup
 
 1. AWS Cloud Development Kit (CDK) v2 bootstrapped:
    ```sh
    cdk bootstrap
    ```
-1. Create an AWS Secret Manager secret called `AccessKeys`, with `LumigoToken` as a field, and the actual token as its value.
+1. Setup environment variables for sending to Lumigo: `LUMIGO_TRACER_TOKEN` and `LUMIGO_ENDPOINT`
 
 ## Run
 
@@ -30,16 +29,10 @@ find . -name node_modules -prune -o -name package.json -execdir npm install \; &
 ```
 
 ```
-yarn install
-npm run build
+npm install
 cdk deploy --all
 ```
 
-To deploy specific stack with AWS profile:
-
-```sh
-CDK_DEFAULT_ACCOUNT=<AWS account number> cdk deploy ecs-js-http-ecs-js --profile <AWS cli profile>
-```
 
 ## Connect to EKS
 
