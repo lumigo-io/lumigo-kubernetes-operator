@@ -14,10 +14,13 @@ Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](htt
 
 ```sh
 helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
-helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace
+helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --set cluster.name <cluster_name>
 ```
 
 You can customize the namespace name to use something other than `lumigo-system`, but this will make the rest of the instructions subtly wrong :-)
+
+(The `cluster.name` is optional, but highly advised, see the [Naming your cluster](#naming-your-cluster) section.)
+
 
 You can verify that the Lumigo Kubernetes operator is up and running with:
 
@@ -28,6 +31,15 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 ```
 
 **Note:** While installing the Lumigo Kubernetes operator via [`kustomize`](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) is generally expected to work (except the [uninstallation of instrumentation on removal](#remove-injection-from-existing-resources)), it is not actually supported[^1].
+
+#### Naming your cluster
+
+Kubernetes clusters does not have a built-in nothing of their identity[^1], but when running multiple Kubernetes clusters, you almost certainly have names from them.
+The Lumigo Kubernetes operator will automatically add to your telemetry the `k8s.cluster.uid` OpenTelemetry resource attribute, set to the value of the UID of the `kube-system` namespace, but UIDs are not meant for humans to remember and recognize easily.
+The Lumigo Kubernetes operator allows you to set a human-readable name using the `cluster.name` Helm setting, which enables you to filter all your tracing data based on the cluster in [Lumigo's Explore view](https://docs.lumigo.io/docs/explore).
+
+[^1] Not even Amazon EKS clusters, as their ARN is not available anywhere inside the cluster itself.
+
 
 ### Upgrading
 

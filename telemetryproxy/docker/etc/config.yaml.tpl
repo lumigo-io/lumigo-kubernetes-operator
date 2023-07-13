@@ -1,6 +1,7 @@
 {{- $namespaces := (datasource "namespaces") -}}
 {{- $config := (datasource "config") -}}
 {{- $debug := $config.debug | conv.ToBool -}}
+{{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 receivers:
   otlp:
     protocols:
@@ -128,6 +129,21 @@ processors:
 {{- end }}
         - key: k8s.namespace.name
           value: "{{ join $namespaceNames "|" }}"
+{{- if $clusterName }}
+  transform/add_cluster_name:
+    trace_statements:
+    - context: resource
+      statements:
+      - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
+#   metric_statements:
+#   - context: resource
+#     statements:
+#     - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
+    log_statements:
+    - context: resource
+      statements:
+      - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
+{{- end }}
   transform/add_heartbeat_attributes:
     log_statements:
     - context: scope
@@ -190,6 +206,9 @@ service:
       - otlp
       processors:
       - k8sdataenricherprocessor
+{{- if $clusterName }}
+      - transform/add_cluster_name
+{{- end }}
       - transform/inject_operator_details_into_resource
       exporters:
       - otlphttp/lumigo
@@ -204,6 +223,9 @@ service:
       - k8sdataenricherprocessor
       - transform/add_heartbeat_attributes
       - transform/add_ns_attributes_ns_{{ $namespace.name }}
+{{- if $clusterName }}
+      - transform/add_cluster_name
+{{- end }}
       - transform/inject_operator_details_into_resource
       exporters:
 {{- if $config.debug }}
@@ -218,6 +240,9 @@ service:
       - k8sdataenricherprocessor
       - transform/add_ns_attributes_ns_{{ $namespace.name }}
       - filter/only_monitored_namespaces
+{{- if $clusterName }}
+      - transform/add_cluster_name
+{{- end }}
       - transform/inject_operator_details_into_resource
       - batch/k8s_objects_ns_{{ $namespace.name }}
       exporters:
@@ -234,6 +259,9 @@ service:
       - transform/add_ns_attributes_ns_{{ $namespace.name }}
       - filter/only_monitored_namespaces
       - transform/inject_operator_details_into_resource
+{{- if $clusterName }}
+      - transform/add_cluster_name
+{{- end }}
       - batch/k8s_events_ns_{{ $namespace.name }}
       exporters:
 {{- if $debug }}

@@ -3,6 +3,8 @@ debug:
 output:
   color: true
   showOperatorStatus: true
+cluster:
+  name:
 controllerManager:
   kubeRbacProxy:
     image:

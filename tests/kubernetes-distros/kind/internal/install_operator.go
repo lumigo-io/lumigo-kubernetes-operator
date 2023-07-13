@@ -32,6 +32,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	controllerImageName, controllerImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorControllerImage).(string))
 	telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorTelemetryProxyImage).(string))
 	operatorDebug := ctx.Value(ContextKeyLumigoOperatorDebug).(bool)
+	kubernetesClusterName := ctx.Value(ContextKeyKubernetesClusterName).(string)
 
 	var curDir, _ = os.Getwd()
 	chartDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(curDir))), "charts", "lumigo-operator")
@@ -43,6 +44,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithChart(chartDir),
 		helm.WithNamespace(lumigoNamespace),
 		helm.WithArgs("--create-namespace"),
+		helm.WithArgs(fmt.Sprintf("--set cluster.name=%s", kubernetesClusterName)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.repository=%s", controllerImageName)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
