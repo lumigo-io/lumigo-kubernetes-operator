@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -434,6 +433,9 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
 			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
+			runId := ctx.Value(internal.ContextKeyRunId).(string)
+
+			expectedProvider := fmt.Sprintf("kind://docker/lumigo-operator-%s/lumigo-operator-%s-control-plane", runId, runId)
 
 			traceBytes, err := os.ReadFile(tracesPath)
 			if err != nil {
@@ -461,11 +463,8 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 					if actualClusterUID, found := resourceAttributes["k8s.provider.id"]; !found {
 						t.Fatalf("found spans without the 'k8s.provider.id' resource attribute: %+v", resourceAttributes)
-					} else {
-						actualClusterUIDstr, ok := actualClusterUID.(string)
-						if !ok || !strings.HasPrefix(actualClusterUIDstr, "kind://") {
-							t.Fatalf("wrong 'k8s.provider.id' value found: '%s'; %+v", actualClusterUID, resourceAttributes)
-						}
+					} else if actualClusterUID != expectedProvider {
+						t.Fatalf("wrong 'k8s.provider.id' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedProvider, resourceAttributes)
 					}
 				}
 			}
