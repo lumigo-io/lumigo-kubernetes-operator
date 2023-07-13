@@ -2,7 +2,8 @@
 
 ## How to trigger a new release
 
-Push a commit to the `main` branch that increments linearly the version in the [VERSION](./VERSION) file.
+Trigger the [`Trigger release`](./.github/workflows/trigger-release.yml) workflow, which will push a commit to the `main` branch that increments linearly the version in the [VERSION](./VERSION) file.
+This, in turn, will trigger the release process (see next section).
 
 ## Release process
 

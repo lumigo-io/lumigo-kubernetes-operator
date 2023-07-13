@@ -1,0 +1,27 @@
+name: Trigger release
+on:
+  workflow_dispatch:
+    inputs: {}
+
+jobs:
+  increase_version:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+      - name: Increase version
+        run: .github/workflows/scripts/increase_version.sh
+      - name: Set Git config up
+        run: |
+          git config --global user.name "Lumigo Bot"
+          git config --global user.email "bot@lumigo.io"
+      - name: Push VERSION increment to main
+        run: |
+          git add 'VERSION'
+          git commit -m "Release version v$(< VERSION)"
+          git push origin HEAD:main
