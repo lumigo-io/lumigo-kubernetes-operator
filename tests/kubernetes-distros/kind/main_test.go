@@ -192,6 +192,7 @@ func TestMain(m *testing.M) {
 	testJsServerImageArchivePath := filepath.Join(tmpDir, "test-js-server.tgz")
 
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
+	ctx = context.WithValue(ctx, internal.ContextKeyKubernetesClusterName, kindClusterName)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkDataPath, dataSinkDataDir)
 	ctx = context.WithValue(ctx, internal.ContextKeySendDataToLumigo, isLumigoTokenPresent)

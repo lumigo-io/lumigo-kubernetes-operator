@@ -4,6 +4,7 @@ type ContextKey string
 
 var (
 	ContextKeyRunId                       = ContextKey("run-id")
+	ContextKeyKubernetesClusterName       = ContextKey("kubernetes/cluster/name")
 	ContextKeyOtlpSinkConfigPath          = ContextKey("otlp-sink/config")
 	ContextKeyOtlpSinkDataPath            = ContextKey("otlp-sink/data")
 	ContextKeyLumigoEndpoint              = ContextKey("lumigo/endpoint")

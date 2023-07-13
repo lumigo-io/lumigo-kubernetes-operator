@@ -331,12 +331,13 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 
 			return ctx
 		}).
-		Assess("All logs have the 'k8s.cluster.uid' set to the UID of the 'kube-system' namespace", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+		Assess("All logs have the 'k8s.cluster.name' and 'k8s.cluster.uid' set correctly", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			kubeSystemNamespace := corev1.Namespace{}
 			if err := c.Client().Resources().Get(ctx, "kube-system", "", &kubeSystemNamespace); err != nil {
 				t.Fatal(fmt.Errorf("cannot retrieve the 'kube-system' namespace: %w", err))
 			}
 			expectedClusterUID := string(kubeSystemNamespace.UID)
+			expectedClusterName := ctx.Value(internal.ContextKeyKubernetesClusterName).(string)
 
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
@@ -365,8 +366,14 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 					resourceLogs := exportRequest.Logs().ResourceLogs().At(i)
 					resourceAttributes := resourceLogs.Resource().Attributes().AsRaw()
 
+					if actualClusterName, found := resourceAttributes["k8s.cluster.name"]; !found {
+						t.Fatalf("found logs without the 'k8s.cluster.name' resource attribute: %+v", resourceAttributes)
+					} else if actualClusterName != expectedClusterName {
+						t.Fatalf("wrong 'k8s.cluster.name' value found: '%s'; expected: '%s'; %+v", actualClusterName, expectedClusterName, resourceAttributes)
+					}
+
 					if actualClusterUID, found := resourceAttributes["k8s.cluster.uid"]; !found {
-						t.Fatalf("found spans without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
+						t.Fatalf("found logs without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
 					} else if actualClusterUID != expectedClusterUID {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
 					}
