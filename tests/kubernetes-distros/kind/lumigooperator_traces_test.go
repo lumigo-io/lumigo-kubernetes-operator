@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -415,6 +416,49 @@ func TestLumigoOperatorTraces(t *testing.T) {
 						t.Fatalf("found spans without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
 					} else if actualClusterUID != expectedClusterUID {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
+					}
+				}
+			}
+
+			return ctx
+		}).
+		Assess("All traces have the 'k8s.provider.id' taken from describe node", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
+
+			traceBytes, err := os.ReadFile(tracesPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(traceBytes) < 1 {
+				t.Fatalf("No trace data found in '%s'", tracesPath)
+			}
+
+			scanner := bufio.NewScanner(bytes.NewBuffer(traceBytes))
+			for scanner.Scan() {
+				exportRequest := ptraceotlp.NewExportRequest()
+				exportRequest.UnmarshalJSON(scanner.Bytes())
+
+				if exportRequest.Traces().SpanCount() < 1 {
+					continue
+				}
+
+				l := exportRequest.Traces().ResourceSpans().Len()
+				for i := 0; i < l; i++ {
+					resourceSpans := exportRequest.Traces().ResourceSpans().At(i)
+
+					resourceAttributes := resourceSpans.Resource().Attributes().AsRaw()
+
+					if actualClusterUID, found := resourceAttributes["k8s.provider.id"]; !found {
+						t.Fatalf("found spans without the 'k8s.provider.id' resource attribute: %+v", resourceAttributes)
+					} else {
+						actualClusterUIDstr, ok := actualClusterUID.(string)
+						if !ok || !strings.HasPrefix(actualClusterUIDstr, "kind://") {
+							t.Fatalf("wrong 'k8s.provider.id' value found: '%s'; %+v", actualClusterUID, resourceAttributes)
+						}
 					}
 				}
 			}
