@@ -393,10 +393,13 @@ func (c *KubeClient) Start() error {
 		return nil
 	}
 
-	// Look up the EC2 identifier of the node on top of which this pod runs
+	// Look up the provider identifier of the node on top of which this pod runs.
+	// If the operator is running on an EC2 nodegroup of an EKS cluster, the provider id
+	// contains the EC2 instance id, and that will allow us in the backend to piece
+	// together which EKS cluster this is.
 	if currentNodeName, isSet := os.LookupEnv("LUMIGO_OPERATOR_NODE_NAME"); isSet {
 		if node, err := c.client.CoreV1().Nodes().Get(context.Background(), currentNodeName, metav1.GetOptions{}); err != nil {
-			return fmt.Errorf("look up the EC2 identifier of the node running this pod: %w", err)
+			return fmt.Errorf("cannot look up the provider identifier of the node running this pod: %w", err)
 		} else {
 			// If it is EKS, the provider ID matches this example: `"aws:///eu-central-1a/i-0ae2ea64455a24a5a"`
 			c.providerId = node.Spec.ProviderID
