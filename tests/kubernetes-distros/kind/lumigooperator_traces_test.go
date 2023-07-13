@@ -428,7 +428,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 			return ctx
 		}).
-		Assess("All traces have the 'k8s.provider.id' taken from describe node", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+		Assess("All traces have the 'k8s.provider.id' resource attribute set correctly", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
