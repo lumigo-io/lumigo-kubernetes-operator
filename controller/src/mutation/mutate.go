@@ -158,7 +158,7 @@ func (m *mutatorImpl) RemoveLumigoFromAppsV1Deployment(deployment *appsv1.Deploy
 
 func (m *mutatorImpl) InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
 	if hasDeploymentOwner, err := hasDeploymentOwnerReference(replicaSet.OwnerReferences); err != nil {
-		return false, nil
+		return false, err
 	} else if hasDeploymentOwner {
 		return false, nil
 	}
@@ -168,7 +168,7 @@ func (m *mutatorImpl) InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.Replic
 
 func (m *mutatorImpl) RemoveLumigoFromAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
 	if hasDeploymentOwner, err := hasDeploymentOwnerReference(replicaSet.OwnerReferences); err != nil {
-		return false, nil
+		return false, err
 	} else if hasDeploymentOwner {
 		return false, nil
 	}
