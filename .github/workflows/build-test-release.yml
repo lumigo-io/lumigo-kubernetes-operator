@@ -51,7 +51,7 @@ jobs:
       - name: Set up regctl
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl
+          sudo apt-get install -y curl ca-certificates
           sudo curl -L https://github.com/regclient/regclient/releases/download/v0.4.4/regctl-linux-amd64 -o /usr/bin/regctl
           sudo chmod +x /usr/bin/regctl
 
@@ -175,7 +175,7 @@ jobs:
       - name: Set up regctl
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl
+          sudo apt-get install -y curl ca-certificates
           sudo curl -L https://github.com/regclient/regclient/releases/download/v0.4.4/regctl-linux-amd64 -o /usr/bin/regctl
           sudo chmod +x /usr/bin/regctl
 
