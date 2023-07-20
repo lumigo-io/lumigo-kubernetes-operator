@@ -32,6 +32,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const LumigoAutoTraceLabelKey = "lumigo.auto-trace"
@@ -156,10 +157,22 @@ func (m *mutatorImpl) RemoveLumigoFromAppsV1Deployment(deployment *appsv1.Deploy
 }
 
 func (m *mutatorImpl) InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
+	if hasDeploymentOwner, err := hasDeploymentOwnerReference(replicaSet.OwnerReferences); err != nil {
+		return false, err
+	} else if hasDeploymentOwner {
+		return false, nil
+	}
+
 	return m.injectLumigoInto(&replicaSet.ObjectMeta, &replicaSet.Spec.Template)
 }
 
 func (m *mutatorImpl) RemoveLumigoFromAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
+	if hasDeploymentOwner, err := hasDeploymentOwnerReference(replicaSet.OwnerReferences); err != nil {
+		return false, err
+	} else if hasDeploymentOwner {
+		return false, nil
+	}
+
 	return m.removeLumigoFrom(&replicaSet.ObjectMeta, &replicaSet.Spec.Template)
 }
 
@@ -452,4 +465,19 @@ func (m *mutatorImpl) removeLumigoFromPodSpec(podSpec *corev1.PodSpec) error {
 func newTrue() *bool {
 	b := true
 	return &b
+}
+
+func hasDeploymentOwnerReference(ownerReferences []metav1.OwnerReference) (bool, error) {
+	for _, ownerReference := range ownerReferences {
+		gv, err := schema.ParseGroupVersion(ownerReference.APIVersion)
+		if err != nil {
+			return false, err
+		}
+
+		if gv.Group == "apps" && gv.Version == "v1" && ownerReference.Kind == "Deployment" {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
