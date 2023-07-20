@@ -48,13 +48,15 @@ jobs:
         run: |
           ip a
           echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
-      - name: Set up regctl
+      - name: Install regctl
+        env:
+          GH_TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl ca-certificates
-          sudo curl -L https://github.com/regclient/regclient/releases/download/v0.4.4/regctl-linux-amd64 -o /usr/bin/regctl
-          sudo chmod +x /usr/bin/regctl
-
+          gh release download v0.5.0 --repo regclient/regclient --pattern regctl-linux-amd64 --output /tmp/regctl
+          chmod 0755 /tmp/regctl
+          sudo mv /tmp/regctl /usr/bin/regctl
+      - name: Configure regctl
+        run: |
           # Configure local registry as insecure
           /usr/bin/regctl registry set --tls disabled "${{ steps.hostip.outputs.ip }}:5000"
       - name: Set up Docker Buildx
@@ -172,13 +174,15 @@ jobs:
         run: |
           ip a
           echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
-      - name: Set up regctl
+      - name: Install regctl
+        env:
+          GH_TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl ca-certificates
-          sudo curl -L https://github.com/regclient/regclient/releases/download/v0.4.4/regctl-linux-amd64 -o /usr/bin/regctl
-          sudo chmod +x /usr/bin/regctl
-
+          gh release download v0.5.0 --repo regclient/regclient --pattern regctl-linux-amd64 --output /tmp/regctl
+          chmod 0755 /tmp/regctl
+          sudo mv /tmp/regctl /usr/bin/regctl
+      - name: Configure regctl
+        run: |
           # Configure local registry as insecure
           /usr/bin/regctl registry set --tls disabled "${{ steps.hostip.outputs.ip }}:5000"
       - name: Set up Docker Buildx
