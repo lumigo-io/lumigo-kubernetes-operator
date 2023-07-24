@@ -471,6 +471,89 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 			return ctx
 		}).
+		Assess("All traces have the 'k8s.node.name' resource attribute set correctly", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
+			runId := ctx.Value(internal.ContextKeyRunId).(string)
+
+			expectedNodeName := fmt.Sprintf("lumigo-operator-%s-control-plane", runId)
+
+			traceBytes, err := os.ReadFile(tracesPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(traceBytes) < 1 {
+				t.Fatalf("No trace data found in '%s'", tracesPath)
+			}
+
+			scanner := bufio.NewScanner(bytes.NewBuffer(traceBytes))
+			for scanner.Scan() {
+				exportRequest := ptraceotlp.NewExportRequest()
+				exportRequest.UnmarshalJSON(scanner.Bytes())
+
+				if exportRequest.Traces().SpanCount() < 1 {
+					continue
+				}
+
+				l := exportRequest.Traces().ResourceSpans().Len()
+				for i := 0; i < l; i++ {
+					resourceSpans := exportRequest.Traces().ResourceSpans().At(i)
+
+					resourceAttributes := resourceSpans.Resource().Attributes().AsRaw()
+
+					if actualNodeName, found := resourceAttributes["k8s.node.name"]; !found {
+						t.Fatalf("found spans without the 'k8s.node.name' resource attribute: %+v", resourceAttributes)
+					} else if actualNodeName != expectedNodeName {
+						t.Fatalf("wrong 'k8s.node.name' value found: '%s'; expected: '%s'; %+v", actualNodeName, expectedNodeName, resourceAttributes)
+					}
+				}
+			}
+
+			return ctx
+		}).
+		Assess("All traces have the 'k8s.container.name' resource attribute set correctly", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+
+			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
+
+			traceBytes, err := os.ReadFile(tracesPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(traceBytes) < 1 {
+				t.Fatalf("No trace data found in '%s'", tracesPath)
+			}
+
+			scanner := bufio.NewScanner(bytes.NewBuffer(traceBytes))
+			for scanner.Scan() {
+				exportRequest := ptraceotlp.NewExportRequest()
+				exportRequest.UnmarshalJSON(scanner.Bytes())
+
+				if exportRequest.Traces().SpanCount() < 1 {
+					continue
+				}
+
+				l := exportRequest.Traces().ResourceSpans().Len()
+				for i := 0; i < l; i++ {
+					resourceSpans := exportRequest.Traces().ResourceSpans().At(i)
+
+					resourceAttributes := resourceSpans.Resource().Attributes().AsRaw()
+
+					if actualContainerName, found := resourceAttributes["k8s.container.name"]; !found {
+						t.Fatalf("found spans without the 'k8s.container.name' resource attribute: %+v", resourceAttributes)
+					} else if actualContainerName != "server" && actualContainerName != "client" {
+						t.Fatalf("wrong 'k8s.container.name' value found: '%s'; %+v", actualContainerName, resourceAttributes)
+					}
+				}
+			}
+
+			return ctx
+		}).
 		Feature()
 
 	testEnv.Test(t, testAppDeploymentFeature)
