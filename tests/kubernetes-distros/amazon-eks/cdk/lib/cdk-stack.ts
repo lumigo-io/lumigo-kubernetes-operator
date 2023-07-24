@@ -10,6 +10,7 @@ import { App, Chart } from 'cdk8s';
 import { Deployment as KubeDeployment, Namespace as KubeNamespace, Secret as KubeSecret } from 'cdk8s-plus-26';
 import { Lumigo as LumigoResource } from './imports/operator.lumigo.io';
 import { KubectlV26Layer } from '@aws-cdk/lambda-layer-kubectl-v26';
+import {ManagedPolicy} from "aws-cdk-lib/aws-iam";
 
 
 export class EksOperatorTestCdkStack extends cdk.Stack {
@@ -24,9 +25,13 @@ export class EksOperatorTestCdkStack extends cdk.Stack {
       clusterName: 'EksOperatorTestCluster',
       version: KubernetesVersion.V1_26,
       kubectlLayer: new KubectlV26Layer(this, 'Kubectlv26Layer'),
-      defaultCapacity: 1, // Just one node for the deployment test
+      defaultCapacity: 2, // Just one node for the deployment test
       vpc,
     });
+
+    cluster.defaultNodegroup!.role.addManagedPolicy(
+        ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
+    );
 
     /**
      * Deploy Lumigo Operator
@@ -66,6 +71,9 @@ export class EksOperatorTestCdkStack extends cdk.Stack {
       namespace: lumigoOperatorNamespace,
       release: 'test',
       values: {
+        cluster: {
+          name: "TestEksClusterName"
+        },
         endpoint: {
           otlp: {
             url: endpoint
@@ -150,6 +158,13 @@ export class EksOperatorTestCdkStack extends cdk.Stack {
       replicas: 1,
       containers: [{
         image: testAppImageAsset.imageUri,
+        resources: {
+          cpu: {
+            limit: {
+              amount: "50m"
+            }
+          }
+        },
         envVariables: {
           'OTEL_SERVICE_NAME': {
             value: 'TestService2',
