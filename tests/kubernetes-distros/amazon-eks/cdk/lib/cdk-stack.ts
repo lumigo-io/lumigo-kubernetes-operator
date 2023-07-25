@@ -25,7 +25,7 @@ export class EksOperatorTestCdkStack extends cdk.Stack {
       clusterName: 'EksOperatorTestCluster',
       version: KubernetesVersion.V1_26,
       kubectlLayer: new KubectlV26Layer(this, 'Kubectlv26Layer'),
-      defaultCapacity: 2, // Just one node for the deployment test
+      defaultCapacity: 2,  // 2 nodes for testing
       vpc,
     });
 
