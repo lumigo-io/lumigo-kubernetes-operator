@@ -6,7 +6,8 @@ const app = express()
 const port = 3000
 
 app.get('/', (req, res) => {
-  res.send('Hello World!!! a')
+    console.log("print something...")
+    res.send('Hello World!!! a')
 })
 
 app.get('/throw-error', (req, res) => {

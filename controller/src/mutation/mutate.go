@@ -46,6 +46,7 @@ const LumigoInjectorVolumeName = "lumigo-injector"
 const LumigoInjectorVolumeMountPoint = "/opt/lumigo"
 const LumigoTracerTokenEnvVarName = "LUMIGO_TRACER_TOKEN"
 const LumigoEndpointEnvVarName = "LUMIGO_ENDPOINT"
+const LumigoContainerNameEnvVarName = "LUMIGO_CONTAINER_NAME"
 const LdPreloadEnvVarName = "LD_PRELOAD"
 const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
 
@@ -402,7 +403,16 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 		} else {
 			envVars[lumigoEndpointEnvVarIndex] = *lumigoEndpointEnvVar
 		}
-
+		lumigoContainerNameEnvVar := &corev1.EnvVar{
+			Name:  LumigoContainerNameEnvVarName,
+			Value: container.Name,
+		}
+		lumigoContainerNameEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoContainerNameEnvVarName })
+		if lumigoContainerNameEnvVarIndex < 0 {
+			envVars = append(envVars, *lumigoContainerNameEnvVar)
+		} else {
+			envVars[lumigoContainerNameEnvVarIndex] = *lumigoContainerNameEnvVar
+		}
 		container.Env = envVars
 
 		patchedContainers = append(patchedContainers, container)

@@ -38,6 +38,7 @@ const (
 	// but not in go.opentelemetry.io/otel/semconv/v1.20.0
 	K8SClusterUIDKey = "k8s.cluster.uid"
 	K8SProviderIdKey = "k8s.provider.id"
+	K8SNodeNameKey   = "k8s.node.name"
 )
 
 type kubernetesprocessor struct {
@@ -84,6 +85,7 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, tr ptrace.Trac
 			)
 			continue
 		}
+		resourceAttributes.PutStr(K8SNodeNameKey, pod.Spec.NodeName)
 
 		// Ensure 'k8s.pod.uid' is set (we might have found the pod via the network connection ip)
 		if _, found := resourceAttributes.Get(string(semconv.K8SPodUIDKey)); !found {
