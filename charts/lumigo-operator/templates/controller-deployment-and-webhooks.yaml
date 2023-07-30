@@ -286,7 +286,7 @@ spec:
       securityContext:
         runAsNonRoot: true
         fsGroup: 1234
-      serviceAccountName: {{ include "helm.fullname" . }}-controller-manager
+      serviceAccountName: lumigo-kubernetes-operator
       terminationGracePeriodSeconds: 10
       volumes:
       - name: cert

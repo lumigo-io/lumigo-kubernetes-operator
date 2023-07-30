@@ -27,7 +27,7 @@ You can verify that the Lumigo Kubernetes operator is up and running with:
 ```sh
 $ kubectl get pods -n lumigo-system
 NAME                                                         READY   STATUS    RESTARTS   AGE
-lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0          56s
+lumigo-kubernetes-operator-7fc8f67bcc-ffh5k   2/2     Running   0          56s
 ```
 
 **Note:** While installing the Lumigo Kubernetes operator via [`kustomize`](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) is generally expected to work (except the [uninstallation of instrumentation on removal](#remove-injection-from-existing-resources)), it is not actually supported[^1].
