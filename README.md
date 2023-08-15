@@ -34,7 +34,28 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 
 #### EKS on Fargate
 
-On EKS, the Lumigo Kubernetes operator needs to be running on a nodegroup using Amazon EC2 virtual machines (very long story, but it is necessary for Lumigo to figure out which EKS cluster is the operator sending data from).
+On EKS, the Lumigo Kubernetes operator needs to be running on a nodegroup using Amazon EC2 virtual machines.
+Installing the Lumigo Kubernetes operator on an EKS cluster without EC2-backed nodegroups, results in the operator pods staying in `Pending` state:
+
+```sh
+$ kubectl describe pod -n lumigo-system lumigo-lumigo-operator-controller-manager-5999997fb7-cvg5h
+
+Namespace:    	lumigo-system
+Priority:     	0
+Service Account:  lumigo-lumigo-operator-controller-manager
+Node:         	<none>
+Labels:       	app.kubernetes.io/instance=lumigo
+              	app.kubernetes.io/name=lumigo-operator
+              	control-plane=controller-manager
+              	lumigo.auto-trace=false
+              	lumigo.cert-digest=dJTiBDRVJUSUZJQ
+              	pod-template-hash=5999997fb7
+Annotations:  	kubectl.kubernetes.io/default-container: manager
+              	kubernetes.io/psp: eks.privileged
+Status:       	Pending
+```
+
+(The reason for this limitation is very long story, but it is necessary for Lumigo to figure out which EKS cluster is the operator sending data from).
 If you are installing the Lumigo Kubernetes operator on an EKS cluster with only the Fargate profile, [add a managed nodegroup](https://docs.aws.amazon.com/eks/latest/userguide/create-managed-node-group.html).
 
 #### Naming your cluster
