@@ -34,7 +34,8 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 
 #### EKS on Fargate
 
-On EKS, the Lumigo Kubernetes operator needs to be running on a nodegroup using Amazon EC2 virtual machines.
+On EKS, the pods of the Lumigo Kubernetes operator need to be running on a nodegroup that uses Amazon EC2 virtual machines.
+Your monitored applications, however, can run on the Fargate profile without any issues.
 Installing the Lumigo Kubernetes operator on an EKS cluster without EC2-backed nodegroups, results in the operator pods staying in `Pending` state:
 
 ```sh
