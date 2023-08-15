@@ -73,9 +73,9 @@ The Lumigo Kubernetes operator automatically adds distributed tracing to pods cr
 * CronJobs ([`batch/v1.CronJob`](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/))
 * Jobs ([`batch/v1.Job`](https://kubernetes.io/docs/concepts/workloads/controllers/job/))
 
-The distributed tracing is provided by the [Lumigo OpenTelemetry distribution for Python](https://github.com/lumigo-io/opentelemetry-python-distro) and [Lumigo OpenTelemetry distribution for JS](https://github.com/lumigo-io/opentelemetry-js-distro).
+The distributed tracing is provided by the [Lumigo OpenTelemetry distribution for JS](https://github.com/lumigo-io/opentelemetry-js-distro), the [Lumigo OpenTelemetry distribution for Java](https://github.com/lumigo-io/opentelemetry-java-distro) and the [Lumigo OpenTelemetry distribution for Python](https://github.com/lumigo-io/opentelemetry-python-distro).
 
-The Lumigo Kubernetes operator will automatically trace all Python and Node.js processes found in the containers of pods created in the namespaces that Lumigo traces.
+The Lumigo Kubernetes operator will automatically trace all Java, Node.js and Python processes found in the containers of pods created in the namespaces that Lumigo traces.
 To activate automatic tracing for resources in a namespace, create in that namespace a Kubernetes secret containing your [Lumigo token](https://docs.lumigo.io/docs/lumigo-tokens), and reference it from a `Lumigo` (`operator.lumigo.io/v1alpha1.Lumigo`) custom resource:
 
 ```yaml
