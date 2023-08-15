@@ -105,6 +105,7 @@ The distributed tracing is provided by the [Lumigo OpenTelemetry distribution fo
 The Lumigo Kubernetes operator will automatically trace all Java, Node.js and Python processes found in the containers of pods created in the namespaces that Lumigo traces.
 To activate automatic tracing for resources in a namespace, create in that namespace a Kubernetes secret containing your [Lumigo token](https://docs.lumigo.io/docs/lumigo-tokens), and reference it from a `Lumigo` (`operator.lumigo.io/v1alpha1.Lumigo`) custom resource:
 
+`lumigo-secret.yml`:
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -113,7 +114,7 @@ metadata:
 stringData:
   # Kubectl won't allow you to deploy this dangling anchor.
   # Get the actual value from Lumigo following this documentation: https://docs.lumigo.io/docs/lumigo-tokens
-  token: *lumigo-token # Example: t_123456789012345678901
+  token: *lumigo-token #  <--- Change this! Example: t_123456789012345678901
 ---
 apiVersion: operator.lumigo.io/v1alpha1
 kind: Lumigo
@@ -127,7 +128,12 @@ spec:
   lumigoToken:
     secretRef:
       name: lumigo-credentials # This must match the name of the secret; the secret must be in the same namespace as this Lumigo custom resource
-      key: token # This must match the key in the Kubernetes secret
+      key: token # This must match the key in the Kubernetes secret (don't touch)
+```
+
+after creating the secret, deploy it in the desired namespace:
+```
+kubectl apply -f lumigo-secret.yml -n <YOUR_NAMESPACE>
 ```
 
 Each `Lumigo` resource keeps in its state a list of resources it currently instruments:
