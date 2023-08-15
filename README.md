@@ -32,6 +32,33 @@ lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0
 
 **Note:** While installing the Lumigo Kubernetes operator via [`kustomize`](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) is generally expected to work (except the [uninstallation of instrumentation on removal](#remove-injection-from-existing-resources)), it is not actually supported[^1].
 
+#### EKS on Fargate
+
+On EKS, the pods of the Lumigo Kubernetes operator itself need to be running on nodes running on Amazon EC2 virtual machines.
+Your monitored applications, however, can run on the Fargate profile without any issues.
+Installing the Lumigo Kubernetes operator on an EKS cluster without EC2-backed nodegroups, results in the operator pods staying in `Pending` state:
+
+```sh
+$ kubectl describe pod -n lumigo-system lumigo-lumigo-operator-controller-manager-5999997fb7-cvg5h
+
+Namespace:    	lumigo-system
+Priority:     	0
+Service Account:  lumigo-lumigo-operator-controller-manager
+Node:         	<none>
+Labels:       	app.kubernetes.io/instance=lumigo
+              	app.kubernetes.io/name=lumigo-operator
+              	control-plane=controller-manager
+              	lumigo.auto-trace=false
+              	lumigo.cert-digest=dJTiBDRVJUSUZJQ
+              	pod-template-hash=5999997fb7
+Annotations:  	kubectl.kubernetes.io/default-container: manager
+              	kubernetes.io/psp: eks.privileged
+Status:       	Pending
+```
+
+(The reason for this limitation is very long story, but it is necessary for Lumigo to figure out which EKS cluster is the operator sending data from).
+If you are installing the Lumigo Kubernetes operator on an EKS cluster with only the Fargate profile, [add a managed nodegroup](https://docs.aws.amazon.com/eks/latest/userguide/create-managed-node-group.html).
+
 #### Naming your cluster
 
 Kubernetes clusters does not have a built-in nothing of their identity[^1], but when running multiple Kubernetes clusters, you almost certainly have names from them.
