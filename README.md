@@ -56,7 +56,7 @@ Annotations:  	kubectl.kubernetes.io/default-container: manager
 Status:       	Pending
 ```
 
-(The reason for this limitation is very long story, but it is necessary for Lumigo to figure out which EKS cluster is the operator sending data from).
+(The reason for this limitation is very long story, but it is necessary for Lumigo to figure out which EKS cluster is the operator sending data from.)
 If you are installing the Lumigo Kubernetes operator on an EKS cluster with only the Fargate profile, [add a managed nodegroup](https://docs.aws.amazon.com/eks/latest/userguide/create-managed-node-group.html).
 
 #### Naming your cluster
@@ -103,7 +103,8 @@ The Lumigo Kubernetes operator automatically adds distributed tracing to pods cr
 The distributed tracing is provided by the [Lumigo OpenTelemetry distribution for JS](https://github.com/lumigo-io/opentelemetry-js-distro), the [Lumigo OpenTelemetry distribution for Java](https://github.com/lumigo-io/opentelemetry-java-distro) and the [Lumigo OpenTelemetry distribution for Python](https://github.com/lumigo-io/opentelemetry-python-distro).
 
 The Lumigo Kubernetes operator will automatically trace all Java, Node.js and Python processes found in the containers of pods created in the namespaces that Lumigo traces.
-To activate automatic tracing for resources in a namespace, create in that namespace a Kubernetes secret containing your [Lumigo token](https://docs.lumigo.io/docs/lumigo-tokens), and reference it from a `Lumigo` (`operator.lumigo.io/v1alpha1.Lumigo`) custom resource:
+To activate automatic tracing for resources in a namespace, create in that namespace a Kubernetes secret containing your [Lumigo token](https://docs.lumigo.io/docs/lumigo-tokens), and reference it from a `Lumigo` (`operator.lumigo.io/v1alpha1.Lumigo`) custom resource.
+Save the following into the `lumigo.yml`:
 
 ```yaml
 apiVersion: v1
@@ -113,7 +114,7 @@ metadata:
 stringData:
   # Kubectl won't allow you to deploy this dangling anchor.
   # Get the actual value from Lumigo following this documentation: https://docs.lumigo.io/docs/lumigo-tokens
-  token: *lumigo-token # Example: t_123456789012345678901
+  token: *lumigo-token #  <--- Change this! Example: t_123456789012345678901
 ---
 apiVersion: operator.lumigo.io/v1alpha1
 kind: Lumigo
@@ -127,7 +128,13 @@ spec:
   lumigoToken:
     secretRef:
       name: lumigo-credentials # This must match the name of the secret; the secret must be in the same namespace as this Lumigo custom resource
-      key: token # This must match the key in the Kubernetes secret
+      key: token # This must match the key in the Kubernetes secret (don't touch)
+```
+
+After creating the secret, deploy it in the desired namespace:
+
+```sh
+kubectl apply -f lumigo.yml -n <YOUR_NAMESPACE>
 ```
 
 Each `Lumigo` resource keeps in its state a list of resources it currently instruments:
