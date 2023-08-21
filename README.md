@@ -14,7 +14,7 @@ Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](htt
 
 ```sh
 helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
-helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --set cluster.name <cluster_name>
+helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --set cluster.name=<cluster_name>
 ```
 
 You can customize the namespace name to use something other than `lumigo-system`, but this will make the rest of the instructions subtly wrong :-)
