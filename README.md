@@ -27,7 +27,7 @@ You can verify that the Lumigo Kubernetes operator is up and running with:
 ```sh
 $ kubectl get pods -n lumigo-system
 NAME                                                         READY   STATUS    RESTARTS   AGE
-lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0          56s
+lumigo-kubernetes-operator-7fc8f67bcc-ffh5k   2/2     Running   0          56s
 ```
 
 **Note:** While installing the Lumigo Kubernetes operator via [`kustomize`](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/) is generally expected to work (except the [uninstallation of instrumentation on removal](#remove-injection-from-existing-resources)), it is not actually supported[^1].
@@ -39,11 +39,11 @@ Your monitored applications, however, can run on the Fargate profile without any
 Installing the Lumigo Kubernetes operator on an EKS cluster without EC2-backed nodegroups, results in the operator pods staying in `Pending` state:
 
 ```sh
-$ kubectl describe pod -n lumigo-system lumigo-lumigo-operator-controller-manager-5999997fb7-cvg5h
+$ kubectl describe pod -n lumigo-system lumigo-kubernetes-operator-5999997fb7-cvg5h
 
 Namespace:    	lumigo-system
 Priority:     	0
-Service Account:  lumigo-lumigo-operator-controller-manager
+Service Account:  lumigo-kubernetes-operator
 Node:         	<none>
 Labels:       	app.kubernetes.io/instance=lumigo
               	app.kubernetes.io/name=lumigo-operator

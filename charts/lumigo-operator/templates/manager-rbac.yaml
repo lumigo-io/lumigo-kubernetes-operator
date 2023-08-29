@@ -97,5 +97,5 @@ roleRef:
   name: '{{ include "helm.fullname" . }}-manager-role'
 subjects:
 - kind: ServiceAccount
-  name: '{{ include "helm.fullname" . }}-controller-manager'
+  name: 'lumigo-kubernetes-operator'
   namespace: '{{ .Release.Namespace }}'

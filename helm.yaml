@@ -49,7 +49,7 @@ spec:
       securityContext:
         fsGroup: 1234
         runAsNonRoot: true
-      serviceAccountName: lumigo-lumigo-operator-controller-manager
+      serviceAccountName: lumigo-kubernetes-operator
 ---
 # Source: lumigo-operator/templates/controller-deployment-and-webhooks.yaml
 apiVersion: v1
@@ -203,7 +203,7 @@ metadata:
     app.kubernetes.io/part-of: lumigo
     app.kubernetes.io/version: "0"
     helm.sh/chart: lumigo-operator-0
-  name: lumigo-lumigo-operator-controller-manager
+  name: lumigo-kubernetes-operator
 ---
 # Source: lumigo-operator/templates/leader-election-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -409,7 +409,7 @@ roleRef:
   name: lumigo-lumigo-operator-leader-election-role
 subjects:
   - kind: ServiceAccount
-    name: lumigo-lumigo-operator-controller-manager
+    name: lumigo-kubernetes-operator
     namespace: lumigo-system
 ---
 # Source: lumigo-operator/templates/manager-rbac.yaml
@@ -432,7 +432,7 @@ roleRef:
   name: lumigo-lumigo-operator-manager-role
 subjects:
   - kind: ServiceAccount
-    name: lumigo-lumigo-operator-controller-manager
+    name: lumigo-kubernetes-operator
     namespace: lumigo-system
 ---
 # Source: lumigo-operator/templates/proxy-rbac.yaml
@@ -455,7 +455,7 @@ roleRef:
   name: lumigo-lumigo-operator-proxy-role
 subjects:
   - kind: ServiceAccount
-    name: lumigo-lumigo-operator-controller-manager
+    name: lumigo-kubernetes-operator
     namespace: lumigo-system
 ---
 # Source: lumigo-operator/templates/metrics-service.yaml
@@ -712,7 +712,7 @@ spec:
       securityContext:
         fsGroup: 1234
         runAsNonRoot: true
-      serviceAccountName: lumigo-lumigo-operator-controller-manager
+      serviceAccountName: lumigo-kubernetes-operator
       terminationGracePeriodSeconds: 10
       volumes:
         - name: cert

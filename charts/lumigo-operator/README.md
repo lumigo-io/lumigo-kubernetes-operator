@@ -18,7 +18,7 @@ You can verify that the Lumigo Operator is up and running with:
 ```sh
 $ kubectl get pods -n lumigo-system
 NAME                                                         READY   STATUS    RESTARTS   AGE
-lumigo-lumigo-operator-controller-manager-7fc8f67bcc-ffh5k   2/2     Running   0          56s
+lumigo-kubernetes-operator-7fc8f67bcc-ffh5k   2/2     Running   0          56s
 ```
 
 ## Enabling automatic tracing
