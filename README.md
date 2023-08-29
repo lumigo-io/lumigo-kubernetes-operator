@@ -39,11 +39,11 @@ Your monitored applications, however, can run on the Fargate profile without any
 Installing the Lumigo Kubernetes operator on an EKS cluster without EC2-backed nodegroups, results in the operator pods staying in `Pending` state:
 
 ```sh
-$ kubectl describe pod -n lumigo-system lumigo-lumigo-operator-controller-manager-5999997fb7-cvg5h
+$ kubectl describe pod -n lumigo-system lumigo-kubernetes-operator-5999997fb7-cvg5h
 
 Namespace:    	lumigo-system
 Priority:     	0
-Service Account:  lumigo-lumigo-operator-controller-manager
+Service Account:  lumigo-kubernetes-operator
 Node:         	<none>
 Labels:       	app.kubernetes.io/instance=lumigo
               	app.kubernetes.io/name=lumigo-operator
