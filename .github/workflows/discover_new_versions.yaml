@@ -1,0 +1,70 @@
+name: discover new kube-rbac-proxy versions
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: {}  # Manual trigger for testing and schedule override
+
+jobs:
+  update-kube-rbac-proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - id: check-latest-version-brancz-kube-rbac-proxy
+        name: Check latest version of brancz/kube-rbac-proxy
+        uses: mmanciop/check-latest-versions@v2
+        with:
+          package-manager: github-releases
+          package-name: 'brancz/kube-rbac-proxy'
+      - id: check-latest-version-brancz-kube-rbac-proxy-base-image
+        name: Check latest version of the brancz/kube-rbac-proxy base image
+        run: |
+          docker pull gcr.io/distroless/static:nonroot
+          version=$(docker image inspect --format='{{index .RepoDigests 0}}' gcr.io/distroless/static:nonroot | cut -d '@' -f 2)
+          echo "::set-output name=version::$version"
+      - name: Check version file updates
+        id: verify
+        run: |
+          if [ "${{ steps.check-latest-version-brancz-kube-rbac-proxy.outputs.version }}" != $(< kube-rbac-proxy/VERSION.kube-rbac-proxy) ]; then
+            echo 'kube-rbac-proxy=true' >> $GITHUB_OUTPUT
+            echo 'update=true' >> $GITHUB_OUTPUT
+          fi
+          if [ "${{ steps.check-latest-version-brancz-kube-rbac-proxy-base-image.outputs.version }}" != $(< kube-rbac-proxy/VERSION.base-image) ]; then
+            echo 'base-image=true' >> $GITHUB_OUTPUT
+            echo 'update=true' >> $GITHUB_OUTPUT
+          fi
+          echo 'branch-name=kube-rbac-proxy-update' >> $GITHUB_OUTPUT
+      - name: Set Git config up
+        run: |
+          git config --global user.name "Lumigo Bot"
+          git config --global user.email "bot@lumigo.io"
+      - name: Create update commit for kube-rbac-proxy
+        if: steps.verify.outputs.kube-rbac-proxy
+        run: |
+          echo -n "${{ steps.check-latest-version-brancz-kube-rbac-proxy.outputs.version }}" > kube-rbac-proxy/VERSION.kube-rbac-proxy
+          git add 'kube-rbac-proxy/VERSION.kube-rbac-proxy'
+          git commit -m 'Update the kube-rbac-proxy to version ${{ steps.check-latest-version-brancz-kube-rbac-proxy.outputs.version }}'
+          git push --force origin HEAD:${{ steps.verify.outputs.branch-name }}
+      - name: Create update commit for kube-rbac-proxy base-image
+        if: steps.verify.outputs.base-image
+        run: |
+          echo -n "${{ steps.check-latest-version-brancz-kube-rbac-proxy-base-image.outputs.version }}" > kube-rbac-proxy/VERSION.base-image
+          git add 'kube-rbac-proxy/VERSION.base-image'
+          git commit -m 'Update the kube-rbac-proxy base image to version ${{ steps.check-latest-version-brancz-kube-rbac-proxy-base-image.outputs.version }}'
+          git push --force origin HEAD:${{ steps.verify.outputs.branch-name }}
+      - name: Open kube-proxy-rbac-update Pull Request
+        id: open-kube-proxy-rbac-update-pr
+        if: steps.verify.outputs.update
+        continue-on-error: true
+        uses: mmanciop/pull-request@master
+        with:
+          source_branch: '${{ steps.verify.outputs.branch-name }}'
+          destination_branch: 'main'
+          pr_title: 'New kube-proxy-rbac Version'
+          pr_body: 'Automated kube-proxy-rbac update Pull Request :crown:'
+          pr_draft: false
+          pr_allow_empty: false
+          pr_automerge: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_reviewer: GuyMoses,mmanciop,nadav3396
