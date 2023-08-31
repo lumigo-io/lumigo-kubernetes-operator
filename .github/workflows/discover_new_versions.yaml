@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch: {}  # Manual trigger for testing and schedule override
+  push:
+    branches:
+      - "RD-10741-fork-re-publish-kube-proxy-image-on-aws-marketplace-owned-ecr-repo"
 
 jobs:
   update-kube-rbac-proxy:
