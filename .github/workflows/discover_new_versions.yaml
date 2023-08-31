@@ -45,20 +45,14 @@ jobs:
       - name: Create update commit for kube-rbac-proxy
         if: steps.verify.outputs.kube-rbac-proxy
         run: |
-          echo -n "${{ steps.check-latest-version-lumigo-python.outputs.version }}" > kube-rbac-proxy/VERSION.kube-rbac-proxy
+          echo -n "${{ steps.check-latest-version-brancz-kube-rbac-proxy.outputs.version }}" > kube-rbac-proxy/VERSION.kube-rbac-proxy
           git add 'kube-rbac-proxy/VERSION.kube-rbac-proxy'
-          git commit -m 'Update the kube-rbac-proxy to version ${{ steps.check-latest-version-lumigo-python.outputs.version }}'
+          git commit -m 'Update the kube-rbac-proxy to version ${{ steps.check-latest-version-brancz-kube-rbac-proxy.outputs.version }}'
           git push --force origin HEAD:${{ steps.verify.outputs.branch-name }}
       - name: Create update commit for kube-rbac-proxy base-image
         if: steps.verify.outputs.base-image
         run: |
           echo -n "${{ steps.check-latest-version-brancz-kube-rbac-proxy-base-image.outputs.version }}" > kube-rbac-proxy/VERSION.base-image
-          if [ `git rev-parse --verify ${{ steps.verify.outputs.branch-name }} 2>/dev/null` ] 
-          then
-            git checkout ${{ steps.verify.outputs.branch-name }}
-          else
-            git checkout -b ${{ steps.verify.outputs.branch-name }}
-          fi
           git add 'kube-rbac-proxy/VERSION.base-image'
           git commit -m 'Update the kube-rbac-proxy base image to version ${{ steps.check-latest-version-brancz-kube-rbac-proxy-base-image.outputs.version }}'
           git push --force origin HEAD:${{ steps.verify.outputs.branch-name }}
