@@ -53,6 +53,12 @@ jobs:
         if: steps.verify.outputs.base-image
         run: |
           echo -n "${{ steps.check-latest-version-brancz-kube-rbac-proxy-base-image.outputs.version }}" > kube-rbac-proxy/VERSION.base-image
+          if [ `git rev-parse --verify ${{ steps.verify.outputs.branch-name }} 2>/dev/null` ] 
+          then
+            git checkout ${{ steps.verify.outputs.branch-name }}
+          else
+            git checkout -b ${{ steps.verify.outputs.branch-name }}
+          fi
           git add 'kube-rbac-proxy/VERSION.base-image'
           git commit -m 'Update the kube-rbac-proxy base image to version ${{ steps.check-latest-version-brancz-kube-rbac-proxy-base-image.outputs.version }}'
           git push --force origin HEAD:${{ steps.verify.outputs.branch-name }}
