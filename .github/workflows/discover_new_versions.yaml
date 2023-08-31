@@ -67,4 +67,4 @@ jobs:
           pr_allow_empty: false
           pr_automerge: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          pr_reviewer: GuyMoses,mmanciop,nadav3396
+          pr_reviewer: GuyMoses,nadav3396

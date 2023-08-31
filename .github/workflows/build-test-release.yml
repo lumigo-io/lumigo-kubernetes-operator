@@ -589,4 +589,5 @@ jobs:
           DOCKER_REPO: 709825985650.dkr.ecr.us-east-1.amazonaws.com/lumigo/lumigo-kubernetes-rbac-proxy
           VERSION: ${{ needs.validate-release-increment.outputs.version }}
         run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
           make republish-kube-rbac-proxy
