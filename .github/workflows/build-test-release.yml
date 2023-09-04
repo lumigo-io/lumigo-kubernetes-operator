@@ -390,6 +390,14 @@ jobs:
       version: ${{ steps.export_version.outputs.version }}
 
   publish-controller-ecr-image:
+    strategy:
+      matrix:
+        include:
+          - ecr-registry: public.ecr.aws
+            registry-type: public
+          - ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
+            registry-type: private
+            registries: "709825985650"
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
@@ -412,18 +420,27 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
+      - name: Login to Amazon ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
         with:
-          registry-type: public
+          registry-type: ${{ matrix.registry-type }}
+          registries: ${{ matrix.registries }}
       - name: Build and push container image to Amazon ECR
         env:
-          CONTROLLER_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}
+          CONTROLLER_IMG: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}
         run: |
           make VERSION=${{ needs.validate-release-increment.outputs.version }} docker-buildx-manager
 
   publish-telemetry-proxy-ecr-image:
+    strategy:
+      matrix:
+        include:
+          - ecr-registry: public.ecr.aws
+            registry-type: public
+          - ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
+            registry-type: private
+            registries: "709825985650"
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
@@ -446,14 +463,15 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
+      - name: Login to Amazon ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
         with:
-          registry-type: public
+          registry-type: ${{ matrix.registry-type }}
+          registries: ${{ matrix.registries }}
       - name: Build and push container image to Amazon ECR
         env:
-          PROXY_IMG: public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
+          PROXY_IMG: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
         run: |
           make docker-buildx-telemetry-proxy
 
@@ -557,69 +575,3 @@ jobs:
           artifacts: packages/*
           omitBody: true
           replacesArtifacts: true
-
-  publish-controller-image-marketplace-owned-ecr:
-    runs-on: ubuntu-latest
-    needs:
-      - validate-release-increment
-    if: ${{ needs.validate-release-increment.outputs.perform-release == 'true' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.19
-      - name: Install tools
-        run: |
-          make install-tools
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      - name: Login to Amazon ECR Private
-        id: login-ecr-private
-        uses: aws-actions/amazon-ecr-login@v1
-      - name: Build and push container image to Amazon ECR
-        env:
-          CONTROLLER_IMG: 709825985650.dkr.ecr.us-east-1.amazonaws.com/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}
-        run: |
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
-          make VERSION=${{ needs.validate-release-increment.outputs.version }} docker-buildx-manager
-
-  publish-telemetry-proxy-image-marketplace-owned-ecr:
-    runs-on: ubuntu-latest
-    needs:
-      - validate-release-increment
-    if: ${{ needs.validate-release-increment.outputs.perform-release == 'true' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.19
-      - name: Install tools
-        run: |
-          make install-tools
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      - name: Login to Amazon ECR Private
-        id: login-ecr-private
-        uses: aws-actions/amazon-ecr-login@v1
-      - name: Build and push container image to Amazon ECR
-        env:
-          PROXY_IMG: 709825985650.dkr.ecr.us-east-1.amazonaws.com/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
-        run: |
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 709825985650.dkr.ecr.us-east-1.amazonaws.com
-          make docker-buildx-telemetry-proxy
