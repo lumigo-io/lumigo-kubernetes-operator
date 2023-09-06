@@ -493,13 +493,16 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          path: main
+      - name: Checkout kube-rbac-proxy repo
+        uses: actions/checkout@v3
+        with:
+          repository: brancz/kube-rbac-proxy
+          path: kube-rbac-proxy
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
           go-version: 1.19
-      - name: Install tools
-        run: |
-          make install-tools
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -517,7 +520,9 @@ jobs:
           DOCKER_REPO: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy
           VERSION: ${{ needs.validate-release-increment.outputs.version }}
         run: |
-          make republish-kube-rbac-proxy
+          cat main/kube-rbac-proxy/publish.sh > kube-rbac-proxy/scripts/publish.sh
+          cd kube-rbac-proxy
+          ./scripts/publish.sh
 
 
   publish-helm-chart:
