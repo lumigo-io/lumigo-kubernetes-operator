@@ -8,8 +8,8 @@ cluster:
 controllerManager:
   kubeRbacProxy:
     image:
-      repository: gcr.io/kubebuilder/kube-rbac-proxy
-      tag: v0.13.0
+      repository: public.ecr.aws/lumigo/lumigo-kubernetes-rbac-proxy
+      tag: 1
     resources:
       limits:
         cpu: 500m
