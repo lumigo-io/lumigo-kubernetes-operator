@@ -531,14 +531,17 @@ jobs:
         include:
           - helm-registry: public-gallery
             ecr-registry: public.ecr.aws
+            registry-type: public
           - helm-registry: eks-addon
             ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
+            registry-type: private
+            registries: "709825985650"
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
     - publish-controller-ecr-image
     - publish-telemetry-proxy-ecr-image
-    - publish-kube-rbac-proxy-image-marketplace-owned-ecr
+    - publish-kube-rbac-proxy-ecr-image
     if: ${{ needs.validate-release-increment.outputs.perform-release }}
     steps:
       - name: Checkout
@@ -551,6 +554,18 @@ jobs:
         run: |
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: ${{ matrix.registry-type }}
+          registries: ${{ matrix.registries }}
       - name: Set up Helm
         run: curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Set up yq
@@ -569,14 +584,22 @@ jobs:
           yq e -i '.controllerManager.telemetryProxy.image.tag = "${{ needs.validate-release-increment.outputs.version }}"' charts/lumigo-operator/values.yaml
           yq e -i '.controllerManager.kubeRbacProxy.image.repository = "${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy"' charts/lumigo-operator/values.yaml
           yq e -i '.controllerManager.kubeRbacProxy.image.tag = "${{ needs.validate-release-increment.outputs.version }}"' charts/lumigo-operator/values.yaml
+
+      - name: Update Helm chart defaults for eks addon
+        if: ${{ matrix.helm-registry }} == 'eks-addon'
+        run: |
+          LUMIGO_AUTOTRACE_LATEST_VERSION=$(aws ecr describe-images --region us-east-1 --registry-id 709825985650 --repository-name lumigo/lumigo-autotrace --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' --output text)
+          echo "LUMIGO_AUTOTRACE_LATEST_VERSION=$LUMIGO_AUTOTRACE_LATEST_VERSION"
+          
           yq e -i '.injectorWebhook.lumigoInjector.image.repository = "${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace"' charts/lumigo-operator/values.yaml
+          yq e -i '.injectorWebhook.lumigoInjector.image.tag = "LUMIGO_AUTOTRACE_LATEST_VERSION"' charts/lumigo-operator/values.yaml
+          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).env[] | select(.name == "LUMIGO_INJECTOR_IMAGE")).value = "${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace:LUMIGO_AUTOTRACE_LATEST_VERSION"' config/manager/manager.yaml
+          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).env[] | select(.name == "LUMIGO_INJECTOR_IMAGE")).value = "${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace:LUMIGO_AUTOTRACE_LATEST_VERSION"' config/default/manager_pin_injector_version_patch.yaml
       - name: Update Kustomize images
         run: |
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).image = "${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy")).image = "${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "kube-rbac-proxy")).image = "${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy:${{ needs.validate-release-increment.outputs.version }}"' config/default/manager_auth_proxy_patch.yaml
-          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).env[] | select(.name == "LUMIGO_INJECTOR_IMAGE")).value = "${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace:latest"' config/manager/manager.yaml
-          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).env[] | select(.name == "LUMIGO_INJECTOR_IMAGE")).value = "${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace:latest"' config/default/manager_pin_injector_version_patch.yaml
       - name: Update Kustomize operator version
         run: |
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == "LUMIGO_OPERATOR_VERSION")).value = "${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
