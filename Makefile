@@ -132,14 +132,6 @@ docker-buildx-telemetry-proxy: ## Build and push docker image for the manager fo
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 
-.PHONY: republish-kube-rbac-proxy
-republish-kube-rbac-proxy: ## Republish kube-rbac-proxy image
-	( git clone git@github.com:brancz/kube-rbac-proxy.git ~/kube-rbac-proxy && \
-	cat kube-rbac-proxy/publish.sh > ~/kube-rbac-proxy/scripts/publish.sh && \
-	cd ~/kube-rbac-proxy && \
-	./scripts/publish.sh && \
-	rm -rf ~/kube-rbac-proxy )
-
 ##@ Deployment
 
 ifndef ignore-not-found
