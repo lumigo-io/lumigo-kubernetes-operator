@@ -494,10 +494,15 @@ jobs:
         with:
           fetch-depth: 0
           path: main
+      - name: Print kube-rbac-proxy version
+        id: print-kube-rbac-proxy-version
+        run: |
+          echo "kube_rbac_proxy_tag=$(cat main/kube-rbac-proxy/VERSION.kube-rbac-proxy)" >> ${GITHUB_OUTPUT}
       - name: Checkout kube-rbac-proxy repo
         uses: actions/checkout@v3
         with:
           repository: brancz/kube-rbac-proxy
+          ref: ${{ steps.print-kube-rbac-proxy-version.outputs.kube_rbac_proxy_tag }}
           path: kube-rbac-proxy
       - name: Setup Go
         uses: actions/setup-go@v3
