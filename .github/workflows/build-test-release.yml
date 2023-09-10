@@ -538,11 +538,11 @@ jobs:
             ecr-registry: public.ecr.aws
             registry-type: public
             is_public_gallery: true
-          - helm-registry: eks-addon
-            ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
-            registry-type: private
-            registries: "709825985650"
-            is_eks_addon: true
+#          - helm-registry: eks-addon
+#            ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
+#            registry-type: private
+#            registries: "709825985650"
+#            is_eks_addon: true
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
