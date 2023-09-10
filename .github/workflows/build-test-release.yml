@@ -646,7 +646,7 @@ jobs:
         id: push-helm-marketplace-owned-ecr
         run: |
           export HELM_EXPERIMENTAL_OCI=1
-          aws ecr get-login-password --region us-west-2 | helm registry login --username AWS --password-stdin ${{ matrix.ecr-registry }}
+          aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin ${{ matrix.ecr-registry }}
           helm push packages/lumigo-operator-${{ needs.validate-release-increment.outputs.version }}.tgz oci://${{ matrix.ecr-registry }} # helm know to push to the right repository based on the chart name inside chart.yaml
       - name: Calculate updated Helm index
         if: ${{ matrix.is_public_gallery }}
