@@ -61,7 +61,7 @@ jobs:
         with:
           source_branch: '${{ steps.verify.outputs.branch-name }}'
           destination_branch: 'main'
-          pr_title: 'New kube-proxy-rbac Version'
+          pr_title: 'chore: New kube-proxy-rbac Version'
           pr_body: 'Automated kube-proxy-rbac update Pull Request :crown:'
           pr_draft: false
           pr_allow_empty: false
