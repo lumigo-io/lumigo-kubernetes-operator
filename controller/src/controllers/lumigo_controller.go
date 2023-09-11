@@ -238,12 +238,16 @@ func (r *LumigoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if isLumigoJustCreated {
-		log.Info("New Lumigo instance found")
+		log.Info("New Lumigo instance found v2")
 		injectionSpec := lumigo.Spec.Tracing.Injection
 		if isTruthy(injectionSpec.Enabled, true) && isTruthy(injectionSpec.InjectLumigoIntoExistingResourcesOnCreation, true) {
 			log.Info("Injecting instrumentation into resources in namespace")
 			if err := r.injectLumigoIntoResources(ctx, lumigo, &log); err != nil {
 				log.Error(err, "cannot inject resources")
+			}
+			log.Info("Adding namespace to fluent-bit config")
+			if err := r.addNamespaceToLogCollection(ctx, lumigo, token, &log); err != nil {
+				log.Error(err, "cannot add namespace to fluentbit")
 			}
 		} else {
 			log.Info(
@@ -972,6 +976,56 @@ func (r *LumigoReconciler) getInstrumentedObjectReferences(ctx context.Context, 
 	}
 
 	return &objectReferences, nil
+}
+
+func (r *LumigoReconciler) addNamespaceToLogCollection(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, lumigoToken string, log *logr.Logger) error {
+	namespace := lumigo.Namespace
+	configMapName := "lumigo-fluent-bit"
+	lumigoNamespace := "lumigo-system"
+
+	configMap, err := r.Clientset.CoreV1().ConfigMaps(lumigoNamespace).Get(context.Background(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("Error getting ConfigMap: %v\n", err)
+	}
+	configMapData := configMap.Data["fluent-bit.conf"]
+
+	log.Info("Updating fluentbit's config map data: to support namespace", "namespace", namespace)
+	log.Info(configMapData)
+
+	if strings.Contains(configMapData, fmt.Sprintf("*_%[1]s_*.log", namespace)) {
+		log.Info("Namespace in configmap, not doing anything")
+	} else {
+		configMapData += getNamespaceConfig(namespace, lumigoToken)
+		log.Info("Updated config map data:")
+		log.Info(configMapData)
+		configMap.Data["fluent-bit.conf"] = configMapData
+		_, err = r.Clientset.CoreV1().ConfigMaps(lumigoNamespace).Update(context.Background(), configMap, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("Error updating ConfigMap: %v\n", err)
+		}
+	}
+	return nil
+}
+
+func getNamespaceConfig(namespace string, lumigoToken string) string {
+	return fmt.Sprintf(`
+[INPUT]
+    Name tail
+    Path /var/log/containers/*_%[1]s_*.log
+    multiline.parser docker, cri
+    Tag kube.*
+    Mem_Buf_Limit 5MB
+    Skip_Long_Lines On
+[OUTPUT]
+    Name opentelemetry
+    Match **%[1]s**
+    Host mosheshaham-edge-app-us-west-2.mosheshaham.golumigo.com
+    Port 443
+    Logs_uri /v1/logs
+    header Authorization LumigoToken %[2]s
+    log_response_payload true
+    Tls on
+`, namespace, lumigoToken)
 }
 
 func retry(description string, function func() error, maxAttempts int, retryOnErrorMatcher func(error) bool, log *logr.Logger) error {

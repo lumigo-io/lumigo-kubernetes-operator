@@ -62,3 +62,27 @@ metricsService:
 endpoint:
   otlp:
     url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+logCollection:
+  enabled: false
+fluent-bit:
+  config:
+    inputs: |
+      [INPUT]
+          Name tail
+          Path /var/log/containers/*_place__holder_*.log
+          multiline.parser docker, cri
+          Tag place__holder_namespace
+          Mem_Buf_Limit 5MB
+          Skip_Long_Lines On
+    outputs: |
+      [OUTPUT]
+          Name opentelemetry
+          Match place__holder_namespace
+          Host mosheshaham-edge-app-us-west-2.mosheshaham.golumigo.com
+          Port 443
+          Logs_uri /v1/logs
+          header Authorization LumigoToken t_186eb52a329344cdb0d6c
+          log_response_payload true
+          Tls on
+  hotReload:
+    enabled: true
