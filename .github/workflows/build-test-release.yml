@@ -22,131 +22,131 @@ jobs:
         run: |
           make test
 
-#  test-helm-upgrade:
-#    runs-on: ubuntu-latest
-#    services:
-#      # Run a local registry
-#      registry:
-#        image: registry:2
-#        ports:
-#          - 5000:5000
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v3
-#        with:
-#          fetch-depth: 0
-#      # The networking setup of this job is... complex. We run a local registry as
-#      # a service, which means that on the worker node there is a registry on localhost:5000.
-#      # However, Minikube cannot pull images from *that* localhost, because it's own localhost
-#      # is something else, so we need to reference the registry via the IP of the worker machine,
-#      # and configure `minikube` to treat that registry as insecure (i.e., talking HTTP instead
-#      # of HTTPS). But the fun does not end here: since we cannot use localhost in the image name,
-#      # the `docker/build-push-action@v3` cannot apparently be told to consider the repo as insecure!
-#      # So we need to output images to file, and then push them to the local repo via regctl.
-#      - name: Look up host ip
-#        id: hostip
-#        run: |
-#          ip a
-#          echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
-#      - name: Install regctl
-#        env:
-#          GH_TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
-#        run: |
-#          gh release download v0.5.0 --repo regclient/regclient --pattern regctl-linux-amd64 --output /tmp/regctl
-#          chmod 0755 /tmp/regctl
-#          sudo mv /tmp/regctl /usr/bin/regctl
-#      - name: Configure regctl
-#        run: |
-#          # Configure local registry as insecure
-#          /usr/bin/regctl registry set --tls disabled "${{ steps.hostip.outputs.ip }}:5000"
-#      - name: Set up Docker Buildx
-#        uses: docker/setup-buildx-action@v2
-#      - name: Build controller image and save it to file
-#        uses: docker/build-push-action@v3
-#        with:
-#          platforms: linux/amd64
-#          context: controller
-#          file: controller/Dockerfile
-#          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
-#          outputs: type=oci,dest=controller-image.tar
-#      - name: Build telemetry-proxy image and save it to file
-#        uses: docker/build-push-action@v3
-#        with:
-#          platforms: linux/amd64
-#          context: telemetryproxy
-#          file: telemetryproxy/Dockerfile
-#          build-args: version=${{ github.sha }}
-#          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
-#          outputs: type=oci,dest=telemetry-proxy-image.tar
-#      - name: Push container images to local repository
-#        env:
-#          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
-#          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
-#        run: |
-#          set -eux
-#          regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
-#          regctl image inspect "${CONTROLLER_IMG}"
-#
-#          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar -v info
-#          regctl image inspect "${PROXY_IMG}"
-#      - name: Install minikube
-#        uses: medyagh/setup-minikube@v0.0.11
-#        with:
-#          start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
-#          driver: docker
-#          # cni: bridge
-#      - name: Install kubectl
-#        uses: azure/setup-kubectl@v3
-#      - name: Set up Helm
-#        run: curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-#      - name: Install latest released Helm chart
-#        run: |
-#          helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
-#
-#          helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --dry-run
-#
-#          if ! helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait --timeout 4m; then
-#            kubectl describe all -n lumigo-system
-#            exit 1
-#          fi
-#
-#          kubectl get all -A
-#      - name: Deploy locally-built operator
-#        env:
-#          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
-#          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
-#        run: |
-#          helm upgrade --install lumigo charts/lumigo-operator \
-#            --namespace lumigo-system --create-namespace \
-#            --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
-#            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
-#            --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
-#            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
-#            --dry-run
-#
-#          if ! helm upgrade --install lumigo charts/lumigo-operator \
-#            --namespace lumigo-system --create-namespace \
-#            --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
-#            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
-#            --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
-#            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
-#            --debug --wait --timeout 4m; then
-#
-#            kubectl describe all -n lumigo-system
-#            kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
-#            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
-#            exit 1
-#          fi
-#      - name: Run end-to-end tests
-#        env:
-#          DELETE_TEST_NAMESPACES: "false"
-#        run: |
-#          if ! make e2e-tests; then
-#            kubectl describe all -A
-#            kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
-#            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
-#            exit 1
-#          fi
+  test-helm-upgrade:
+    runs-on: ubuntu-latest
+    services:
+      # Run a local registry
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      # The networking setup of this job is... complex. We run a local registry as
+      # a service, which means that on the worker node there is a registry on localhost:5000.
+      # However, Minikube cannot pull images from *that* localhost, because it's own localhost
+      # is something else, so we need to reference the registry via the IP of the worker machine,
+      # and configure `minikube` to treat that registry as insecure (i.e., talking HTTP instead
+      # of HTTPS). But the fun does not end here: since we cannot use localhost in the image name,
+      # the `docker/build-push-action@v3` cannot apparently be told to consider the repo as insecure!
+      # So we need to output images to file, and then push them to the local repo via regctl.
+      - name: Look up host ip
+        id: hostip
+        run: |
+          ip a
+          echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
+      - name: Install regctl
+        env:
+          GH_TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
+        run: |
+          gh release download v0.5.0 --repo regclient/regclient --pattern regctl-linux-amd64 --output /tmp/regctl
+          chmod 0755 /tmp/regctl
+          sudo mv /tmp/regctl /usr/bin/regctl
+      - name: Configure regctl
+        run: |
+          # Configure local registry as insecure
+          /usr/bin/regctl registry set --tls disabled "${{ steps.hostip.outputs.ip }}:5000"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build controller image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          context: controller
+          file: controller/Dockerfile
+          tags: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          outputs: type=oci,dest=controller-image.tar
+      - name: Build telemetry-proxy image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          context: telemetryproxy
+          file: telemetryproxy/Dockerfile
+          build-args: version=${{ github.sha }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
+          outputs: type=oci,dest=telemetry-proxy-image.tar
+      - name: Push container images to local repository
+        env:
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
+        run: |
+          set -eux
+          regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
+          regctl image inspect "${CONTROLLER_IMG}"
+
+          regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar -v info
+          regctl image inspect "${PROXY_IMG}"
+      - name: Install minikube
+        uses: medyagh/setup-minikube@v0.0.11
+        with:
+          start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
+          driver: docker
+          # cni: bridge
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+      - name: Set up Helm
+        run: curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install latest released Helm chart
+        run: |
+          helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
+
+          helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --dry-run
+
+          if ! helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --debug --wait --timeout 4m; then
+            kubectl describe all -n lumigo-system
+            exit 1
+          fi
+
+          kubectl get all -A
+      - name: Deploy locally-built operator
+        env:
+          CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
+          PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
+        run: |
+          helm upgrade --install lumigo charts/lumigo-operator \
+            --namespace lumigo-system --create-namespace \
+            --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
+            --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
+            --dry-run
+
+          if ! helm upgrade --install lumigo charts/lumigo-operator \
+            --namespace lumigo-system --create-namespace \
+            --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
+            --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
+            --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
+            --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
+            --debug --wait --timeout 4m; then
+
+            kubectl describe all -n lumigo-system
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
+            exit 1
+          fi
+      - name: Run end-to-end tests
+        env:
+          DELETE_TEST_NAMESPACES: "false"
+        run: |
+          if ! make e2e-tests; then
+            kubectl describe all -A
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
+            exit 1
+          fi
 
   test-kustomize:
     runs-on: ubuntu-latest
