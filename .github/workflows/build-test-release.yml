@@ -538,11 +538,11 @@ jobs:
             ecr-registry: public.ecr.aws
             registry-type: public
             is_public_gallery: true
-#          - helm-registry: eks-addon
-#            ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
-#            registry-type: private
-#            registries: "709825985650"
-#            is_eks_addon: true
+          - helm-registry: eks-addon
+            ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
+            registry-type: private
+            registries: "709825985650"
+            is_eks_addon: true
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
@@ -647,7 +647,7 @@ jobs:
         run: |
           export HELM_EXPERIMENTAL_OCI=1
           aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin ${{ matrix.ecr-registry }}
-          helm push packages/lumigo-operator-${{ needs.validate-release-increment.outputs.version }}.tgz oci://${{ matrix.ecr-registry }} # helm know to push to the right repository based on the chart name inside chart.yaml
+          helm push packages/lumigo-operator-${{ needs.validate-release-increment.outputs.version }}.tgz oci://${{ matrix.ecr-registry }}/lumigo # helm know to push to the right repository based on the chart name inside chart.yaml
       - name: Calculate updated Helm index
         if: ${{ matrix.is_public_gallery }}
         id: prepare-helm-index-update
