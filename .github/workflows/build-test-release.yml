@@ -338,7 +338,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
     - unit-test
-#    - test-helm-upgrade
+    - test-helm-upgrade
     - test-kustomize
     - test-kind
     - test-controller-for-security-issues
