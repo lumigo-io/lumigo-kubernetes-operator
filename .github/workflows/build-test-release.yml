@@ -594,7 +594,7 @@ jobs:
       - name: Update Helm chart defaults for eks addon
         if: ${{ matrix.is_eks_addon }}
         run: |
-          LUMIGO_AUTOTRACE_LATEST_VERSION=$(aws ecr describe-images --region us-east-1 --registry-id 709825985650 --repository-name lumigo/lumigo-autotrace --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' --output text)
+          LUMIGO_AUTOTRACE_LATEST_VERSION=$(aws ecr describe-images --region us-east-1 --registry-id 709825985650 --repository-name lumigo/lumigo-autotrace --query 'sort_by(imageDetails,& imagePushedAt)[-2].imageTags[0]' --output text)
           echo "LUMIGO_AUTOTRACE_LATEST_VERSION=$LUMIGO_AUTOTRACE_LATEST_VERSION"
         
           yq e -i ".injectorWebhook.lumigoInjector.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace\"" charts/lumigo-operator/values.yaml
