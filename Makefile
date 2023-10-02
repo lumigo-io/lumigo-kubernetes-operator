@@ -94,8 +94,8 @@ e2e-tests:
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f controller/Dockerfile controller
-	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f telemetryproxy/Dockerfile telemetryproxy
+	docker build -t ${CONTROLLER_IMG} --platform=${TARGET_PLATFORM} -f controller/Dockerfile controller
+	docker build -t ${PROXY_IMG} --platform=${TARGET_PLATFORM} -f telemetryproxy/Dockerfile telemetryproxy
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.

@@ -157,6 +157,7 @@ spec:
       containers:
       - name: manager
         image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: IfNotPresent
         command:
         - /manager
         args:
@@ -220,6 +221,7 @@ spec:
           readOnly: false
       - name: telemetry-proxy
         image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: IfNotPresent
         env:
 {{- if .Values.cluster }}
 {{- if .Values.cluster.name }}

@@ -28,6 +28,7 @@ spec:
       containers:
       - name: uninstall-hook
         image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: IfNotPresent
         command: ["/manager", "--uninstall"]
         securityContext:
           allowPrivilegeEscalation: false
