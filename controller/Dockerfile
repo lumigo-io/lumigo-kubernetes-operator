@@ -1,7 +1,7 @@
 # Build the manager binary
 FROM golang:1.19 as builder
 ARG TARGETOS
-ARG TARGETARCH
+ARG TARGET_PLATFORM
 
 WORKDIR /workspace
 # Copy the go source
@@ -16,12 +16,12 @@ RUN go mod download
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGET_PLATFORM} go build -a -o manager main.go
 
 FROM alpine:latest
 
 # Be able to validate the TLS cert of the Lumigo SaaS endpoint
-RUN apk add bash procps 
+RUN apk add bash procps
 
 WORKDIR /
 COPY --from=builder --chown=65532:65532 /workspace/manager .
