@@ -1,6 +1,6 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor
 
-go 1.18
+go 1.20
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.4

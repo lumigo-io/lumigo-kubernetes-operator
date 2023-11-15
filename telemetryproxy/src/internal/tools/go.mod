@@ -1,6 +1,6 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/internal/tools
 
-go 1.18
+go 1.20
 
 require (
 	go.opentelemetry.io/collector/cmd/builder v0.79.0
