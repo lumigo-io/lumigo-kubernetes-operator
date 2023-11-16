@@ -20,6 +20,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 
 FROM alpine:latest
 
+# Temporary fix for CVEs until issue resolved: https://github.com/alpinelinux/docker-alpine/issues/352
+RUN apk update && apk upgrade --no-cache libcrypto3 libssl3
+
 # Be able to validate the TLS cert of the Lumigo SaaS endpoint
 RUN apk add bash procps 
 
