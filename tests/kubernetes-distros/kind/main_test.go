@@ -26,7 +26,7 @@ var (
 const (
 	DEFAULT_KIND_NODE_IMAGE        = "kindest/node:v1.27.1"
 	LUMIGO_SYSTEM_NAMESPACE        = "lumigo-system"
-	OTLP_SINK_OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector:0.82.0"
+	OTLP_SINK_OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector:0.83.0"
 	OTLP_SINK_NAMESPACE            = "otlp-sink"
 )
 
