@@ -4,12 +4,12 @@ go 1.20
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.4
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.83.0
-	go.opentelemetry.io/collector v0.83.0
-	go.opentelemetry.io/collector/component v0.83.0
-	go.opentelemetry.io/collector/consumer v0.83.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.84.0
+	go.opentelemetry.io/collector v0.84.0
+	go.opentelemetry.io/collector/component v0.84.0
+	go.opentelemetry.io/collector/consumer v0.84.0
 	go.opentelemetry.io/collector/pdata v1.0.0-rcv0014
-	go.opentelemetry.io/collector/processor v0.83.0
+	go.opentelemetry.io/collector/processor v0.84.0
 	go.opentelemetry.io/otel v1.16.0
 	go.uber.org/zap v1.25.0
 	k8s.io/api v0.27.4
@@ -29,7 +29,7 @@ require (
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/google/uuid v1.3.1 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -46,8 +46,8 @@ require (
 	github.com/openshift/client-go v0.0.0-20210521082421-73d9475a9142 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	go.opentelemetry.io/collector/config/configtelemetry v0.83.0 // indirect
-	go.opentelemetry.io/collector/confmap v0.83.0 // indirect
+	go.opentelemetry.io/collector/config/configtelemetry v0.84.0 // indirect
+	go.opentelemetry.io/collector/confmap v0.84.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.0.0-rcv0014 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
