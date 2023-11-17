@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/tcnksm/ghr v0.16.0
-	go.opentelemetry.io/collector/cmd/builder v0.80.0
+	go.opentelemetry.io/collector/cmd/builder v0.81.0
 	golang.org/x/tools v0.15.0
 )
 
@@ -18,8 +18,8 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/knadh/koanf v1.5.0 // indirect
+	github.com/knadh/koanf/v2 v2.0.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

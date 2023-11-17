@@ -3,7 +3,7 @@ module github.com/open-telemetry/opentelemetry-collector-contrib/internal/tools
 go 1.20
 
 require (
-	go.opentelemetry.io/collector/cmd/builder v0.80.0
+	go.opentelemetry.io/collector/cmd/builder v0.81.0
 	golang.org/x/tools v0.15.0
 )
 
@@ -11,6 +11,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/knadh/koanf v1.5.0 // indirect
+	github.com/knadh/koanf/v2 v2.0.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
