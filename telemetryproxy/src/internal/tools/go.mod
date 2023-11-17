@@ -3,7 +3,7 @@ module github.com/open-telemetry/opentelemetry-collector-contrib/internal/tools
 go 1.20
 
 require (
-	go.opentelemetry.io/collector/cmd/builder v0.84.0
+	go.opentelemetry.io/collector/cmd/builder v0.85.0
 	golang.org/x/tools v0.15.0
 )
 
