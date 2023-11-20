@@ -303,3 +303,4 @@ The Lumigo Kubernetes operator will add events to the resources it instruments w
 
 [^1]: The user experience of having to install [Cert Manager](https://cert-manager.io/docs/installation/) is unnecessarily complex, and Kustomize layers, while they may be fine for one's own applications, are simply unsound for a batteries-included, rapidly-evolving product like the Lumigo Kubernetes operator.
 Specifically, please expect your Kustomize layers to stop working with any release of the Lumigo Kubernetes operator.
+
