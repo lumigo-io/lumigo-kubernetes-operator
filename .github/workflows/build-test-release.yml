@@ -494,10 +494,15 @@ jobs:
         with:
           fetch-depth: 0
           path: main
+      - name: Print kube-rbac-proxy version
+        id: print-kube-rbac-proxy-version
+        run: |
+          echo "kube_rbac_proxy_tag=$(cat main/kube-rbac-proxy/VERSION.kube-rbac-proxy)" >> ${GITHUB_OUTPUT}
       - name: Checkout kube-rbac-proxy repo
         uses: actions/checkout@v3
         with:
           repository: brancz/kube-rbac-proxy
+          ref: ${{ steps.print-kube-rbac-proxy-version.outputs.kube_rbac_proxy_tag }}
           path: kube-rbac-proxy
       - name: Setup Go
         uses: actions/setup-go@v3
@@ -526,11 +531,24 @@ jobs:
 
 
   publish-helm-chart:
+    strategy:
+      matrix:
+        include:
+          - helm-registry: public-gallery
+            ecr-registry: public.ecr.aws
+            registry-type: public
+            is_public_gallery: true
+          - helm-registry: eks-addon
+            ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
+            registry-type: private
+            registries: "709825985650"
+            is_eks_addon: true
     runs-on: ubuntu-latest
     needs:
     - validate-release-increment
     - publish-controller-ecr-image
     - publish-telemetry-proxy-ecr-image
+    - publish-kube-rbac-proxy-ecr-image
     if: ${{ needs.validate-release-increment.outputs.perform-release }}
     steps:
       - name: Checkout
@@ -543,6 +561,18 @@ jobs:
         run: |
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: ${{ matrix.registry-type }}
+          registries: ${{ matrix.registries }}
       - name: Set up Helm
         run: curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Set up yq
@@ -555,24 +585,37 @@ jobs:
           yq e -i '.appVersion = "${{ needs.validate-release-increment.outputs.version }}"' charts/lumigo-operator/Chart.yaml
       - name: Update Helm chart defaults
         run: |
-          yq e -i '.controllerManager.manager.image.repository = "public.ecr.aws/lumigo/lumigo-kubernetes-operator"' charts/lumigo-operator/values.yaml
-          yq e -i '.controllerManager.manager.image.tag = "${{ needs.validate-release-increment.outputs.version }}"' charts/lumigo-operator/values.yaml
-          yq e -i '.controllerManager.telemetryProxy.image.repository = "public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy"' charts/lumigo-operator/values.yaml
-          yq e -i '.controllerManager.telemetryProxy.image.tag = "${{ needs.validate-release-increment.outputs.version }}"' charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.manager.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-operator\"" charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.manager.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.telemetryProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy\"" charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.kubeRbacProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy\"" charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.kubeRbacProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
+      - name: Update Helm chart defaults for eks addon
+        if: ${{ matrix.is_eks_addon }}
+        run: |
+          LUMIGO_AUTOTRACE_LATEST_VERSION=$(aws ecr describe-images --region us-east-1 --registry-id 709825985650 --repository-name lumigo/lumigo-autotrace --query 'sort_by(imageDetails,& imagePushedAt)[-2].imageTags[0]' --output text)
+          echo "LUMIGO_AUTOTRACE_LATEST_VERSION=$LUMIGO_AUTOTRACE_LATEST_VERSION"
+        
+          yq e -i ".injectorWebhook.lumigoInjector.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace\"" charts/lumigo-operator/values.yaml
+          yq e -i ".injectorWebhook.lumigoInjector.image.tag = \"$LUMIGO_AUTOTRACE_LATEST_VERSION\"" charts/lumigo-operator/values.yaml
+          yq e -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"manager\").env[] | select(.name == \"LUMIGO_INJECTOR_IMAGE\")).value = \"${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace:$LUMIGO_AUTOTRACE_LATEST_VERSION\"" config/manager/manager.yaml
       - name: Update Kustomize images
         run: |
-          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
-          yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy")).image = "public.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
+          yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"manager\")).image = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-operator:${{ needs.validate-release-increment.outputs.version }}\"" config/manager/manager.yaml
+          yq -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"telemetry-proxy\")).image = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}\"" config/manager/manager.yaml
       - name: Update Kustomize operator version
         run: |
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == "LUMIGO_OPERATOR_VERSION")).value = "${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
           yq -i '(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == "telemetry-proxy") | .env[] | select(.name == "LUMIGO_OPERATOR_VERSION")).value = "${{ needs.validate-release-increment.outputs.version }}"' config/manager/manager.yaml
       - name: Prep Changelog settings
+        if: ${{ matrix.is_public_gallery }}
         id: changelog-settings
         run: |
           echo "organization=$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{ print $1 }')" >> ${GITHUB_OUTPUT}
           echo "repository=$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{ print $2 }')" >> ${GITHUB_OUTPUT}
       - name: Update Changelog
+        if: ${{ matrix.is_public_gallery }}
         uses: addnab/docker-run-action@v3
         env:
           CHANGELOG_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -582,9 +625,11 @@ jobs:
           run: |
             github_changelog_generator -u "${{ steps.changelog-settings.outputs.organization }}" -p "${{ steps.changelog-settings.outputs.repository }}" pull-requests=false issues=false issues-wo-labels=false pr-wo-labels=false
       - name: Print CHANGELOG.md
+        if: ${{ matrix.is_public_gallery }}
         run: |
           cat CHANGELOG.md
       - name: Create release commit
+        if: ${{ matrix.is_public_gallery }}
         id: create-release-commit
         run: |
           git add charts/lumigo-operator
@@ -596,7 +641,15 @@ jobs:
       - name: Package Helm chart
         run: |
           helm package charts/lumigo-operator --destination packages/
+      - name: Push Helm chart to marketplace owned ecr
+        if: ${{ matrix.is_eks_addon }}
+        id: push-helm-marketplace-owned-ecr
+        run: |
+          export HELM_EXPERIMENTAL_OCI=1
+          aws ecr get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin ${{ matrix.ecr-registry }}
+          helm push packages/lumigo-operator-${{ needs.validate-release-increment.outputs.version }}.tgz oci://${{ matrix.ecr-registry }}/lumigo # helm know to push to the right repository based on the chart name inside chart.yaml
       - name: Calculate updated Helm index
+        if: ${{ matrix.is_public_gallery }}
         id: prepare-helm-index-update
         run: |
           git checkout origin/gh-pages -b gh-pages --quiet
@@ -611,11 +664,13 @@ jobs:
           git commit -m "v${{ needs.validate-release-increment.outputs.version }}"
           echo "commit_sha=$(git rev-parse HEAD)" >> ${GITHUB_OUTPUT}
       - name: Update Helm index
+        if: ${{ matrix.is_public_gallery }}
         uses: CasperWA/push-protected@v2
         with:
           token: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
           branch: gh-pages
       - name: Create Release
+        if: ${{ matrix.is_public_gallery }}
         uses: ncipollo/release-action@v1.12.0
         with:
           token: ${{ secrets.TRIGGER_RELEASE_TOKEN }}

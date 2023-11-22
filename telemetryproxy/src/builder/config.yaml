@@ -7,7 +7,7 @@ dist:
   output_path: dist
 
 exporters:
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter v0.71.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter v0.79.0"
   - gomod: go.opentelemetry.io/collector/exporter/loggingexporter v0.79.0
   - gomod: "go.opentelemetry.io/collector/exporter/otlphttpexporter v0.79.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.79.0"
@@ -35,3 +35,4 @@ replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.79.0 => github.com/lumigo-io/opentelemetry-collector-contrib/extension/lumigoauthextension lumigo-main
   - github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor v0.79.0 => ../processor/k8sdataenricherprocessor
   - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.79.0 => ../receiver/lumigooperatorheartbeatreceiver
+  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.79.0 => ../receiver/k8sobjectsreceiver
