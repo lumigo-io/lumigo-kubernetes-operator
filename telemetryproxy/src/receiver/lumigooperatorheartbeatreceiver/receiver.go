@@ -8,9 +8,9 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/obsreport"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/receiver/receiverhelper"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -34,7 +34,7 @@ type lumigooperatorheartbeatReceiver struct {
 	kube     dynamic.Interface
 	config   *Config
 	consumer consumer.Logs
-	obsrecv  *obsreport.Receiver
+	obsrecv  *receiverhelper.ObsReport
 	ticker   *time.Ticker
 	logger   *zap.Logger
 }

@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/tcnksm/ghr v0.16.0
-	go.opentelemetry.io/collector/cmd/builder v0.85.0
+	go.opentelemetry.io/collector/cmd/builder v0.86.0
 	golang.org/x/tools v0.15.0
 )
 
@@ -33,7 +33,7 @@ require (
 	github.com/tcnksm/go-gitconfig v0.1.2 // indirect
 	github.com/tcnksm/go-latest v0.0.0-20170313132115-e3007ae9052e // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.25.0 // indirect
+	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.15.0 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.18.0 // indirect
