@@ -19,6 +19,7 @@ bin/
 
 node_modules
 test.out
+.vscode
 
 # Temporary files created by make docker-buildx
 Dockerfile.*.cross

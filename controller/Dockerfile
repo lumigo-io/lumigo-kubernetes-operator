@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.19 as builder
+FROM golang:1.20 as builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -19,6 +19,9 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
 FROM alpine:latest
+
+# Temporary fix for CVEs until issue resolved: https://github.com/alpinelinux/docker-alpine/issues/352
+RUN apk update && apk upgrade --no-cache libcrypto3 libssl3
 
 # Be able to validate the TLS cert of the Lumigo SaaS endpoint
 RUN apk add bash procps 
