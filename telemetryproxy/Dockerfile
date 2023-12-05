@@ -37,9 +37,6 @@ RUN apk add ca-certificates
 # Update OtelCollector config on namespace file change
 RUN apk add bash gomplate procps 
 
-# Temporary fix for CVEs until issue resolved: https://github.com/alpinelinux/docker-alpine/issues/352
-RUN apk update && apk upgrade --no-cache libcrypto3 libssl3
-
 COPY --from=chmod-helper /lumigo /lumigo
 
 ENTRYPOINT ["/bin/bash"]
