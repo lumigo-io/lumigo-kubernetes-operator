@@ -2,7 +2,7 @@
 
 The files in this folder are used to populate the image descriptions on the Amazon ECR Public Gallery:
 
-* [`lumigo/lumigo-autotrace`](https://gallery.ecr.aws/lumigo/autotrace)
+* [`lumigo/lumigo-autotrace`](https://gallery.ecr.aws/lumigo/lumigo-autotrace)
 * [`lumigo/lumigo-kubernetes-operator`](https://gallery.ecr.aws/lumigo/lumigo-kubernetes-operator)
 * [`lumigo/lumigo-kubernetes-telemetry-proxy`](https://gallery.ecr.aws/lumigo/lumigo-kubernetes-telemetry-proxy)
 
