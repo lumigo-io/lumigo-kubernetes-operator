@@ -271,6 +271,40 @@ spec:
 
 When a `Lumigo` resource is deleted from a namespace, the collection of Kubernetes events and object versions is automatically halted.
 
+#### Modify manager log level
+
+By default, the manager will log all `INFO` level and above logs.
+
+The current log level can be viewed by running:
+
+```bash
+kubectl -n lumigo-system get deploy lumigo-lumigo-operator-controller-manager -o=json | jq '.spec.template.spec.containers[0].args'
+```
+
+With the default settings, there will be no log level explicitly set and the above command will return:
+
+```bash
+[
+  "--health-probe-bind-address=:8081",
+  "--metrics-bind-address=127.0.0.1:8080",
+  "--leader-elect"
+]
+```
+
+To set the log level to only show `ERROR` level logs, run:
+
+```bash
+kubectl -n lumigo-system patch deploy lumigo-lumigo-operator-controller-manager --type=json -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--zap-log-level=error"}]'
+```
+
+If a log level is already set, instead of using the `add` operation we use `replace` and modify the path from `/args/-` to the index of containing the log level setting, such as `/args/3`:
+
+```bash
+kubectl -n lumigo-system patch deploy lumigo-lumigo-operator-controller-manager --type=json -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/args/3", "value": "--zap-log-level=info"}]'
+```
+
+NOTE: The container argument array is zero indexed, so the first argument is at index 0.
+
 ### Uninstall
 
 The removal of the Lumigo Kubernetes operator is performed by:
