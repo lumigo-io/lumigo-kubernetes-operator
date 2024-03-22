@@ -29,6 +29,9 @@ RUN chown -R 1234:1234 /lumigo/bin/*
 
 FROM alpine:latest
 
+# Temporary fix to bring in 3.11.6 version of gomplate from Alpine Edge
+RUN apk add gomplate --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
+
 # Be able to validate the TLS cert of the Lumigo SaaS endpoint
 RUN apk add ca-certificates
 # Update OtelCollector config on namespace file change

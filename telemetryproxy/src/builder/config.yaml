@@ -2,37 +2,37 @@ dist:
   module: github.com/lumigo-io/opentelemetry-collector-contrib
   name: lumigo-collector
   description: Lumigo OpenTelemetry collector
-  otelcol_version: "0.90.0"
+  otelcol_version: "0.89.0"
   version: "lumigo-dev"
   output_path: dist
 
 exporters:
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter v0.90.0"
-  - gomod: go.opentelemetry.io/collector/exporter/loggingexporter v0.90.0
-  - gomod: "go.opentelemetry.io/collector/exporter/otlphttpexporter v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.90.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter v0.89.0"
+  - gomod: go.opentelemetry.io/collector/exporter/loggingexporter v0.89.0
+  - gomod: "go.opentelemetry.io/collector/exporter/otlphttpexporter v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.89.0"
 
 extensions:
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/headerssetterextension v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.90.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/headerssetterextension v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.89.0"
 
 receivers:
-  - gomod: "go.opentelemetry.io/collector/receiver/otlpreceiver v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.90.0"
+  - gomod: "go.opentelemetry.io/collector/receiver/otlpreceiver v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.89.0"
 
 processors:
-  - gomod: "go.opentelemetry.io/collector/processor/batchprocessor v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.90.0"
+  - gomod: "go.opentelemetry.io/collector/processor/batchprocessor v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.89.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.89.0"
 
 replaces:
-  - github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.90.0 => github.com/lumigo-io/opentelemetry-collector-contrib/extension/lumigoauthextension lumigo-main
-  - github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor v0.90.0 => ../processor/k8sdataenricherprocessor
-  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.90.0 => ../receiver/lumigooperatorheartbeatreceiver
-  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.90.0 => ../receiver/k8sobjectsreceiver
+  - github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.89.0 => github.com/lumigo-io/opentelemetry-collector-contrib/extension/lumigoauthextension lumigo-main
+  - github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor v0.89.0 => ../processor/k8sdataenricherprocessor
+  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.89.0 => ../receiver/lumigooperatorheartbeatreceiver
+  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.89.0 => ../receiver/k8sobjectsreceiver

@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/tcnksm/ghr v0.16.0
-	go.opentelemetry.io/collector/cmd/builder v0.90.0
+	go.opentelemetry.io/collector/cmd/builder v0.89.0
 	golang.org/x/tools v0.15.0
 )
 
