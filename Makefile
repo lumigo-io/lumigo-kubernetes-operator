@@ -10,7 +10,7 @@ IMG_VERSION ?= latest
 CONTROLLER_IMG ?= host.docker.internal:5000/controller:$(IMG_VERSION)
 PROXY_IMG ?= host.docker.internal:5000/telemetry-proxy:$(IMG_VERSION)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.25.0
+ENVTEST_K8S_VERSION = 1.28.0
 
 TARGET_PLATFORM = linux/amd64
 
