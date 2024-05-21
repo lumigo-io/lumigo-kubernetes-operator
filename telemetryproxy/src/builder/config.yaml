@@ -22,6 +22,7 @@ receivers:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.90.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.90.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.90.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.90.0"
 
 processors:
   - gomod: "go.opentelemetry.io/collector/processor/batchprocessor v0.90.0"
@@ -30,6 +31,7 @@ processors:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sdataenricherprocessor v0.90.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.90.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.90.0"
+
 
 replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.90.0 => github.com/lumigo-io/opentelemetry-collector-contrib/extension/lumigoauthextension lumigo-main

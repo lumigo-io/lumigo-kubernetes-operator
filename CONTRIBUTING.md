@@ -46,7 +46,7 @@ $ curl localhost:5000/v2/_catalog -v
 > Host: localhost:5000
 > User-Agent: curl/7.77.0
 > Accept: */*
-> 
+>
 * Mark bundle as not supporting multiuse
 < HTTP/1.1 200 OK
 < Content-Type: application/json; charset=utf-8
@@ -54,7 +54,7 @@ $ curl localhost:5000/v2/_catalog -v
 < X-Content-Type-Options: nosniff
 < Date: Fri, 20 Jan 2023 08:10:32 GMT
 < Content-Length: 20
-< 
+<
 {"repositories":[]}
 * Connection #0 to host localhost left intact
 ```
@@ -64,16 +64,18 @@ $ curl localhost:5000/v2/_catalog -v
 Deploy the Lumigo Kubernetes operator with:
 
 ```sh
+export TOKEN=<token> # The lumigo environment token
 make docker-build docker-push
-helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "debug.enabled=true"
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set token=${TOKEN} --set "debug.enabled=true"
 ```
 
 To avoid strange issues with Docker caching the wrong images in your test environment, it is usually a better to always build a new image tag:
 
 ```sh
 export IMG_VERSION=1 # Incremend this every time to try a deploy
+export TOKEN=<token> # The lumigo environment token
 make docker-build docker-push
-helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" --set "debug.enabled=true"
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" --set "watchdog.image.tag=${IMG_VERSION} --set token=${TOKEN} --set "debug.enabled=true"
 ```
 
 (Notice that the `--set "debug.enabled=true"` is of course optional, but in development is very handy, as it will, among other things, make the `telemetry-proxy` container log which OTLP data it sends upstream.)
@@ -123,8 +125,8 @@ If you see the following, it's likely because and Mac OS has [squatted over port
 docker push host.docker.internal:5000/controller
 Using default tag: latest
 The push refers to repository [host.docker.internal:5000/controller]
-377b701db379: Preparing 
-fba4381f2bb7: Preparing 
+377b701db379: Preparing
+fba4381f2bb7: Preparing
 error parsing HTTP 403 response body: unexpected end of JSON input: ""
 ```
 

@@ -14,7 +14,8 @@ Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](htt
 
 ```sh
 helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
-helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --set cluster.name=<cluster_name>
+export TOKEN=<lumigo token> # The Lumigo Environment Token
+helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --set cluster.name=<cluster_name> --set token=${TOKEN}
 ```
 **Note:** You have the option to alter the namespace from `lumigo-system` to a name of your choosing, but its important to be aware that doing so might cause slight discrepancies throughout the steps below.
 
@@ -72,9 +73,9 @@ The Lumigo Kubernetes operator allows you to set a human-readable name using the
 You can check which version of the Lumigo Kubernetes operator you have deployed in your cluster as follows:
 
 ```sh
-$ helm ls -A      
+$ helm ls -A
 NAME  	NAMESPACE    	REVISION	UPDATED                              	STATUS  	CHART             	APP VERSION
-lumigo	lumigo-system	2       	2023-07-10 09:20:04.233825 +0200 CEST	deployed	lumigo-operator-13	13         
+lumigo	lumigo-system	2       	2023-07-10 09:20:04.233825 +0200 CEST	deployed	lumigo-operator-13	13
 ```
 
 The Lumigo Kubernetes operator is reported as `APP VERSION`.
