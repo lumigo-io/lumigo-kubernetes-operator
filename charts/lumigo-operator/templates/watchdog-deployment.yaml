@@ -1,3 +1,4 @@
+{{- if .Values.watchdog.enabled }}
 {{- $lumigoOperatorVersion := .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
 ---
 apiVersion: apps/v1
@@ -58,3 +59,4 @@ spec:
               name: {{ include "helm.fullname" . }}-token
               key: token
       resources: {{- toYaml .Values.watchdog.resources | nindent 8 }}
+{{- end }}
