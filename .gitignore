@@ -26,3 +26,5 @@ Dockerfile.*.cross
 
 .idea
 .DS_Store
+
+**/__debug_bin*

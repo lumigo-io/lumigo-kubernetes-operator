@@ -5,7 +5,6 @@ output:
   showOperatorStatus: true
 cluster:
   name:
-token: <base64-encoded-token>
 watchdog:
   enabled: true
   image:

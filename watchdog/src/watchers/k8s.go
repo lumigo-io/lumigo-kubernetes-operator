@@ -20,6 +20,7 @@ type KubeWatcher struct {
 	clientset *kubernetes.Clientset
 	namespace string
 	reporter  *reporters.KubeReporter
+	config    *config.Config
 }
 
 func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
@@ -42,6 +43,7 @@ func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
 		clientset: clientset,
 		namespace: config.NAMESPACE,
 		reporter:  reporter,
+		config:    config,
 	}, nil
 }
 
@@ -57,7 +59,11 @@ func (w *KubeWatcher) Watch() {
 
 	log.Printf("Watching for namespace changes in %s...\n", w.namespace)
 	for event := range ch {
-		e := event.Object.(*coreV1.Event)
-		w.reporter.AddEvent(*e) // Pass event directly to reporters package
+		if w.config.LUMITO_TOKEN != "" {
+			e := event.Object.(*coreV1.Event)
+			w.reporter.AddEvent(*e) // Pass event directly to reporters package
+		} else {
+			log.Printf("No token found, skipping event collection")
+		}
 	}
 }

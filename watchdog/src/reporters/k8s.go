@@ -2,6 +2,7 @@ package reporters
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -18,7 +19,7 @@ type KubeReporter struct {
 	batchMaxSize int
 	timer        *time.Ticker
 	endpoint     string
-	token        string
+	config       *config.Config
 }
 
 type Event struct {
@@ -43,7 +44,7 @@ func NewKubeReporter() *KubeReporter {
 		batchMaxSize: lumigoConfig.MAX_BATCH_SIZE,
 		timer:        time.NewTicker(time.Duration(lumigoConfig.KUBE_INTERVAL) * time.Second),
 		endpoint:     lumigoConfig.LUMIGO_ENDPOINT + "/api/v1/",
-		token:        lumigoConfig.LUMITO_TOKEN,
+		config:       lumigoConfig,
 	}
 }
 
@@ -90,7 +91,7 @@ func (r *KubeReporter) sendBatch() {
 	log.Printf("Sending batch of %d events", len(r.eventBatch))
 
 	url := r.endpoint + "events"
-	token := r.token
+	token := r.config.LUMITO_TOKEN
 
 	eventBatchJSON, err := json.Marshal(r.eventBatch)
 	if err != nil {
@@ -103,8 +104,9 @@ func (r *KubeReporter) sendBatch() {
 		log.Println("Error creating request:", err)
 		return
 	}
+	encodedToken := base64.StdEncoding.EncodeToString([]byte(token))
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+encodedToken)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}

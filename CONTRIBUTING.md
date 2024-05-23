@@ -64,18 +64,16 @@ $ curl localhost:5000/v2/_catalog -v
 Deploy the Lumigo Kubernetes operator with:
 
 ```sh
-export TOKEN=<token> # The lumigo environment token
 make docker-build docker-push
-helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set token=${TOKEN} --set "debug.enabled=true"
+helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "debug.enabled=true"
 ```
 
 To avoid strange issues with Docker caching the wrong images in your test environment, it is usually a better to always build a new image tag:
 
 ```sh
 export IMG_VERSION=1 # Incremend this every time to try a deploy
-export TOKEN=<token> # The lumigo environment token
 make docker-build docker-push
-helm upgrade --install lumigo ./charts/lumigo-operator/ --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" --set "watchdog.image.tag=${IMG_VERSION} --set token=${TOKEN} --set "debug.enabled=true"
+helm upgrade --install lumigo ./charts/lumigo-operator/ --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" --set "watchdog.image.tag=${IMG_VERSION} --set "debug.enabled=true"
 ```
 
 (Notice that the `--set "debug.enabled=true"` is of course optional, but in development is very handy, as it will, among other things, make the `telemetry-proxy` container log which OTLP data it sends upstream.)

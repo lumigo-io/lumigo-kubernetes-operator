@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -23,6 +24,7 @@ type TopWatcher struct {
 	namespace     string
 	reporter      *reporters.MetricsReporter
 	interval      time.Duration
+	config        *config.Config
 }
 
 func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
@@ -49,43 +51,47 @@ func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
 		reporter:      reporters.NewMetricsReporter(config),
 		namespace:     config.NAMESPACE,
 		interval:      time.Duration(config.TOP_INTERVAL),
+		config:        config,
 	}, nil
 }
 
 func (w *TopWatcher) Watch() {
 	for {
-		var buffer bytes.Buffer
+		if w.config.LUMITO_TOKEN != "" {
+			var buffer bytes.Buffer
 
-		podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
-		if err != nil {
-			fmt.Printf("Error getting pod metrics: %v\n", err)
-			return
-		}
-		version := w.GetK8SVersion()
-		cloudProvider := w.GetK8SCloudProvider()
-
-		for _, podMetrics := range podMetricsList.Items {
-			for _, container := range podMetrics.Containers {
-				cpuUsage := container.Usage.Cpu().MilliValue()
-				memUsage := container.Usage.Memory().Value()
-
-				buffer.WriteString(fmt.Sprintf("kube_pod_container_resource_usage_cpu{namespace=\"%s\", pod=\"%s\", container=\"%s\", version=\"%s\", cloudProvider=\"%s\"} %d\n",
-					w.namespace, podMetrics.Name, container.Name, version, cloudProvider, cpuUsage))
-				buffer.WriteString(fmt.Sprintf("kube_pod_container_resource_usage_memory{namespace=\"%s\", pod=\"%s\", container=\"%s\", version=\"%s\", cloudProvider=\"%s\"} %d\n",
-					w.namespace, podMetrics.Name, container.Name, version, cloudProvider, memUsage))
+			podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
+			if err != nil {
+				log.Printf("Error getting pod metrics: %v\n", err)
+				return
 			}
+			version := w.GetK8SVersion()
+			cloudProvider := w.GetK8SCloudProvider()
+
+			for _, podMetrics := range podMetricsList.Items {
+				for _, container := range podMetrics.Containers {
+					cpuUsage := container.Usage.Cpu().MilliValue()
+					memUsage := container.Usage.Memory().Value()
+
+					buffer.WriteString(fmt.Sprintf("kube_pod_container_resource_usage_cpu{namespace=\"%s\", pod=\"%s\", container=\"%s\", version=\"%s\", cloudProvider=\"%s\"} %d\n",
+						w.namespace, podMetrics.Name, container.Name, version, cloudProvider, cpuUsage))
+					buffer.WriteString(fmt.Sprintf("kube_pod_container_resource_usage_memory{namespace=\"%s\", pod=\"%s\", container=\"%s\", version=\"%s\", cloudProvider=\"%s\"} %d\n",
+						w.namespace, podMetrics.Name, container.Name, version, cloudProvider, memUsage))
+				}
+			}
+
+			metrics := buffer.String()
+			w.reporter.Report(metrics)
+		} else {
+			log.Println("No token found, skipping top metrics collection")
 		}
-
-		metrics := buffer.String()
-		w.reporter.Report(metrics)
-
 		time.Sleep(w.interval * time.Second)
 	}
 }
 
 func (w *TopWatcher) GetK8SVersion() string {
 	version, err := w.clientset.ServerVersion()
-if err != nil {
+	if err != nil {
 		return "unknown"
 	}
 

@@ -14,6 +14,7 @@ type TelemetryWatcher struct {
 	endpoint string
 	interval time.Duration
 	reporter *reporters.MetricsReporter
+	config   *config.Config
 }
 
 func NewTelemetryWatcher(config *config.Config) *TelemetryWatcher {
@@ -21,12 +22,17 @@ func NewTelemetryWatcher(config *config.Config) *TelemetryWatcher {
 		endpoint: config.TELEMETRY_PROXY_ENDPOINT,
 		interval: time.Duration(config.TELEMETRY_INTERVAL),
 		reporter: reporters.NewMetricsReporter(config),
+		config:   config,
 	}
 }
 
 func (w *TelemetryWatcher) Watch() {
 	for {
-		w.GetTelemetryMetrics()
+		if w.config.LUMITO_TOKEN != "" {
+			w.GetTelemetryMetrics()
+		} else {
+			log.Printf("No token found, skipping telemetry metrics collection")
+		}
 		time.Sleep(w.interval * time.Second)
 	}
 }

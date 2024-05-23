@@ -53,10 +53,5 @@ spec:
           value: "{{ .Values.watchdog.endpoint }}"
         - name: NAMESPACE
           value: "{{ .Release.Namespace }}"
-        - name: LUMITO_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "helm.fullname" . }}-token
-              key: token
       resources: {{- toYaml .Values.watchdog.resources | nindent 8 }}
 {{- end }}
