@@ -48,7 +48,9 @@ func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
 func (w *KubeWatcher) Watch() {
 	watcher, err := w.clientset.CoreV1().Events(w.namespace).Watch(context.TODO(), v1.ListOptions{})
 	if err != nil {
-		panic(err.Error())
+		log.Printf("Error starting watch: %s\n", err.Error())
+		go w.Watch() // Start watch again in a new goroutine in case of error
+		return
 	}
 
 	ch := watcher.ResultChan()
