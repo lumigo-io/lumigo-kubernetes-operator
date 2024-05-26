@@ -37,14 +37,13 @@ type Event struct {
 	Kind              string       `json:"kind"`
 }
 
-func NewKubeReporter() *KubeReporter {
-	lumigoConfig := config.LoadConfig()
+func NewKubeReporter(config *config.Config) *KubeReporter {
 	return &KubeReporter{
 		eventBatch:   []Event{},
-		batchMaxSize: lumigoConfig.MAX_BATCH_SIZE,
-		timer:        time.NewTicker(time.Duration(lumigoConfig.KUBE_INTERVAL) * time.Second),
-		endpoint:     lumigoConfig.LUMIGO_ENDPOINT + "/api/v1/",
-		config:       lumigoConfig,
+		batchMaxSize: config.MAX_BATCH_SIZE,
+		timer:        time.NewTicker(time.Duration(config.KUBE_INTERVAL) * time.Second),
+		endpoint:     config.LUMIGO_ENDPOINT + "/api/v1/",
+		config:       config,
 	}
 }
 

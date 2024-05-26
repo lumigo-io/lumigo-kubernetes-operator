@@ -37,7 +37,7 @@ func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
 		return nil, err
 	}
 
-	reporter := reporters.NewKubeReporter()
+	reporter := reporters.NewKubeReporter(config)
 
 	return &KubeWatcher{
 		clientset: clientset,
