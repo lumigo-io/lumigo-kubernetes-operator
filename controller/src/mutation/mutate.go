@@ -46,6 +46,7 @@ const LumigoInjectorVolumeName = "lumigo-injector"
 const LumigoInjectorVolumeMountPoint = "/opt/lumigo"
 const LumigoTracerTokenEnvVarName = "LUMIGO_TRACER_TOKEN"
 const LumigoEndpointEnvVarName = "LUMIGO_ENDPOINT"
+const LumigoLogsEndpointEnvVarName = "LUMIGO_LOGS_ENDPOINT"
 const LumigoContainerNameEnvVarName = "LUMIGO_CONTAINER_NAME"
 const LdPreloadEnvVarName = "LD_PRELOAD"
 const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
@@ -78,6 +79,7 @@ type mutatorImpl struct {
 	log                       *logr.Logger
 	lumigoAutotraceLabelValue string
 	lumigoEndpoint            string
+	lumigoLogsEndpoint        string
 	lumigoToken               *operatorv1alpha1.Credentials
 	lumigoInjectorImage       string
 }
@@ -403,6 +405,18 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 		} else {
 			envVars[lumigoEndpointEnvVarIndex] = *lumigoEndpointEnvVar
 		}
+
+		lumigoLogsEndpointEnvVar := &corev1.EnvVar{
+			Name:  LumigoLogsEndpointEnvVarName,
+			Value: m.lumigoLogsEndpoint,
+		}
+		lumigoLogsEndpointEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoLogsEndpointEnvVarName })
+		if lumigoLogsEndpointEnvVarIndex < 0 {
+			envVars = append(envVars, *lumigoLogsEndpointEnvVar)
+		} else {
+			envVars[lumigoLogsEndpointEnvVarIndex] = *lumigoLogsEndpointEnvVar
+		}
+
 		lumigoContainerNameEnvVar := &corev1.EnvVar{
 			Name:  LumigoContainerNameEnvVarName,
 			Value: container.Name,
