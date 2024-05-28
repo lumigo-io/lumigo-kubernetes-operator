@@ -226,6 +226,7 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 
 func (kp *kubernetesprocessor) processResourceLogs(ctx context.Context, resourceLogs *plog.ResourceLogs) {
 	scopeLogs := resourceLogs.ScopeLogs()
+
 	for i := 0; i < scopeLogs.Len(); i++ {
 		sl := scopeLogs.At(i)
 
@@ -244,7 +245,121 @@ func (kp *kubernetesprocessor) processResourceLogs(ctx context.Context, resource
 			}
 		default:
 			{
-				kp.logger.Error("Unexpected logs scope", zap.String("scope-name", sl.Scope().Name()))
+				resource := resourceLogs.Resource()
+				resourceAttributes := resourceLogs.Resource().Attributes()
+
+				resourceAttributes.PutStr(K8SProviderIdKey, kp.kube.GetProviderId())
+				resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+
+				pod, found := kp.getPod(ctx, &resource)
+				if !found {
+					kp.logger.Debug(
+						"Cannot find pod by 'k8s.pod.uid' of by connection ip",
+						zap.Any("resource-attributes", resourceAttributes.AsRaw()),
+					)
+					continue
+				}
+				resourceAttributes.PutStr(K8SNodeNameKey, pod.Spec.NodeName)
+
+				// Ensure 'k8s.pod.uid' is set (we might have found the pod via the network connection ip)
+				if _, found := resourceAttributes.Get(string(semconv.K8SPodUIDKey)); !found {
+					resourceAttributes.PutStr(string(semconv.K8SPodUIDKey), string(pod.UID))
+				}
+
+				resourceAttributes.PutStr(string(semconv.K8SPodNameKey), pod.Name)
+
+				resourceAttributes.PutStr(string(semconv.K8SNamespaceNameKey), pod.Namespace)
+				if namespace, nsFound := kp.kube.GetNamespaceByName(pod.Namespace); nsFound {
+					resourceAttributes.PutStr("k8s.namespace.uid", string(namespace.UID))
+				} else {
+					kp.logger.Error(
+						"Cannot add namespace resource attributes to traces, namespace not found",
+						zap.String("namespace", pod.Namespace),
+					)
+				}
+
+				ownerObject, found, err := kp.kube.ResolveRelevantOwnerReference(ctx, pod)
+				if err != nil {
+					kp.logger.Error(
+						"Cannot look up owner reference for pod",
+						zap.Any("pod", pod),
+						zap.Error(err),
+					)
+				}
+
+				if !found {
+					kp.logger.Debug(
+						"Pod has no owner reference we can use to add other resource attributes",
+						zap.Any("pod", pod),
+					)
+					continue
+				}
+
+				switch podOwner := ownerObject.(type) {
+				case *appsv1.DaemonSet:
+					{
+						resourceAttributes.PutStr(string(semconv.K8SDaemonSetNameKey), podOwner.Name)
+						resourceAttributes.PutStr(string(semconv.K8SDaemonSetUIDKey), string(podOwner.UID))
+					}
+				case *appsv1.ReplicaSet:
+					{
+						resourceAttributes.PutStr(string(semconv.K8SReplicaSetNameKey), podOwner.Name)
+						resourceAttributes.PutStr(string(semconv.K8SReplicaSetUIDKey), string(podOwner.UID))
+
+						if replicaSetOwner, found, err := kp.kube.ResolveRelevantOwnerReference(ctx, podOwner); found {
+							if deployment, ok := replicaSetOwner.(*appsv1.Deployment); ok {
+								resourceAttributes.PutStr(string(semconv.K8SDeploymentNameKey), deployment.Name)
+								resourceAttributes.PutStr(string(semconv.K8SDeploymentUIDKey), string(deployment.UID))
+							} else {
+								kp.logger.Error(
+									"Cannot add deployment resource attributes to traces, replicaset's owner object is not a *apps/v1.Deployment",
+									zap.Any("owner-object", ownerObject),
+									zap.Error(err),
+								)
+							}
+						} else {
+							kp.logger.Debug(
+								"Cannot add deployment resource attributes to traces, replicaset has no deployment owner",
+								zap.Any("replicaset", podOwner),
+								zap.Error(err),
+							)
+						}
+					}
+				case *appsv1.StatefulSet:
+					{
+						resourceAttributes.PutStr(string(semconv.K8SStatefulSetNameKey), podOwner.Name)
+						resourceAttributes.PutStr(string(semconv.K8SStatefulSetUIDKey), string(podOwner.UID))
+					}
+				case *batchv1.Job:
+					{
+						resourceAttributes.PutStr(string(semconv.K8SJobNameKey), podOwner.Name)
+						resourceAttributes.PutStr(string(semconv.K8SJobUIDKey), string(podOwner.UID))
+
+						if jobOwner, found, err := kp.kube.ResolveRelevantOwnerReference(ctx, podOwner); found {
+							if cronJob, ok := jobOwner.(*batchv1.CronJob); ok {
+								resourceAttributes.PutStr(string(semconv.K8SCronJobNameKey), cronJob.Name)
+								resourceAttributes.PutStr(string(semconv.K8SCronJobUIDKey), string(cronJob.UID))
+							} else {
+								kp.logger.Error(
+									"Cannot add cronjob resource attributes to traces, job's object is not a *batch/v1.CronJob",
+									zap.Any("owner-object", ownerObject),
+									zap.Error(err),
+								)
+							}
+						} else {
+							kp.logger.Debug(
+								"Cannot add cronjob resource attributes to traces, job has no cronjob owner",
+								zap.Any("job", podOwner),
+								zap.Error(err),
+							)
+						}
+					}
+				default:
+					{
+						kp.logger.Error("Unexpected owner-object for pod", zap.Any("pod", pod), zap.Any("owner-object", ownerObject))
+					}
+				}
+				return
 			}
 		}
 	}

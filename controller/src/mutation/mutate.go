@@ -88,7 +88,7 @@ func (m *mutatorImpl) GetAutotraceLabelValue() string {
 	return m.lumigoAutotraceLabelValue
 }
 
-func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string) (Mutator, error) {
+func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (Mutator, error) {
 	version := LumigoOperatorVersion
 
 	if len(version) > 8 {
@@ -99,6 +99,7 @@ func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, Lum
 		log:                       Log,
 		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
 		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
+		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
 		lumigoToken:               LumigoToken,
 		lumigoInjectorImage:       LumigoInjectorImage,
 	}, nil

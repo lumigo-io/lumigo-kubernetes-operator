@@ -64,6 +64,7 @@ var lumigoApiVersion = fmt.Sprintf("%s/%s", operatorv1alpha1.GroupVersion.Group,
 var lumigoOperatorVersion = "2b1e6b60ca871edee1d8f543c400f0b24663349144b78c79cfa006efaad6176a" // Unrealistically long, but we need to ensure we don't set label values too long
 var lumigoInjectorImage = "localhost:5000/lumigo-autotrace:test"
 var telemetryProxyOtlpServiceUrl = "lumigo-telemetry-proxy.lumigo-system.svc.cluster.local"
+var telemetryProxyOtlpLogsServiceUrl = telemetryProxyOtlpServiceUrl
 
 var statusActive = operatorv1alpha1.LumigoStatus{
 	Conditions: []operatorv1alpha1.LumigoCondition{
@@ -174,11 +175,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	err = (&LumigoInjectorWebhookHandler{
-		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s", lumigoOperatorVersion)),
-		LumigoOperatorVersion:        lumigoOperatorVersion,
-		LumigoInjectorImage:          lumigoInjectorImage,
-		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpServiceUrl,
-		Log:                          ctrl.Log.WithName("injector-webhook").WithName("Lumigo"),
+		EventRecorder:                    mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s", lumigoOperatorVersion)),
+		LumigoOperatorVersion:            lumigoOperatorVersion,
+		LumigoInjectorImage:              lumigoInjectorImage,
+		TelemetryProxyOtlpServiceUrl:     telemetryProxyOtlpServiceUrl,
+		TelemetryProxyOtlpLogsServiceUrl: telemetryProxyOtlpLogsServiceUrl,
+		Log:                              ctrl.Log.WithName("injector-webhook").WithName("Lumigo"),
 	}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
