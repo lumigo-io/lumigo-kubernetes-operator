@@ -30,6 +30,8 @@ Start `minikube`:
 minikube start --insecure-registry "host.docker.internal:5000"
 ```
 
+* Note that if the minikube machine already exists, you will need to delete it first with `minikube delete` - otherwise the `--insecure-registry` parameter will be ignored (more details [here](https://stackoverflow.com/a/53937716))
+
 Start a local Docker registry:
 
 ```sh
@@ -46,7 +48,7 @@ $ curl localhost:5000/v2/_catalog -v
 > Host: localhost:5000
 > User-Agent: curl/7.77.0
 > Accept: */*
-> 
+>
 * Mark bundle as not supporting multiuse
 < HTTP/1.1 200 OK
 < Content-Type: application/json; charset=utf-8
@@ -54,7 +56,7 @@ $ curl localhost:5000/v2/_catalog -v
 < X-Content-Type-Options: nosniff
 < Date: Fri, 20 Jan 2023 08:10:32 GMT
 < Content-Length: 20
-< 
+<
 {"repositories":[]}
 * Connection #0 to host localhost left intact
 ```
@@ -123,8 +125,8 @@ If you see the following, it's likely because and Mac OS has [squatted over port
 docker push host.docker.internal:5000/controller
 Using default tag: latest
 The push refers to repository [host.docker.internal:5000/controller]
-377b701db379: Preparing 
-fba4381f2bb7: Preparing 
+377b701db379: Preparing
+fba4381f2bb7: Preparing
 error parsing HTTP 403 response body: unexpected end of JSON input: ""
 ```
 
