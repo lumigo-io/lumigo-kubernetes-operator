@@ -93,12 +93,6 @@ exporters:
     endpoint: {{ env.Getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
-{{- if $debug }}
-  logging:
-    verbosity: detailed
-    sampling_initial: 1
-    sampling_thereafter: 1
-{{- end }}
   otlphttp/lumigo_logs:
     endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
