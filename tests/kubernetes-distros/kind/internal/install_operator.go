@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -14,7 +13,6 @@ import (
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
-	"sigs.k8s.io/e2e-framework/pkg/features"
 	"sigs.k8s.io/e2e-framework/third_party/helm"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -80,22 +78,6 @@ func LumigoOperatorEnvFunc(lumigoNamespace string, otlpSinkUrl string, otlpSinkL
 
 		return installLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, otlpSinkLogsUrl, logger)
 	}
-}
-
-func LumigoOperatorFeature(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) features.Feature {
-	return features.New("LumigoOperatorLocal").Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-		client, err := config.NewClient()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		ctx, err = installLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, logger)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		return ctx
-	}).Feature()
 }
 
 func splitContainerImageNameAndTag(imageName string) (string, string) {
