@@ -99,6 +99,16 @@ exporters:
     sampling_initial: 1
     sampling_thereafter: 1
 {{- end }}
+  otlphttp/lumigo_logs:
+    endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    auth:
+      authenticator: headers_setter/lumigo
+{{- if $debug }}
+  logging:
+    verbosity: detailed
+    sampling_initial: 1
+    sampling_thereafter: 1
+{{- end }}
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:
     endpoint: $LUMIGO_ENDPOINT
@@ -247,7 +257,7 @@ service:
 {{- if $config.debug }}
       - logging
 {{- end }}
-      - otlphttp/lumigo_ns_{{ $namespace.name }}
+      - otlphttp/lumigo_logs
     logs/k8s_objects_ns_{{ $namespace.name }}:
       receivers:
       - k8sobjects/objects_ns_{{ $namespace.name }}
