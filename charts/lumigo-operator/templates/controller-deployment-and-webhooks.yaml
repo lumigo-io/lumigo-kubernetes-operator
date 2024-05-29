@@ -231,6 +231,8 @@ spec:
           value: "{{ .Values.debug.enabled | default false }}"
         - name: LUMIGO_ENDPOINT
           value: "{{ .Values.endpoint.otlp.url }}"
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.logs_url }}"
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD

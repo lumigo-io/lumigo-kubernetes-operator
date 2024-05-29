@@ -168,11 +168,12 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	}
 
 	if err = (&injector.LumigoInjectorWebhookHandler{
-		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/injector-webhook", lumigoOperatorVersion)),
-		LumigoOperatorVersion:        lumigoOperatorVersion,
-		LumigoInjectorImage:          lumigoInjectorImage,
-		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
-		Log:                          logger,
+		EventRecorder:                    mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/injector-webhook", lumigoOperatorVersion)),
+		LumigoOperatorVersion:            lumigoOperatorVersion,
+		LumigoInjectorImage:              lumigoInjectorImage,
+		TelemetryProxyOtlpServiceUrl:     telemetryProxyOtlpService,
+		TelemetryProxyOtlpLogsServiceUrl: telemetryProxyOtlpLogsService,
+		Log:                              logger,
 	}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create injector webhook: %w", err)
 	}

@@ -111,6 +111,8 @@ spec:
         env:
         - name: LUMIGO_ENDPOINT
           value: \"https://my.lumigo.endpoint\" # Replace this!
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: \"https://my.lumigo.endpoint\" # Replace this!
 " > lumigo-endpoint.patch.yaml
 kubectl patch --patch-file lumigo-endpoint.patch.yaml --type strategic -n lumigo-system --filename=lumigo-endpoint.patch.yaml
 ```
