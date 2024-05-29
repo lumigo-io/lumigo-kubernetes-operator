@@ -233,6 +233,21 @@ service:
       - logging
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
+    logs/application_logs_ns_{{ $namespace.name }}:
+      receivers:
+      - otlp
+      processors:
+      - k8sdataenricherprocessor
+      - transform/add_ns_attributes_ns_{{ $namespace.name }}
+{{- if $clusterName }}
+      - transform/add_cluster_name
+{{- end }}
+      - transform/inject_operator_details_into_resource
+      exporters:
+{{- if $config.debug }}
+      - logging
+{{- end }}
+      - otlphttp/lumigo_ns_{{ $namespace.name }}
     logs/k8s_objects_ns_{{ $namespace.name }}:
       receivers:
       - k8sobjects/objects_ns_{{ $namespace.name }}

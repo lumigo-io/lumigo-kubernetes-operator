@@ -208,7 +208,7 @@ func TestMain(m *testing.M) {
 
 	logrWrapper := stdr.New(logger)
 	otlpSinkFeature, otlpSinkK8sServiceUrl := internal.OtlpSinkEnvFunc(OTLP_SINK_NAMESPACE, "otlp-sink", OTLP_SINK_OTEL_COLLECTOR_IMAGE, logrWrapper)
-	lumigoOperatorFeature := internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, otlpSinkK8sServiceUrl, logrWrapper)
+	lumigoOperatorFeature := internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, otlpSinkK8sServiceUrl, otlpSinkK8sServiceUrl, logrWrapper)
 
 	testEnv.Setup(
 		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),

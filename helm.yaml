@@ -683,6 +683,8 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
         - env:
+            - name: LUMIGO_LOGS_ENDPOINT
+              value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
             - name: LUMIGO_ENDPOINT
               value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
             - mountPath: /lumigo/etc/namespaces/

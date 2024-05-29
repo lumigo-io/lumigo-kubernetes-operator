@@ -131,6 +131,8 @@ spec:
               value: Kustomize
             - name: LUMIGO_ENDPOINT
               value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+            - name: LUMIGO_LOGS_ENDPOINT
+              value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
           ports:
             - containerPort: 4318
               name: otlphttp

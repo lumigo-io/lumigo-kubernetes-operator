@@ -28,7 +28,7 @@ const (
 	DEFAULT_IMG_VERSION         = "latest"
 )
 
-func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfigFilePath string, lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) (context.Context, error) {
+func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfigFilePath string, lumigoNamespace string, otlpSinkUrl string, otlpSinkLogsUrl string, logger logr.Logger) (context.Context, error) {
 	controllerImageName, controllerImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorControllerImage).(string))
 	telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorTelemetryProxyImage).(string))
 	operatorDebug := ctx.Value(ContextKeyLumigoOperatorDebug).(bool)
@@ -50,6 +50,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
+		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.logs.url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)), // Operator debug logging at runtime
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
@@ -70,14 +71,14 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	return ctx, nil
 }
 
-func LumigoOperatorEnvFunc(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
+func LumigoOperatorEnvFunc(lumigoNamespace string, otlpSinkUrl string, otlpSinkLogsUrl string, logger logr.Logger) func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
 		client, err := config.NewClient()
 		if err != nil {
 			return ctx, err
 		}
 
-		return installLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, logger)
+		return installLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, otlpSinkLogsUrl, logger)
 	}
 }
 
