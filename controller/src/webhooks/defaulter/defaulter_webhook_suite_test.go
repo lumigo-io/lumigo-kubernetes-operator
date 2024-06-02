@@ -71,10 +71,10 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: false,
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
-			Paths: []string{filepath.Join("..", "..", "config", "webhooks")},
+			Paths: []string{filepath.Join("..", "..", "..", "..", "config", "webhooks")},
 		},
 	}
 
@@ -218,7 +218,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				},
 			}
 
-			Expect(k8sClient.Create(ctx, &newLumigo)).To(Succeed())
+			Expect(k8sClient.Create(ctx, &newLumigo)).To(MatchError("abc"))
 
 			Expect(newLumigo.Spec.Infrastructure.Enabled).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Infrastructure.KubeEvents.Enabled).To(&beBoolPointer{expectedValue: true})
