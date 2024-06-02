@@ -516,7 +516,7 @@ var _ = Context("Lumigo controller", func() {
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
 					},
-				}, true, true, false, true)
+				}, true, true, false, false)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func(g Gomega) {
@@ -627,7 +627,7 @@ var _ = Context("Lumigo controller", func() {
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
 					},
-				}, true, true, true, true)
+				}, true, true, true, false)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func(g Gomega) {

@@ -434,7 +434,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, true))
 		})
 
 		It("should inject a deployment with containers running not as root", func() {
@@ -443,7 +443,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 					Name: "lumigosecret",
 					Key:  "token",
 				},
-			}, true, true)
+			}, true, false)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			lumigo.Status = statusActive
@@ -503,7 +503,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 					Name: "lumigosecret",
 					Key:  "token",
 				},
-			}, true, true)
+			}, true, false)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			lumigo.Status = statusActive

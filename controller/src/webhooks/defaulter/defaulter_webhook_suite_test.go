@@ -197,7 +197,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 
 	Context("when creating the first Lumigo instance in the namespace", func() {
 
-		It("it sets defaults for Tracing.Injection.*", func() {
+		It("it sets defaults for Tracing.Injection.* and Logging", func() {
 			newLumigo := operatorv1alpha1.Lumigo{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Lumigo",
@@ -225,6 +225,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 			Expect(newLumigo.Spec.Tracing.Injection.Enabled).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion).To(&beBoolPointer{expectedValue: true})
+			Expect(newLumigo.Spec.Logging.Enabled).To(&beBoolPointer{expectedValue: false})
 		})
 
 		It("it rejects instances with blank .LumigoToken.Spec.LumigoToken.SecretRef.Name", func() {

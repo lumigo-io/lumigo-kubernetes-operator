@@ -99,8 +99,13 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 	}
 
 	lumigoEnableLogs := false
-	if LumigoSpec.Logging.Enabled != nil {
+	if LumigoSpec != nil && LumigoSpec.Logging.Enabled != nil {
 		lumigoEnableLogs = *LumigoSpec.Logging.Enabled
+	}
+
+	lumigoToken := &operatorv1alpha1.Credentials{}
+	if LumigoSpec != nil {
+		lumigoToken = &LumigoSpec.LumigoToken
 	}
 
 	return &mutatorImpl{
@@ -109,7 +114,7 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
 		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
 		lumigoEnableLogs: 				 lumigoEnableLogs,
-		lumigoToken:               &LumigoSpec.LumigoToken,
+		lumigoToken:               lumigoToken,
 		lumigoInjectorImage:       LumigoInjectorImage,
 	}, nil
 }
