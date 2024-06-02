@@ -4,7 +4,9 @@
   "license": "ISC",
   "dependencies": {
     "@opentelemetry/api": "^1.4.1",
-    "axios": "^1.1.2"
+    "axios": "^1.1.2",
+    "winston": "3.13.0",
+    "@opentelemetry/winston-transport": "0.3.0"
   },
   "scripts": {
     "start": "node app.js"

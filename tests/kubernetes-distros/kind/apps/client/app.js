@@ -2,16 +2,21 @@ const axios = require('axios');
 
 const { init } = require('@lumigo/opentelemetry');
 const { SpanStatusCode, trace } = require('@opentelemetry/api');
+const winston = require('winston');
 
 if (!process.env.TARGET_URL) {
   throw new Error("The required environment variable 'TARGET_URL' is not set")
 }
 
-(async() => {
+(async () => {
   const { tracerProvider } = await init;
   const tracer = trace.getTracer(__filename)
-
-  await tracer.startActiveSpan('batch', async(rootSpan) => {
+  const logger = winston.createLogger({
+    transports: [new winston.transports.Console()],
+    level: 'info'
+  });
+  logger.info('Starting batch job...');
+  await tracer.startActiveSpan('batch', async (rootSpan) => {
     try {
       const res = await axios.post(`${process.env.TARGET_URL}/api/checkout`, {
         "reference": "Order1234567",
