@@ -3,6 +3,7 @@ package mutation
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
@@ -15,16 +16,19 @@ import (
 
 var (
 	errAutotraceLabelNotFound        = fmt.Errorf("'%s' label not found", LumigoAutoTraceLabelKey)
-	errLdPreloadEnvVarNotSet         = fmt.Errorf("the environment variable '%s' is not set in the container's Env", LdPreloadEnvVarName)
-	errLumigoTracerTokenEnvVarNotSet = fmt.Errorf("the environment variable '%s' is not set in the container's Env", LumigoTracerTokenEnvVarName)
-	errLumigoEndpointEnvVarNotSet    = fmt.Errorf("the environment variable '%s' is not set in the container's Env", LumigoEndpointEnvVarName)
+	errEnvVarMissingFormat					 = "the environment variable '%s' is not set in the container's Env"
+	errLdPreloadEnvVarNotSet         = fmt.Errorf(errEnvVarMissingFormat, LdPreloadEnvVarName)
+	errLumigoTracerTokenEnvVarNotSet = fmt.Errorf(errEnvVarMissingFormat, LumigoTracerTokenEnvVarName)
+	errLumigoEndpointEnvVarNotSet    = fmt.Errorf(errEnvVarMissingFormat, LumigoEndpointEnvVarName)
+	errLumigoEnableLogsEnvVarNotSet  = fmt.Errorf(errEnvVarMissingFormat, LumigoEnableLogsEnvVarName)
 )
 
-func BeInstrumentedWithLumigo(lumigoOperatorVersion string, lumigoInjectorImage string, lumigoEndpointUrl string) types.GomegaMatcher {
+func BeInstrumentedWithLumigo(lumigoOperatorVersion string, lumigoInjectorImage string, lumigoEndpointUrl string, lumigoLogsEnabled bool) types.GomegaMatcher {
 	return &beInstrumentedWithLumigo{
 		lumigoOperatorVersion: lumigoOperatorVersion,
 		lumigoInjectorImage:   lumigoInjectorImage,
 		lumigoEndpointUrl:     lumigoEndpointUrl,
+		lumigoLogsEnabled:     lumigoLogsEnabled,
 	}
 }
 
@@ -32,6 +36,7 @@ type beInstrumentedWithLumigo struct {
 	lumigoOperatorVersion string
 	lumigoInjectorImage   string
 	lumigoEndpointUrl     string
+	lumigoLogsEnabled     bool
 }
 
 func (m *beInstrumentedWithLumigo) Match(actual interface{}) (bool, error) {
@@ -248,6 +253,8 @@ func (m *beInstrumentedWithLumigo) isContainerInstrumentedWithLumigo(container *
 	ldPreloadEnvVarFound := false
 	lumigoTracerTokenEnvVarFound := false
 	lumigoEndpointEnvVarFound := false
+	lumigoEnableLogsEnvVarFound := false
+
 	for _, envVar := range container.Env {
 		switch envVar.Name {
 		case LdPreloadEnvVarName:
@@ -267,6 +274,18 @@ func (m *beInstrumentedWithLumigo) isContainerInstrumentedWithLumigo(container *
 				return false, fmt.Errorf("unexpected value for '%s' env var: expected '%s', found '%s'", LumigoEndpointEnvVarName, m.lumigoEndpointUrl, envVar.Value)
 			}
 			lumigoEndpointEnvVarFound = true
+
+		case LumigoEnableLogsEnvVarName:
+			boolValue, err := strconv.ParseBool(envVar.Value)
+
+			if err != nil {
+				return false, fmt.Errorf("unexpected value for boolean '%s' env var: '%s'", LumigoEnableLogsEnvVarName, envVar.Value)
+			}
+
+			if boolValue != m.lumigoLogsEnabled {
+				return false, fmt.Errorf("unexpected value for '%s' env var: expected '%t', found '%s'", LumigoEnableLogsEnvVarName, m.lumigoLogsEnabled, envVar.Value)
+			}
+			lumigoEnableLogsEnvVarFound = true
 		}
 	}
 
@@ -280,6 +299,10 @@ func (m *beInstrumentedWithLumigo) isContainerInstrumentedWithLumigo(container *
 
 	if !lumigoEndpointEnvVarFound {
 		return false, errLumigoEndpointEnvVarNotSet
+	}
+
+	if !lumigoEnableLogsEnvVarFound {
+		return false, errLumigoEnableLogsEnvVarNotSet
 	}
 
 	volumeMountFound := false

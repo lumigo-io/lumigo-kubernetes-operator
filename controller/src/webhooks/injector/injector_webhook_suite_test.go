@@ -323,7 +323,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 					Name: "DoesNot",
 					Key:  "Exist",
 				},
-			}, true)
+			}, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			lumigo.Status = statusErroneous
@@ -388,7 +388,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 					Name: "lumigosecret",
 					Key:  "token",
 				},
-			}, true)
+			}, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			lumigo.Status = statusActive
@@ -434,7 +434,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
 		})
 
 		It("should inject a deployment with containers running not as root", func() {
@@ -443,7 +443,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 					Name: "lumigosecret",
 					Key:  "token",
 				},
-			}, true)
+			}, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			lumigo.Status = statusActive
@@ -493,7 +493,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
 			Expect(deploymentAfter.Spec.Template.Spec.InitContainers[0].SecurityContext.RunAsNonRoot).To(Equal(&f))
 		})
 
@@ -503,7 +503,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 					Name: "lumigosecret",
 					Key:  "token",
 				},
-			}, true)
+			}, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			lumigo.Status = statusActive
@@ -564,7 +564,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
 			Expect(deploymentAfter.Spec.Template.Spec.InitContainers[0].SecurityContext.RunAsGroup).To(Equal(&group))
 		})
 
@@ -576,7 +576,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 				Name: "doesnot",
 				Key:  "exist",
 			},
-		}, true)
+		}, true, true)
 		Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 		lumigo.Status = statusActive
@@ -638,7 +638,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 
 })
 
-func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool) *operatorv1alpha1.Lumigo {
+func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool, loggingEnabled bool) *operatorv1alpha1.Lumigo {
 	return &operatorv1alpha1.Lumigo{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Lumigo",
@@ -655,6 +655,9 @@ func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Crede
 				Injection: operatorv1alpha1.InjectionSpec{
 					Enabled: &injectionEnabled,
 				},
+			},
+			Logging: operatorv1alpha1.LoggingSpec{
+				Enabled: &loggingEnabled,
 			},
 		},
 	}

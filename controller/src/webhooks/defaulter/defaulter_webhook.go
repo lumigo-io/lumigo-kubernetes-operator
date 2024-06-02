@@ -146,6 +146,11 @@ func (h *LumigoDefaulterWebhookHandler) Handle(ctx context.Context, request admi
 		newLumigo.Spec.Infrastructure.KubeEvents.Enabled = &newTrue
 	}
 
+	newFalse := false
+	if newLumigo.Spec.Logging.Enabled == nil {
+		newLumigo.Spec.Logging.Enabled = &newFalse
+	}
+
 	marshalled, err := json.Marshal(newLumigo)
 	if err != nil {
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("cannot marshal object %w", err))

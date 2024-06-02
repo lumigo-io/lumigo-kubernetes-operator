@@ -197,7 +197,6 @@ var _ = Context("Lumigo controller", func() {
 	})
 
 	Context("with one Lumigo instance", func() {
-
 		It("has an error if the referenced secret does not exist", func() {
 			lumigoName := "lumigo"
 			lumigo := newLumigo(namespaceName, lumigoName, operatorv1alpha1.Credentials{
@@ -205,7 +204,7 @@ var _ = Context("Lumigo controller", func() {
 					Name: "lumigo-credentials",
 					Key:  "token",
 				},
-			}, true, true, true)
+			}, true, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
@@ -253,7 +252,7 @@ var _ = Context("Lumigo controller", func() {
 					Name: "lumigo-credentials",
 					Key:  expectedTokenKey,
 				},
-			}, true, true, true)
+			}, true, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
@@ -333,7 +332,7 @@ var _ = Context("Lumigo controller", func() {
 					Name: "lumigo-credentials",
 					Key:  expectedTokenKey,
 				},
-			}, true, true, true)
+			}, true, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 			By("the Lumigo instance goes in an erroneous state", func() {
@@ -434,7 +433,7 @@ var _ = Context("Lumigo controller", func() {
 							Name: lumigoSecretName,
 							Key:  expectedTokenKey,
 						},
-					}, true, false, false)
+					}, true, false, false, true)
 					g.Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 				}, defaultTimeout, defaultInterval).Should(Succeed())
 			})
@@ -453,7 +452,7 @@ var _ = Context("Lumigo controller", func() {
 					Name:      deploymentName,
 				}, deployment)).To(Succeed())
 
-				Expect(deployment).NotTo(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+				Expect(deployment).NotTo(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
 			})
 
 		})
@@ -517,7 +516,7 @@ var _ = Context("Lumigo controller", func() {
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
 					},
-				}, true, true, false)
+				}, true, true, false, true)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func(g Gomega) {
@@ -537,7 +536,7 @@ var _ = Context("Lumigo controller", func() {
 						Name:      deploymentName,
 					}, deployment)).To(Succeed())
 
-					g.Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+					g.Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
 					g.Expect(currentVersionOf(lumigo, g)).To(BeActive())
 					g.Expect(currentVersionOf(lumigo, g)).To(HaveInstrumentedObjectReferenceFor(deployment))
 				}, defaultTimeout, defaultInterval).Should(Succeed())
@@ -565,7 +564,7 @@ var _ = Context("Lumigo controller", func() {
 					Name:      deploymentName,
 				}, deployment)).To(Succeed())
 
-				Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+				Expect(deployment).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
 			})
 		})
 
@@ -628,7 +627,7 @@ var _ = Context("Lumigo controller", func() {
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
 					},
-				}, true, true, true)
+				}, true, true, true, true)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func(g Gomega) {
@@ -644,7 +643,7 @@ var _ = Context("Lumigo controller", func() {
 					Name:      deploymentName,
 				}, deploymentAfter)).To(Succeed())
 
-				Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl))
+				Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, false))
 			})
 
 			By("Deleting the Lumigo resource", func() {
@@ -710,7 +709,7 @@ var _ = Context("Lumigo controller", func() {
 						Name: lumigoSecretName,
 						Key:  expectedTokenKey,
 					},
-				}, true, true, false)
+				}, true, true, false, true)
 				Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
 
 				Eventually(func(g Gomega) {
@@ -763,7 +762,7 @@ var _ = Context("Lumigo controller", func() {
 				},
 			}
 
-			lumigo1 := newLumigo(namespaceName, "lumigo1", lumigoToken, true, true, true)
+			lumigo1 := newLumigo(namespaceName, "lumigo1", lumigoToken, true, true, true, true)
 			Expect(k8sClient.Create(ctx, lumigo1)).Should(Succeed())
 			Eventually(func(g Gomega) {
 				g.Expect(currentVersionOf(lumigo1, g)).To(BeActive())
@@ -771,7 +770,7 @@ var _ = Context("Lumigo controller", func() {
 
 			Expect(telemetryProxyNamespacesFile).To(BeMonitoringNamespace(namespaceName))
 
-			lumigo2 := newLumigo(namespaceName, "lumigo2", lumigoToken, true, true, true)
+			lumigo2 := newLumigo(namespaceName, "lumigo2", lumigoToken, true, true, true, true)
 			By("adding a second Lumigo in the namespace", func() {
 				Expect(k8sClient.Create(ctx, lumigo2)).Should(Succeed())
 
@@ -803,7 +802,7 @@ var _ = Context("Lumigo controller", func() {
 
 })
 
-func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool, injectLumigoIntoExistingResourcesOnCreation bool, removeLumigoFromResourcesOnDeletion bool) *operatorv1alpha1.Lumigo {
+func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Credentials, injectionEnabled bool, injectLumigoIntoExistingResourcesOnCreation bool, removeLumigoFromResourcesOnDeletion bool, loggingEnabled bool) *operatorv1alpha1.Lumigo {
 	return &operatorv1alpha1.Lumigo{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
@@ -818,6 +817,9 @@ func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Crede
 					InjectLumigoIntoExistingResourcesOnCreation: &injectLumigoIntoExistingResourcesOnCreation,
 					RemoveLumigoFromResourcesOnDeletion:         &removeLumigoFromResourcesOnDeletion,
 				},
+			},
+			Logging: operatorv1alpha1.LoggingSpec{
+				Enabled: &loggingEnabled,
 			},
 		},
 	}

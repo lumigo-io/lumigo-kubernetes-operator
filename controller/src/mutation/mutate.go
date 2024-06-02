@@ -22,6 +22,7 @@ import (
 
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -47,6 +48,7 @@ const LumigoInjectorVolumeMountPoint = "/opt/lumigo"
 const LumigoTracerTokenEnvVarName = "LUMIGO_TRACER_TOKEN"
 const LumigoEndpointEnvVarName = "LUMIGO_ENDPOINT"
 const LumigoLogsEndpointEnvVarName = "LUMIGO_LOGS_ENDPOINT"
+const LumigoEnableLogsEnvVarName = "LUMIGO_ENABLE_LOGS"
 const LumigoContainerNameEnvVarName = "LUMIGO_CONTAINER_NAME"
 const LdPreloadEnvVarName = "LD_PRELOAD"
 const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
@@ -80,6 +82,7 @@ type mutatorImpl struct {
 	lumigoAutotraceLabelValue string
 	lumigoEndpoint            string
 	lumigoLogsEndpoint        string
+	lumigoEnableLogs					bool
 	lumigoToken               *operatorv1alpha1.Credentials
 	lumigoInjectorImage       string
 }
@@ -88,11 +91,16 @@ func (m *mutatorImpl) GetAutotraceLabelValue() string {
 	return m.lumigoAutotraceLabelValue
 }
 
-func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (Mutator, error) {
+func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (Mutator, error) {
 	version := LumigoOperatorVersion
 
 	if len(version) > 8 {
 		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
+	}
+
+	lumigoEnableLogs := false
+	if LumigoSpec.Logging.Enabled != nil {
+		lumigoEnableLogs = *LumigoSpec.Logging.Enabled
 	}
 
 	return &mutatorImpl{
@@ -100,7 +108,8 @@ func NewMutator(Log *logr.Logger, LumigoToken *operatorv1alpha1.Credentials, Lum
 		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
 		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
 		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
-		lumigoToken:               LumigoToken,
+		lumigoEnableLogs: 				 lumigoEnableLogs,
+		lumigoToken:               &LumigoSpec.LumigoToken,
 		lumigoInjectorImage:       LumigoInjectorImage,
 	}, nil
 }
@@ -416,6 +425,17 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 			envVars = append(envVars, *lumigoLogsEndpointEnvVar)
 		} else {
 			envVars[lumigoLogsEndpointEnvVarIndex] = *lumigoLogsEndpointEnvVar
+		}
+
+		lumigoEnableLogsEnvVar := &corev1.EnvVar{
+			Name:  LumigoEnableLogsEnvVarName,
+			Value: strconv.FormatBool(m.lumigoEnableLogs),
+		}
+		lumigoEnableLogsEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoEnableLogsEnvVarName })
+		if lumigoEnableLogsEnvVarIndex < 0 {
+			envVars = append(envVars, *lumigoEnableLogsEnvVar)
+		} else {
+			envVars[lumigoEnableLogsEnvVarIndex] = *lumigoEnableLogsEnvVar
 		}
 
 		lumigoContainerNameEnvVar := &corev1.EnvVar{
