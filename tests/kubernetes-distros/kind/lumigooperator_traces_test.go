@@ -76,7 +76,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true)
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true, false)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {

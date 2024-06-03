@@ -42,7 +42,7 @@ var (
 // 2. A Lumigo operator installed into the Kubernetes cluster referenced by the
 //    `kubectl` configuration
 
-func TestLumigoOperatorEventsAndObjects(t *testing.T) {
+func TestLumigoOperatorEventsObjectsAndLogs(t *testing.T) {
 	logger := testr.New(t)
 
 	testAppDeploymentFeature := features.New("TestApp").
@@ -77,7 +77,7 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true)
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true, true)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {
@@ -352,6 +352,8 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				t.Fatalf("No log data found in '%s'", logsPath)
 			}
 
+			foundApplicationLogs := false
+
 			/*
 			 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
 			 * bufio.NewScanner fails because our lines are "too long" (LOL).
@@ -364,6 +366,17 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				l := exportRequest.Logs().ResourceLogs().Len()
 				for i := 0; i < l; i++ {
 					resourceLogs := exportRequest.Logs().ResourceLogs().At(i)
+
+					for j := 0; j < resourceLogs.ScopeLogs().Len(); j++ {
+						scopeLogs := resourceLogs.ScopeLogs().At(j)
+
+						// Make sure that applications logs are exported as well,
+						// and not only the operator built-in logs for events and objects
+						if scopeLogs.Scope().Name() == "@opentelemetry/winston-transport" {
+							foundApplicationLogs = true
+						}
+					}
+
 					resourceAttributes := resourceLogs.Resource().Attributes().AsRaw()
 
 					if actualClusterName, found := resourceAttributes["k8s.cluster.name"]; !found {
@@ -377,6 +390,10 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 					} else if actualClusterUID != expectedClusterUID {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
 					}
+				}
+
+				if !foundApplicationLogs {
+					t.Fatalf("No application logs were found in the logs. Make sure that the test-application uses Winston for logging and has @opentelemetry/winston-transport as a dependency")
 				}
 			}
 
