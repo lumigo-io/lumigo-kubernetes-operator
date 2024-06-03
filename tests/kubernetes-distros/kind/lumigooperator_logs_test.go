@@ -391,10 +391,10 @@ func TestLumigoOperatorEventsObjectsAndLogs(t *testing.T) {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
 					}
 				}
+			}
 
-				if !foundApplicationLogs {
-					t.Fatalf("No application logs were found in the logs. Make sure that the test-application uses Winston for logging and has @opentelemetry/winston-transport as a dependency")
-				}
+			if !foundApplicationLogs {
+				t.Fatalf("No application logs were found in the logs. Make sure that the test-application uses Winston for logging and has @opentelemetry/winston-transport as a dependency")
 			}
 
 			return ctx
