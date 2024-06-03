@@ -125,7 +125,13 @@ func TestLumigoOperatorEventsObjectsAndLogs(t *testing.T) {
 								{
 									Name:    "myapp",
 									Image:   testImage,
-									Command: []string{"python", "-c", fmt.Sprintf("while True: print(\"%s\"); import time; time.sleep(5)", logOutput)},
+									Command: []string{"python", "-c", fmt.Sprintf(`
+										import logging
+										import time
+										while True:
+												logging.getLogger(__name__).info('%s')
+												time.sleep(5)
+										`, logOutput)},
 								},
 							},
 						},
