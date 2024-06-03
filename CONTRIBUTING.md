@@ -102,7 +102,7 @@ Changing the target Lumigo backend can be done with a [`patchStrategicMerge`](ht
 echo -n "apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: lumigo-lumigo-controller-manager
+  name: lumigo-lumigo-operator-controller-manager
 spec:
   template:
     spec:
