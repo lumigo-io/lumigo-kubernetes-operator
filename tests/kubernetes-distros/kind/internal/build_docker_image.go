@@ -17,7 +17,6 @@ import (
 const (
 	DEFAULT_JS_CLIENT_IMG_NAME = "host.docker.internal:5000/test-apps/js/client"
 	DEFAULT_JS_SERVER_IMG_NAME = "host.docker.internal:5000/test-apps/js/server"
-	DEFAULT_PYTHON_IMG_NAME  = "host.docker.internal:5000/test-apps/python-app"
 )
 
 func BuildDockerImageAndExportArchive(imageName, sourceFolder, imageArchivePath string, logger *log.Logger) env.Func {
