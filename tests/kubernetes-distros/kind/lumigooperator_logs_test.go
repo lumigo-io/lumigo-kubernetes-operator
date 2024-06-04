@@ -87,8 +87,7 @@ func TestLumigoOperatorEventsObjectsAndLogs(t *testing.T) {
 			r.Create(ctx, lumigo)
 
 			deploymentName := "testdeployment"
-			testImage := "python"
-			logOutput := "IT'S ALIIIIIIVE!"
+			logOutput := "I AM ALIIIIIIVE!"
 
 			tr := true
 			var g int64 = 5678
@@ -124,8 +123,8 @@ func TestLumigoOperatorEventsObjectsAndLogs(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "myapp",
-									Image:   testImage,
-									Command: []string{"python", "-c", fmt.Sprintf("while True: import time; import logging; logging.getLogger('test').warning('%s'); time.sleep(5)", logOutput)},
+									Image:   ctx.Value(internal.ContextTestAppPythonImageName).(string),
+									Command: []string{"python", "app.py", logOutput},
 								},
 							},
 						},
@@ -372,7 +371,7 @@ func TestLumigoOperatorEventsObjectsAndLogs(t *testing.T) {
 
 						// Make sure that applications logs are exported as well,
 						// and not only the operator built-in logs for events and objects
-						if scopeLogs.Scope().Name() == "@opentelemetry/winston-transport" {
+						if !strings.Contains(scopeLogs.Scope().Name(), "lumigo") {
 							foundApplicationLogs = true
 						}
 					}
@@ -394,7 +393,7 @@ func TestLumigoOperatorEventsObjectsAndLogs(t *testing.T) {
 			}
 
 			if !foundApplicationLogs {
-				t.Fatalf("No application logs were found in the logs. Make sure that the test-application uses Winston for logging and has @opentelemetry/winston-transport as a dependency")
+				t.Fatalf("No application logs were found in the logs. Make sure that the test-application logs are emitted by checking %s", logsPath)
 			}
 
 			return ctx
