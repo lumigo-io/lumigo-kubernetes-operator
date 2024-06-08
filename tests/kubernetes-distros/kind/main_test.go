@@ -191,6 +191,9 @@ func TestMain(m *testing.M) {
 	testJsServerImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_SERVER_IMG_NAME, runId)
 	testJsServerImageArchivePath := filepath.Join(tmpDir, "test-js-server.tgz")
 
+	testPythonImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_PYTHON_IMG_NAME, runId)
+	testPythonImageArchivePath := filepath.Join(tmpDir, "test-python.tgz")
+
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
 	ctx = context.WithValue(ctx, internal.ContextKeyKubernetesClusterName, kindClusterName)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
@@ -203,6 +206,7 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorTelemetryProxyImage, telemetryProxyImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsClientImageName, testJsClientImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsServerImageName, testJsServerImageName)
+	ctx = context.WithValue(ctx, internal.ContextTestAppPythonImageName, testPythonImageName)
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
@@ -215,6 +219,7 @@ func TestMain(m *testing.M) {
 		internal.BuildDockerImageAndExportArchive(telemetryProxyImageName, filepath.Join(repoRoot, "telemetryproxy"), telemetryProxyImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(testJsClientImageName, filepath.Join(cwd, "apps", "client"), testJsClientImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(testJsServerImageName, filepath.Join(cwd, "apps", "server"), testJsServerImageArchivePath, logger),
+		internal.BuildDockerImageAndExportArchive(testPythonImageName, filepath.Join(cwd, "apps", "python"), testPythonImageArchivePath, logger),
 
 		envfuncs.CreateKindClusterWithConfig(kindClusterName, kindNodeImageVal, kindConfigPath),
 
@@ -222,6 +227,8 @@ func TestMain(m *testing.M) {
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, telemetryProxyImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, testJsClientImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, testJsServerImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, testPythonImageArchivePath, logger),
+
 		/*
 		 * Otel Collector image is on Docker hub, no need to pull it into Kind (pulling into Kind
 		 * works only for local image, in the local Docker daemon).

@@ -23,6 +23,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -87,8 +88,6 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 			r.Create(ctx, lumigo)
 
 			deploymentName := "testdeployment"
-			testImage := "python"
-			logOutput := "IT'S ALIIIIIIVE!"
 
 			tr := true
 			var g int64 = 5678
@@ -124,8 +123,15 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "myapp",
-									Image:   testImage,
-									Command: []string{"python", "-c", fmt.Sprintf("while True: print(\"%s\"); import time; time.sleep(5)", logOutput)},
+									Image:   ctx.Value(internal.ContextTestAppPythonImageName).(string),
+									Resources: corev1.ResourceRequirements{
+										Limits: corev1.ResourceList{
+											corev1.ResourceMemory: resource.MustParse("1Gi"),
+										},
+										Requests: corev1.ResourceList{
+											corev1.ResourceMemory: resource.MustParse("768Mi"),
+										},
+									},
 								},
 							},
 						},
