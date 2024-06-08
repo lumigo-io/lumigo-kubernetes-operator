@@ -358,6 +358,8 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				t.Fatalf("No log data found in '%s'", logsPath)
 			}
 
+			foundApplicationLogs := false
+
 			/*
 			 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
 			 * bufio.NewScanner fails because our lines are "too long" (LOL).
@@ -370,6 +372,11 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				l := exportRequest.Logs().ResourceLogs().Len()
 				for i := 0; i < l; i++ {
 					resourceLogs := exportRequest.Logs().ResourceLogs().At(i)
+
+					if !strings.HasPrefix(resourceLogs.ScopeLogs().AppendEmpty().Scope().Name(), "lumigo-operator.") {
+						foundApplicationLogs = false
+					}
+
 					resourceAttributes := resourceLogs.Resource().Attributes().AsRaw()
 
 					if actualClusterName, found := resourceAttributes["k8s.cluster.name"]; !found {
@@ -384,6 +391,10 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
 					}
 				}
+			}
+
+			if !foundApplicationLogs {
+				t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting using a supported logger", logsPath)
 			}
 
 			return ctx
