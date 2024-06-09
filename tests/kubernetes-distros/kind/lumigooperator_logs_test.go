@@ -78,7 +78,7 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true)
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true, true)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {
@@ -358,8 +358,6 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				t.Fatalf("No log data found in '%s'", logsPath)
 			}
 
-			foundApplicationLogs := false
-
 			/*
 			 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
 			 * bufio.NewScanner fails because our lines are "too long" (LOL).
@@ -372,11 +370,6 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				l := exportRequest.Logs().ResourceLogs().Len()
 				for i := 0; i < l; i++ {
 					resourceLogs := exportRequest.Logs().ResourceLogs().At(i)
-
-					if !strings.HasPrefix(resourceLogs.ScopeLogs().AppendEmpty().Scope().Name(), "lumigo-operator.") {
-						foundApplicationLogs = false
-					}
-
 					resourceAttributes := resourceLogs.Resource().Attributes().AsRaw()
 
 					if actualClusterName, found := resourceAttributes["k8s.cluster.name"]; !found {
@@ -391,10 +384,6 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
 					}
 				}
-			}
-
-			if !foundApplicationLogs {
-				t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
 			}
 
 			return ctx
@@ -442,6 +431,52 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				return true, nil
 			}); err != nil {
 				t.Fatalf("Failed to wait for logs: %v", err)
+			}
+
+			return ctx
+		}).
+		Assess("Application logs are collected successfully and added k8s.* attributes", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				applicationLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if appLogs, err := exportRequestToApplicationLogRecords(exportRequest); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						applicationLogs = append(applicationLogs, appLogs...)
+					}
+				}
+
+				if len(applicationLogs) < 1 {
+					// No application logs received yet
+					t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
+					return false, nil
+				}
+
+				t.Logf("Found application logs: %d", len(applicationLogs))
+				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for application logs: %v", err)
 			}
 
 			return ctx
@@ -570,20 +605,44 @@ func exportRequestToHeartbeatLogRecords(exportRequest plogotlp.ExportRequest) ([
 	return eventLogs, nil
 }
 
+func exportRequestToApplicationLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
+	applicationLogs := make([]plog.LogRecord, 0)
+	logs := exportRequest.Logs()
+
+	l := logs.ResourceLogs().Len()
+	for i := 0; i < l; i++ {
+		e, err := resourceLogsToApplicationLogRecords(logs.ResourceLogs().At(i))
+		if err != nil {
+			return nil, err
+		}
+
+		applicationLogs = append(applicationLogs, e...)
+	}
+
+	return applicationLogs, nil
+}
+
+func resourceLogsToApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal")
+}
+
 func resourceLogsToHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat")
+}
+
+func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string) ([]plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
-	heartbeatLogRecords := make([]plog.LogRecord, 0)
+	filteredScopeLogRecords := make([]plog.LogRecord, 0)
+
 	for i := 0; i < l; i++ {
 		scopeLogs := resourceLogs.ScopeLogs().At(i)
 		scopeName := scopeLogs.Scope().Name()
 		logRecords := scopeLogsToLogRecords(scopeLogs)
 
-		switch scopeName {
-		case "lumigo-operator.namespace_heartbeat":
-			{
-				heartbeatLogRecords = append(heartbeatLogRecords, logRecords...)
-			}
+		if scopeName == filteredScopeName {
+				filteredScopeLogRecords = append(filteredScopeLogRecords, logRecords...)
 		}
 	}
-	return heartbeatLogRecords, nil
+
+	return filteredScopeLogRecords, nil
 }
