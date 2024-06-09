@@ -394,7 +394,7 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 			}
 
 			if !foundApplicationLogs {
-				t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting using a supported logger", logsPath)
+				t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
 			}
 
 			return ctx
