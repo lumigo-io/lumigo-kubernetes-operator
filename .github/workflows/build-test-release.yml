@@ -307,7 +307,7 @@ jobs:
 
   test-telemetry-proxy-for-security-issues:
     runs-on: ubuntu-latest
-    if: github.ref != 'refs/heads/master'
+    if: github.ref != 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -597,7 +597,7 @@ jobs:
         run: |
           LUMIGO_AUTOTRACE_LATEST_VERSION=$(aws ecr describe-images --region us-east-1 --registry-id 709825985650 --repository-name lumigo/lumigo-autotrace --query 'sort_by(imageDetails,& imagePushedAt)[-2].imageTags[0]' --output text)
           echo "LUMIGO_AUTOTRACE_LATEST_VERSION=$LUMIGO_AUTOTRACE_LATEST_VERSION"
-        
+
           yq e -i ".injectorWebhook.lumigoInjector.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace\"" charts/lumigo-operator/values.yaml
           yq e -i ".injectorWebhook.lumigoInjector.image.tag = \"$LUMIGO_AUTOTRACE_LATEST_VERSION\"" charts/lumigo-operator/values.yaml
           yq e -i "(select(documentIndex == 1).spec.template.spec.containers[] | select(.name == \"manager\").env[] | select(.name == \"LUMIGO_INJECTOR_IMAGE\")).value = \"${{ matrix.ecr-registry }}/lumigo/lumigo-autotrace:$LUMIGO_AUTOTRACE_LATEST_VERSION\"" config/manager/manager.yaml
