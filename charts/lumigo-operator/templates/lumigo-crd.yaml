@@ -102,6 +102,17 @@ spec:
                 required:
                 - injection
                 type: object
+              logging:
+                description: 'LoggingSpec specifies if logging should be set up by the operator'
+                properties:
+                  enabled:
+                    description: Whether Daemonsets, Deployments, ReplicaSets,
+                      StatefulSets, CronJobs and Jobs that are created or updated
+                      after the creation of the Lumigo resource and are injected will
+                      have their logs sent to Lumigo.
+                      If unspecified, defaults to `false`
+                    type: boolean
+                type: object
             type: object
           status:
             description: LumigoStatus defines the observed state of Lumigo

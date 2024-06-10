@@ -50,10 +50,11 @@ type LumigoInjectorWebhookHandler struct {
 	client.Client
 	record.EventRecorder
 	*admission.Decoder
-	LumigoOperatorVersion        string
-	LumigoInjectorImage          string
-	TelemetryProxyOtlpServiceUrl string
-	Log                          logr.Logger
+	LumigoOperatorVersion            string
+	LumigoInjectorImage              string
+	TelemetryProxyOtlpServiceUrl     string
+	TelemetryProxyOtlpLogsServiceUrl string
+	Log                              logr.Logger
 }
 
 func (h *LumigoInjectorWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -132,7 +133,7 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Sprintf("The Lumigo object in the '%s' namespace is not active; resource will not be mutated", namespace))
 	}
 
-	mutator, err := mutation.NewMutator(&log, &lumigo.Spec.LumigoToken, h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl)
+	mutator, err := mutation.NewMutator(&log, &lumigo.Spec, h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl, h.TelemetryProxyOtlpLogsServiceUrl)
 	if err != nil {
 		return admission.Allowed(fmt.Errorf("cannot instantiate mutator: %w", err).Error())
 	}

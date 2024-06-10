@@ -5,7 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewLumigo(namespace, name, lumigoTokenSecretName, lumigoTokenSecretKey string, injectionEnabled bool) *operatorv1alpha1.Lumigo {
+func NewLumigo(namespace, name, lumigoTokenSecretName, lumigoTokenSecretKey string, injectionEnabled bool, enableLogging bool) *operatorv1alpha1.Lumigo {
 	return &operatorv1alpha1.Lumigo{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
@@ -23,6 +23,9 @@ func NewLumigo(namespace, name, lumigoTokenSecretName, lumigoTokenSecretKey stri
 				Injection: operatorv1alpha1.InjectionSpec{
 					Enabled: &injectionEnabled,
 				},
+			},
+			Logging: operatorv1alpha1.LoggingSpec{
+				Enabled: &enableLogging,
 			},
 		},
 	}

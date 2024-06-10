@@ -77,6 +77,7 @@ type LumigoReconciler struct {
 	LumigoOperatorVersion                     string
 	LumigoInjectorImage                       string
 	TelemetryProxyOtlpServiceUrl              string
+	TelemetryProxyOtlpLogsServiceUrl          string
 	TelemetryProxyNamespaceConfigurationsPath string
 }
 
@@ -489,7 +490,7 @@ func (r *LumigoReconciler) updateStatusIfNeeded(ctx context.Context, logger logr
 }
 
 func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, log *logr.Logger) error {
-	mutator, err := mutation.NewMutator(log, &lumigo.Spec.LumigoToken, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
+	mutator, err := mutation.NewMutator(log, &lumigo.Spec, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl, r.TelemetryProxyOtlpLogsServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
 	}
@@ -688,7 +689,8 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 
 func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, log *logr.Logger) error {
 	namespace := lumigo.Namespace
-	mutator, err := mutation.NewMutator(log, nil, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl)
+
+	mutator, err := mutation.NewMutator(log, nil, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl, r.TelemetryProxyOtlpLogsServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
 	}

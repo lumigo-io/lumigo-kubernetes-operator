@@ -129,6 +129,7 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	}
 
 	telemetryProxyOtlpService := lumigoEndpoint + "/v1/traces" // TODO: Fix it when the distros use the Lumigo endpoint as root
+	telemetryProxyOtlpLogsService := lumigoEndpoint + "/v1/logs"
 
 	namespaceConfigurationsPath, isSet := os.LookupEnv("LUMIGO_NAMESPACE_CONFIGURATIONS")
 	if !isSet {
@@ -151,14 +152,15 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	}
 
 	if err = (&controllers.LumigoReconciler{
-		Client:                       mgr.GetClient(),
-		Clientset:                    clientset,
-		DynamicClient:                dynamicClient,
-		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/controller", lumigoOperatorVersion)),
-		Scheme:                       mgr.GetScheme(),
-		LumigoOperatorVersion:        lumigoOperatorVersion,
-		LumigoInjectorImage:          lumigoInjectorImage,
-		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
+		Client:                           mgr.GetClient(),
+		Clientset:                        clientset,
+		DynamicClient:                    dynamicClient,
+		EventRecorder:                    mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/controller", lumigoOperatorVersion)),
+		Scheme:                           mgr.GetScheme(),
+		LumigoOperatorVersion:            lumigoOperatorVersion,
+		LumigoInjectorImage:              lumigoInjectorImage,
+		TelemetryProxyOtlpServiceUrl:     telemetryProxyOtlpService,
+		TelemetryProxyOtlpLogsServiceUrl: telemetryProxyOtlpLogsService,
 		TelemetryProxyNamespaceConfigurationsPath: namespaceConfigurationsPath,
 		Log: logger,
 	}).SetupWithManager(mgr); err != nil {
@@ -166,11 +168,12 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	}
 
 	if err = (&injector.LumigoInjectorWebhookHandler{
-		EventRecorder:                mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/injector-webhook", lumigoOperatorVersion)),
-		LumigoOperatorVersion:        lumigoOperatorVersion,
-		LumigoInjectorImage:          lumigoInjectorImage,
-		TelemetryProxyOtlpServiceUrl: telemetryProxyOtlpService,
-		Log:                          logger,
+		EventRecorder:                    mgr.GetEventRecorderFor(fmt.Sprintf("lumigo-operator.v%s/injector-webhook", lumigoOperatorVersion)),
+		LumigoOperatorVersion:            lumigoOperatorVersion,
+		LumigoInjectorImage:              lumigoInjectorImage,
+		TelemetryProxyOtlpServiceUrl:     telemetryProxyOtlpService,
+		TelemetryProxyOtlpLogsServiceUrl: telemetryProxyOtlpLogsService,
+		Log:                              logger,
 	}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create injector webhook: %w", err)
 	}

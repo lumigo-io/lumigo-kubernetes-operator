@@ -30,6 +30,8 @@ Start `minikube`:
 minikube start --insecure-registry "host.docker.internal:5000"
 ```
 
+* Note that if the minikube machine already exists, you will need to delete it first with `minikube delete` - otherwise the `--insecure-registry` parameter will be ignored (more details [here](https://stackoverflow.com/a/53937716))
+
 Start a local Docker registry:
 
 ```sh
@@ -46,7 +48,7 @@ $ curl localhost:5000/v2/_catalog -v
 > Host: localhost:5000
 > User-Agent: curl/7.77.0
 > Accept: */*
-> 
+>
 * Mark bundle as not supporting multiuse
 < HTTP/1.1 200 OK
 < Content-Type: application/json; charset=utf-8
@@ -54,7 +56,7 @@ $ curl localhost:5000/v2/_catalog -v
 < X-Content-Type-Options: nosniff
 < Date: Fri, 20 Jan 2023 08:10:32 GMT
 < Content-Length: 20
-< 
+<
 {"repositories":[]}
 * Connection #0 to host localhost left intact
 ```
@@ -100,7 +102,7 @@ Changing the target Lumigo backend can be done with a [`patchStrategicMerge`](ht
 echo -n "apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: lumigo-controller-manager
+  name: lumigo-lumigo-operator-controller-manager
 spec:
   template:
     spec:
@@ -108,6 +110,8 @@ spec:
       - name: telemetry-proxy
         env:
         - name: LUMIGO_ENDPOINT
+          value: \"https://my.lumigo.endpoint\" # Replace this!
+        - name: LUMIGO_LOGS_ENDPOINT
           value: \"https://my.lumigo.endpoint\" # Replace this!
 " > lumigo-endpoint.patch.yaml
 kubectl patch --patch-file lumigo-endpoint.patch.yaml --type strategic -n lumigo-system --filename=lumigo-endpoint.patch.yaml
@@ -123,8 +127,8 @@ If you see the following, it's likely because and Mac OS has [squatted over port
 docker push host.docker.internal:5000/controller
 Using default tag: latest
 The push refers to repository [host.docker.internal:5000/controller]
-377b701db379: Preparing 
-fba4381f2bb7: Preparing 
+377b701db379: Preparing
+fba4381f2bb7: Preparing
 error parsing HTTP 403 response body: unexpected end of JSON input: ""
 ```
 

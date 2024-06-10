@@ -54,6 +54,7 @@ type LumigoSpec struct {
 	// https://docs.lumigo.io/docs/lumigo-tokens
 	LumigoToken    Credentials        `json:"lumigoToken,omitempty"`
 	Tracing        TracingSpec        `json:"tracing,omitempty"`
+	Logging				 LoggingSpec        `json:"logging,omitempty"`
 	Infrastructure InfrastructureSpec `json:"infrastructure,omitempty"`
 }
 
@@ -75,6 +76,14 @@ type KubernetesSecretRef struct {
 // should be set up by the operator
 type TracingSpec struct {
 	Injection InjectionSpec `json:"injection"`
+}
+
+type LoggingSpec struct {
+	// Whether Daemonsets, Deployments, ReplicaSets, StatefulSets, CronJobs and Jobs
+	// that are created or updated after the creation of the Lumigo resource have their logs sent to Lumigo.
+	// If unspecified, defaults to `false`.
+	// +kubebuilder:validation:Optional
+	Enabled *bool `json:"enabled"` // Using a pointer to support cases where the value is not set (and it counts as disabled)
 }
 
 type InjectionSpec struct {

@@ -15,6 +15,7 @@ var (
 	ContextKeySendDataToLumigo            = ContextKey("lumigo/upstream/send_data")
 	ContextTestAppJsClientImageName       = ContextKey("test-apps/js/client/image/name")
 	ContextTestAppJsServerImageName       = ContextKey("test-apps/js/server/image/name")
+	ContextTestAppPythonImageName       	= ContextKey("test-apps/python/image/name")
 )
 
 func (c ContextKey) String() string {

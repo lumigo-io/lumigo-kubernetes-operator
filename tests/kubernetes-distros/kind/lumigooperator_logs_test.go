@@ -23,6 +23,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -77,7 +78,7 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true)
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true, true)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {
@@ -87,8 +88,6 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 			r.Create(ctx, lumigo)
 
 			deploymentName := "testdeployment"
-			testImage := "python"
-			logOutput := "IT'S ALIIIIIIVE!"
 
 			tr := true
 			var g int64 = 5678
@@ -124,8 +123,15 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "myapp",
-									Image:   testImage,
-									Command: []string{"python", "-c", fmt.Sprintf("while True: print(\"%s\"); import time; time.sleep(5)", logOutput)},
+									Image:   ctx.Value(internal.ContextTestAppPythonImageName).(string),
+									Resources: corev1.ResourceRequirements{
+										Limits: corev1.ResourceList{
+											corev1.ResourceMemory: resource.MustParse("1Gi"),
+										},
+										Requests: corev1.ResourceList{
+											corev1.ResourceMemory: resource.MustParse("768Mi"),
+										},
+									},
 								},
 							},
 						},
@@ -429,6 +435,52 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 
 			return ctx
 		}).
+		Assess("Application logs are collected successfully and added k8s.* attributes", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				applicationLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if appLogs, err := exportRequestToApplicationLogRecords(exportRequest); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						applicationLogs = append(applicationLogs, appLogs...)
+					}
+				}
+
+				if len(applicationLogs) < 1 {
+					// No application logs received yet
+					t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
+					return false, nil
+				}
+
+				t.Logf("Found application logs: %d", len(applicationLogs))
+				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for application logs: %v", err)
+			}
+
+			return ctx
+		}).
 		Feature()
 
 	testEnv.Test(t, testAppDeploymentFeature)
@@ -553,20 +605,44 @@ func exportRequestToHeartbeatLogRecords(exportRequest plogotlp.ExportRequest) ([
 	return eventLogs, nil
 }
 
+func exportRequestToApplicationLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
+	applicationLogs := make([]plog.LogRecord, 0)
+	logs := exportRequest.Logs()
+
+	l := logs.ResourceLogs().Len()
+	for i := 0; i < l; i++ {
+		e, err := resourceLogsToApplicationLogRecords(logs.ResourceLogs().At(i))
+		if err != nil {
+			return nil, err
+		}
+
+		applicationLogs = append(applicationLogs, e...)
+	}
+
+	return applicationLogs, nil
+}
+
+func resourceLogsToApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal")
+}
+
 func resourceLogsToHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat")
+}
+
+func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string) ([]plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
-	heartbeatLogRecords := make([]plog.LogRecord, 0)
+	filteredScopeLogRecords := make([]plog.LogRecord, 0)
+
 	for i := 0; i < l; i++ {
 		scopeLogs := resourceLogs.ScopeLogs().At(i)
 		scopeName := scopeLogs.Scope().Name()
 		logRecords := scopeLogsToLogRecords(scopeLogs)
 
-		switch scopeName {
-		case "lumigo-operator.namespace_heartbeat":
-			{
-				heartbeatLogRecords = append(heartbeatLogRecords, logRecords...)
-			}
+		if scopeName == filteredScopeName {
+				filteredScopeLogRecords = append(filteredScopeLogRecords, logRecords...)
 		}
 	}
-	return heartbeatLogRecords, nil
+
+	return filteredScopeLogRecords, nil
 }

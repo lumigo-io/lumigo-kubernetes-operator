@@ -72,9 +72,9 @@ The Lumigo Kubernetes operator allows you to set a human-readable name using the
 You can check which version of the Lumigo Kubernetes operator you have deployed in your cluster as follows:
 
 ```sh
-$ helm ls -A      
+$ helm ls -A
 NAME  	NAMESPACE    	REVISION	UPDATED                              	STATUS  	CHART             	APP VERSION
-lumigo	lumigo-system	2       	2023-07-10 09:20:04.233825 +0200 CEST	deployed	lumigo-operator-13	13         
+lumigo	lumigo-system	2       	2023-07-10 09:20:04.233825 +0200 CEST	deployed	lumigo-operator-13	13
 ```
 
 The Lumigo Kubernetes operator is reported as `APP VERSION`.
@@ -158,6 +158,26 @@ Status:
     Namespace:         my-namespace
     Resource Version:  320123
     UID:               93d6d809-ac2a-43a9-bc07-f0d4e314efcc
+```
+
+#### Logging support
+
+The Lumigo Kubernetes operator can automatically forward logs emitted by traced pods to [Lumigo's log-management solution](https://lumigo.io/lp/log-management/), supporting several logging providers (currently `logging` for Python apps, `Winston` and `Bunyan` for Node.js apps).
+Enabling log forwarding is done by adding the `spec.logging.enabled` field to the `Lumigo` resource:
+
+```yaml
+apiVersion: operator.lumigo.io/v1alpha1
+kind: Lumigo
+metadata:
+  labels:
+    app.kubernetes.io/name: lumigo
+    app.kubernetes.io/instance: lumigo
+    app.kubernetes.io/part-of: lumigo-operator
+  name: lumigo
+spec:
+  lumigoToken: ... # same token used for tracing
+  logging:
+    enabled: true # enables log forwarding for pods with tracing injected
 ```
 
 #### Opting out for specific resources
