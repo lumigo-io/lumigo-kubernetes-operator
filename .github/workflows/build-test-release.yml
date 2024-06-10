@@ -307,6 +307,7 @@ jobs:
 
   test-telemetry-proxy-for-security-issues:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -342,7 +343,7 @@ jobs:
     - test-kustomize
     - test-kind
     - test-controller-for-security-issues
-    #- test-telemetry-proxy-for-security-issues
+    - test-telemetry-proxy-for-security-issues
     steps:
       - name: no-op
         run: echo '*tongue click* noice'
