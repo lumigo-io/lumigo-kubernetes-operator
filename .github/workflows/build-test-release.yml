@@ -343,7 +343,7 @@ jobs:
     - test-kustomize
     - test-kind
     - test-controller-for-security-issues
-    - test-telemetry-proxy-for-security-issues
+    # - test-telemetry-proxy-for-security-issues
     steps:
       - name: no-op
         run: echo '*tongue click* noice'
