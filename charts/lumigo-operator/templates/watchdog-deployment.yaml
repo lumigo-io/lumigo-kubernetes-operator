@@ -1,0 +1,57 @@
+{{- if .Values.watchdog.enabled }}
+{{- $lumigoOperatorVersion := .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "helm.fullname" . }}-watchdog
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: watchdog
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: watchdog
+    lumigo.auto-trace: 'false' # We do not need the operator to inject itself
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: watchdog
+      {{- include "helm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        control-plane: watchdog
+        {{- include "helm.selectorLabels" . | nindent 8 }}
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+                - arm64
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+      serviceAccountName: lumigo-kubernetes-operator
+      containers:
+      - name: watchdog
+        image: {{ .Values.watchdog.image.repository }}:{{ .Values.watchdog.image.tag }}
+        imagePullPolicy: IfNotPresent
+        command: ["/watchdog"]
+        env:
+        - name: TELEMETRY_PROXY_ENDPOINT
+          value: "http://{{ include "helm.fullname" . }}-telemetry-proxy-service.{{ .Release.Namespace }}.svc.cluster.local:8888/metrics"
+        - name: LUMIGO_OPERATOR_VERSION
+          value: "{{ $lumigoOperatorVersion }}"
+        - name: LUMIGO_ENDPOINT
+          value: "{{ .Values.watchdog.endpoint }}"
+        - name: NAMESPACE
+          value: "{{ .Release.Namespace }}"
+      resources: {{- toYaml .Values.watchdog.resources | nindent 8 }}
+{{- end }}

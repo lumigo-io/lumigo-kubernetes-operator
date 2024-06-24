@@ -3,6 +3,13 @@
 {{- $debug := $config.debug | conv.ToBool -}}
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 5s
+          static_configs:
+            - targets: ['0.0.0.0:8888']
   otlp:
     protocols:
       http:
@@ -111,6 +118,7 @@ exporters:
 {{- end }}
 
 processors:
+  batch:
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 {{- range $i, $namespace := $namespaces }}
@@ -195,6 +203,9 @@ service:
   telemetry:
     logs:
       level: {{ $debug | ternary "debug" "info" }}
+    metrics:
+      level: detailed
+      address: ":8888"
   extensions:
   - headers_setter/lumigo
   - health_check
