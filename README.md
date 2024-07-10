@@ -130,11 +130,16 @@ spec:
       key: token # This must match the key in the Kubernetes secret (don't touch)
 ```
 
-After creating the secret, deploy it in the desired namespace:
+After creating `lumigo.yml`, deploy it in the desired namespace:
 
 ```sh
 kubectl apply -f lumigo.yml -n <YOUR_NAMESPACE>
 ```
+
+> ℹ️ **Important note**
+> 
+> Apply the secret and the custom resource to the namespace you wish to start tracing, not to `lumigo-system`.
+
 
 Each `Lumigo` resource keeps in its state a list of resources it currently instruments:
 
