@@ -93,7 +93,11 @@ e2e-tests:
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
+docker-build: test docker-build-without-tests ## Build docker image with the manager.
+	echo "Finished building docker image"
+
+.PHONY: docker-build-without-tests
+docker-build-without-tests: # This is used by our IT because we dont want to run the tests there
 	docker build -t ${CONTROLLER_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f controller/Dockerfile controller
 	docker build -t ${PROXY_IMG} --build-arg "target_platform=$(TARGET_PLATFORM)" -f telemetryproxy/Dockerfile telemetryproxy
 
