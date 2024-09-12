@@ -9,6 +9,18 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'k8s-infra-metrics'
+          scrape_interval: 5s
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
     namespace: {{ $namespace.name }}
@@ -97,6 +109,11 @@ exporters:
     endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
+  otlphttp/lumigo_metrics:
+    endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    headers:
+      Authorization: "LumigoToken <--------------- some token here ---------------->"
+
 {{- if $debug }}
   logging:
     verbosity: detailed
@@ -203,6 +220,14 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
+    metrics:
+      receivers:
+      - prometheus
+      exporters:
+      - otlphttp/lumigo_metrics
+{{- if $debug }}
+      - logging
+{{- end }}
     traces:
       # We cannot add a Batch processor to this pipeline as it would break the
       # `headers_setter/lumigo` extension.
