@@ -13,6 +13,27 @@ receivers:
     config:
       scrape_configs:
         - job_name: 'k8s-infra-metrics'
+          metrics_path: /metrics
+          scrape_interval: 5s
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'k8s-infra-metrics-cadvisor'
+          metrics_path: /metrics/cadvisor
+          scrape_interval: 5s
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'k8s-infra-metrics-resources'
+          metrics_path: /metrics/resource
           scrape_interval: 5s
           scheme: https
           tls_config:
