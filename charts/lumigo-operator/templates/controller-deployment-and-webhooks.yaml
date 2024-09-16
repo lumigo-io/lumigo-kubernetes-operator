@@ -233,6 +233,10 @@ spec:
           value: "{{ .Values.endpoint.otlp.url }}"
         - name: LUMIGO_LOGS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: LUMIGO_METRICS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.metrics_url }}"
+        - name: LUMIGO_INFRA_METRICS_TOKEN
+          value: "{{ .Values.endpoint.otlp.infra_metrics_token }}"
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD

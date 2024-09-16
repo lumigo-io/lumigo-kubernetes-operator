@@ -133,7 +133,7 @@ exporters:
   otlphttp/lumigo_metrics:
     endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     headers:
-      Authorization: "LumigoToken <--------------- some token here ---------------->"
+      Authorization: "LumigoToken {{ env.Getenv "LUMIGO_INFRA_METRICS_TOKEN" }}"
 
 {{- if $debug }}
   logging:

@@ -63,3 +63,5 @@ endpoint:
   otlp:
     url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
     logs_url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+    metrics_url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+    infra_metrics_token: "<some-token>"

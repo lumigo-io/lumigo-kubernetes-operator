@@ -24,6 +24,7 @@ rules:
   resources:
   - nodes
   - nodes/proxy
+  - nodes/stats
   - nodes/metrics
   - services
   - endpoints

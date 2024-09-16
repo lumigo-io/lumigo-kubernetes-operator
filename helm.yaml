@@ -705,6 +705,8 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
         - env:
+            - name: LUMIGO_METRICS_ENDPOINT
+              value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
             - name: LUMIGO_LOGS_ENDPOINT
               value: https://ga-otlp.lumigo-tracer-edge.golumigo.com
             - name: LUMIGO_ENDPOINT
