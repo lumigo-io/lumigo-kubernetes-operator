@@ -49,6 +49,7 @@ const LumigoTracerTokenEnvVarName = "LUMIGO_TRACER_TOKEN"
 const LumigoEndpointEnvVarName = "LUMIGO_ENDPOINT"
 const LumigoLogsEndpointEnvVarName = "LUMIGO_LOGS_ENDPOINT"
 const LumigoEnableLogsEnvVarName = "LUMIGO_ENABLE_LOGS"
+const LumigoEnableTracesEnvVarName = "LUMIGO_ENABLE_TRACES"
 const LumigoContainerNameEnvVarName = "LUMIGO_CONTAINER_NAME"
 const LdPreloadEnvVarName = "LD_PRELOAD"
 const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
@@ -83,6 +84,7 @@ type mutatorImpl struct {
 	lumigoEndpoint            string
 	lumigoLogsEndpoint        string
 	lumigoEnableLogs					bool
+	lumigoEnableTraces				bool
 	lumigoToken               *operatorv1alpha1.Credentials
 	lumigoInjectorImage       string
 }
@@ -103,6 +105,11 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 		lumigoEnableLogs = *LumigoSpec.Logging.Enabled
 	}
 
+	lumigoEnableTraces := true
+	if LumigoSpec != nil && LumigoSpec.Tracing.Enabled != nil {
+		lumigoEnableTraces = *LumigoSpec.Tracing.Enabled
+	}
+
 	lumigoToken := &operatorv1alpha1.Credentials{}
 	if LumigoSpec != nil {
 		lumigoToken = &LumigoSpec.LumigoToken
@@ -114,6 +121,7 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
 		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
 		lumigoEnableLogs: 				 lumigoEnableLogs,
+		lumigoEnableTraces:        lumigoEnableTraces,
 		lumigoToken:               lumigoToken,
 		lumigoInjectorImage:       LumigoInjectorImage,
 	}, nil
@@ -441,6 +449,17 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 			envVars = append(envVars, *lumigoEnableLogsEnvVar)
 		} else {
 			envVars[lumigoEnableLogsEnvVarIndex] = *lumigoEnableLogsEnvVar
+		}
+
+		lumigoEnableTracesEnvVar := &corev1.EnvVar{
+			Name:  LumigoEnableTracesEnvVarName,
+			Value: strconv.FormatBool(m.lumigoEnableTraces),
+		}
+		lumigoEnableTracesEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoEnableTracesEnvVarName })
+		if lumigoEnableTracesEnvVarIndex < 0 {
+			envVars = append(envVars, *lumigoEnableTracesEnvVar)
+		} else {
+			envVars[lumigoEnableTracesEnvVarIndex] = *lumigoEnableTracesEnvVar
 		}
 
 		lumigoContainerNameEnvVar := &corev1.EnvVar{
