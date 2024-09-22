@@ -416,13 +416,9 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 		}
 		lumigoEndpointEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoEndpointEnvVarName })
 		if lumigoEndpointEnvVarIndex < 0 {
-			// envVars = append(envVars, *lumigoEndpointEnvVar)
-			println(lumigoEndpointEnvVar.Name)
-			println(lumigoEndpointEnvVar.Value)
+			envVars = append(envVars, *lumigoEndpointEnvVar)
 		} else {
-			println(lumigoEndpointEnvVar.Name)
-			println(lumigoEndpointEnvVar.Value)
-			// envVars[lumigoEndpointEnvVarIndex] = *lumigoEndpointEnvVar
+			envVars[lumigoEndpointEnvVarIndex] = *lumigoEndpointEnvVar
 		}
 
 		lumigoLogsEndpointEnvVar := &corev1.EnvVar{
