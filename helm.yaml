@@ -138,7 +138,18 @@ spec:
                 tracing:
                   description: 'TracingSpec specified how distributed tracing (for example: tracer injection) should be set up by the operator'
                   properties:
+                    enabled:
+                      description: Whether tracing should be set up by the operator.
+                        When enabled, traces from injected resources will be sent to Lumigo.
+                        Note that this does not affect the injection itself, which is required for logging as well.
+                        If unspecified, defaults to `true`.
+                      type: boolean
+                      default: true
                     injection:
+                      description: Allows fine-grained control over which resources should be injected with the Lumigo tracers,
+                        and how the injection should take place or be removed.
+                        Note that even though this setting is nested under `tracing`, it applies to both logging and tracing - as both require injection.
+                        This will be changed in future versions of the operator.
                       properties:
                         enabled:
                           description: Whether Daemonsets, Deployments, ReplicaSets, StatefulSets, CronJobs and Jobs that are created or updated after the creation of the Lumigo resource be injected. If unspecified, defaults to `true`
