@@ -83,8 +83,8 @@ type mutatorImpl struct {
 	lumigoAutotraceLabelValue string
 	lumigoEndpoint            string
 	lumigoLogsEndpoint        string
-	lumigoEnableLogs					bool
-	lumigoEnableTraces				bool
+	lumigoEnableLogs          bool
+	lumigoEnableTraces        bool
 	lumigoToken               *operatorv1alpha1.Credentials
 	lumigoInjectorImage       string
 }
@@ -120,7 +120,7 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
 		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
 		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
-		lumigoEnableLogs: 				 lumigoEnableLogs,
+		lumigoEnableLogs:          lumigoEnableLogs,
 		lumigoEnableTraces:        lumigoEnableTraces,
 		lumigoToken:               lumigoToken,
 		lumigoInjectorImage:       LumigoInjectorImage,
