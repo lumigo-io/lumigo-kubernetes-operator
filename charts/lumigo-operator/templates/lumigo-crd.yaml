@@ -76,6 +76,13 @@ spec:
                 description: 'TracingSpec specified how distributed tracing (for example:
                   tracer injection) should be set up by the operator'
                 properties:
+                  enabled:
+                    description: Whether tracing should be set up by the operator.
+                      When enabled, traces from injected resources will be sent to Lumigo.
+                      Note that this does not affect the injection itself, which is required for logging as well.
+                      If unspecified, defaults to `true`.
+                    type: boolean
+                    default: true
                   injection:
                     properties:
                       enabled:
