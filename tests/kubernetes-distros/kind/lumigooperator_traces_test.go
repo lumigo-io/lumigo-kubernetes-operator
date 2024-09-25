@@ -515,7 +515,6 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			return ctx
 		}).
 		Assess("All traces have the 'k8s.container.name' resource attribute set correctly", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
-
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
 			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
@@ -554,7 +553,52 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 			return ctx
 		}).
-		Feature()
+		Assess("LUMIGO_ENABLE_TRACES reflects spec.tracing.enabled", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			if err := apimachinerywait.PollImmediateUntilWithContext(
+				ctx,
+				time.Second*5,
+				wrapWithLogging(t, "LUMIGO_ENABLE_TRACES is false when spec.tracing.enabled is set to false", func(context.Context) (bool, error) {
+					client := c.Client()
+
+					podList := corev1.PodList{}
+					listOptions := resources.ListOption(resources.WithLabelSelector(fmt.Sprintf("app=%s", deploymentName)))
+					err := client.Resources().WithNamespace(namespaceName).List(ctx, &podList, listOptions)
+
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					if len(podList.Items) == 0 {
+						return false, fmt.Errorf("no pods found for deployment %s", deploymentName)
+					}
+
+					for _, pod := range podList.Items {
+						for _, container := range pod.Spec.Containers {
+							var envVarFound bool
+
+							for _, envVar := range container.Env {
+								if envVar.Name == "LUMIGO_ENABLE_TRACES" {
+									envVarFound = true
+									if envVar.Value != "true" {
+										t.Fatalf("Pod %s, container %s has LUMIGO_ENABLE_TRACES set %s instead of 'true'", pod.Name, container.Name, envVar.Value)
+									}
+									break
+								}
+							}
+
+							if !envVarFound {
+								fmt.Printf("Pod %s, container %s is missing the LUMIGO_ENABLE_TRACES environment variable.", pod.Name, container.Name)
+							}
+						}
+					}
+
+					return true, nil
+				})); err != nil {
+				t.Fatalf("Failed to wait for LUMIGO_ENABLE_TRACES check: %v", err)
+			}
+			return ctx
+		}).
+		Feature();
 
 	testEnv.Test(t, testAppDeploymentFeature)
 }
