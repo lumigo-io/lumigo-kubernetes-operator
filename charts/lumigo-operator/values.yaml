@@ -67,3 +67,4 @@ endpoint:
 metrics:
   infra:
     token:
+    tokenSecret:

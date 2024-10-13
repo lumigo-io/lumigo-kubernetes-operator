@@ -20,6 +20,9 @@ data:
   tls.key: {{ $cert.Key | b64enc }}
   ca.crt: {{ $ca.Cert | b64enc }}
 ---
+{{- if and .Values.metrics.infra.token .Values.metrics.infra.tokenSecret }}
+{{- fail "metrics.infra.token and metrics.infra.tokenSecret are mutually exclusive" }}
+{{- end }}
 {{- if .Values.metrics.infra.token }}
 apiVersion: v1
 kind: Secret
@@ -28,7 +31,7 @@ metadata:
   labels:
   {{- include "helm.labels" . | nindent 4 }}
 data:
-  token: {{ .Values.metrics.infra.token | b64enc }}
+  lumigo-token: {{ .Values.metrics.infra.token | b64enc }}
 {{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -246,12 +249,16 @@ spec:
           value: "{{ .Values.endpoint.otlp.logs_url }}"
         - name: LUMIGO_METRICS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.metrics_url }}"
-{{- if .Values.metrics.infra.token }}
+{{- if or .Values.metrics.infra.token .Values.metrics.infra.tokenSecret }}
         - name: LUMIGO_INFRA_METRICS_TOKEN
           valueFrom:
             secretKeyRef:
-              name: '{{ include "helm.fullname" . }}-lumigo-infra-metrics-token'
-              key: token
+{{- if .Values.metrics.infra.token }}
+              name: "{{ include "helm.fullname" . }}-lumigo-infra-metrics-token"
+{{- else }}
+              name: "{{ .Values.metrics.infra.tokenSecret }}"
+{{- end }}
+              key: lumigo-token
 {{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
