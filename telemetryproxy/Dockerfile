@@ -1,6 +1,6 @@
 # Byuild the telemetry-proxy from sources
 FROM golang:1.20-alpine AS telemetry-proxy-builder
-
+#test
 ARG version='dev'
 ENV VERSION=${version}
 
@@ -32,7 +32,7 @@ FROM alpine:latest
 # Be able to validate the TLS cert of the Lumigo SaaS endpoint
 RUN apk add ca-certificates
 # Update OtelCollector config on namespace file change
-RUN apk add bash gomplate procps 
+RUN apk add bash gomplate procps
 
 COPY --from=chmod-helper /lumigo /lumigo
 
