@@ -15,8 +15,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
 )
 
-const (
-	typeStr = "lumigooperatorheartbeat"
+var (
+	componentType = component.MustNewType("lumigooperatorheartbeat")
 )
 
 var (
@@ -30,7 +30,7 @@ func createDefaultConfig() component.Config {
 
 func createLumigooperatorheartbeatReceiver(_ context.Context, params receiver.CreateSettings, baseCfg component.Config, consumer consumer.Logs) (receiver.Logs, error) {
 	if consumer == nil {
-		return nil, component.ErrNilNextConsumer
+		return nil, fmt.Errorf("nextConsumer cannot be nil")
 	}
 
 	cfg := baseCfg.(*Config)
@@ -82,7 +82,7 @@ func initKubeClient() (dynamic.Interface, error) {
 
 func NewFactory() receiver.Factory {
 	return receiver.NewFactory(
-		typeStr,
+		componentType,
 		createDefaultConfig,
 		receiver.WithLogs(createLumigooperatorheartbeatReceiver, component.StabilityLevelAlpha))
 }

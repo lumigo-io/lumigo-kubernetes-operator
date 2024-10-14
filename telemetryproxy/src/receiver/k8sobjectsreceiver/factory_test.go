@@ -31,7 +31,7 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestFactoryType(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, component.Type("k8sobjects"), NewFactory().Type())
+	assert.Equal(t, component.MustNewType("k8sobjects"), NewFactory().Type())
 }
 
 func TestCreateReceiver(t *testing.T) {

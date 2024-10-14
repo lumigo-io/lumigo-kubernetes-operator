@@ -29,9 +29,9 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
 )
 
-const (
+var (
 	// The value of "type" key in configuration.
-	typeStr = "k8sdataenricherprocessor"
+	componentType = component.MustNewType("k8sdataenricherprocessor")
 	// The stability level of the processor.
 	stability = component.StabilityLevelBeta
 )
@@ -44,7 +44,7 @@ var (
 
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
-		typeStr,
+		componentType,
 		createDefaultConfig,
 		processor.WithTraces(createTracesProcessor, stability),
 		processor.WithLogs(createLogsProcessor, stability),
