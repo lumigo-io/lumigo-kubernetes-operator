@@ -172,7 +172,7 @@ var _ = Context("End-to-end tests", func() {
 		It("trace a Python job created after the Lumigo resource is created", func() {
 			lumigoTokenName := "lumigo-credentials"
 			lumigoTokenKey := "token"
-			testImage := "python"
+			testImage := "python:3.12" // Must be a Python version supported by our Python distro
 
 			logOutput := "IT'S ALIIIIIIVE!"
 
@@ -308,7 +308,7 @@ var _ = Context("End-to-end tests", func() {
 		It("trace a Python deployment with tight security settings that is created after the Lumigo resource is created", func() {
 			lumigoTokenName := "lumigo-credentials"
 			lumigoTokenKey := "token"
-			testImage := "python"
+			testImage := "python:3.12" // Must be a Python version supported by our Python distro
 
 			logOutput := "IT'S ALIIIIIIVE!"
 
@@ -459,7 +459,7 @@ var _ = Context("End-to-end tests", func() {
 		It("trace a Python statefulset created after the Lumigo resource is created", func() {
 			lumigoTokenName := "lumigo-credentials"
 			lumigoTokenKey := "token"
-			testImage := "python"
+			testImage := "python:3.12" // Must be a Python version supported by our Python distro
 
 			logOutput := "IT'S ALIIIIIIVE!"
 
