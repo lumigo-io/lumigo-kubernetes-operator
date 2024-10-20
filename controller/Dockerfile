@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.20 as builder
+FROM golang:1.22 as builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 FROM alpine:latest
 
 # Be able to validate the TLS cert of the Lumigo SaaS endpoint
-RUN apk add bash procps 
+RUN apk add bash procps
 
 WORKDIR /
 COPY --from=builder --chown=65532:65532 /workspace/manager .
