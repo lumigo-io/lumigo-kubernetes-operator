@@ -250,9 +250,9 @@ service:
       - prometheus
       exporters:
       - otlphttp/lumigo_metrics
-{{- end }}
 {{- if $debug }}
       - logging
+{{- end }}
 {{- end }}
     traces:
       # We cannot add a Batch processor to this pipeline as it would break the
