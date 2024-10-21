@@ -3,3 +3,6 @@ ignore:
   # TODO: Remove this once the above issue is resolved
   - vulnerability: GHSA-449p-3h89-pw88
   - vulnerability: GHSA-mw99-9chc-xw7r
+  # Required until the collector can be bumped to a version that does not use
+  # the vulnerable version of the `github.com/docker/docker` module
+  - vulnerability: GHSA-v23v-6jw2-98fq

@@ -26,7 +26,7 @@ var (
 const (
 	DEFAULT_KIND_NODE_IMAGE        = "kindest/node:v1.27.1"
 	LUMIGO_SYSTEM_NAMESPACE        = "lumigo-system"
-	OTLP_SINK_OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector:0.90.0"
+	OTLP_SINK_OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector:0.102.0"
 	OTLP_SINK_NAMESPACE            = "otlp-sink"
 )
 
@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 	var runId string
 
 	if ghRunId, isPresent := os.LookupEnv("GITHUB_RUN_ID"); isPresent {
-		// Use the GitHub job id as run id, as it removes unnecessary congnitive
+		// Use the GitHub job id as run id, as it removes unnecessary cognitive
 		// complexity in analyzing the OTLP data
 		kindClusterName = fmt.Sprintf("lumigo-operator-%s", ghRunId)
 		runId = ghRunId
@@ -212,7 +212,7 @@ func TestMain(m *testing.M) {
 
 	logrWrapper := stdr.New(logger)
 	otlpSinkFeature, otlpSinkK8sServiceUrl := internal.OtlpSinkEnvFunc(OTLP_SINK_NAMESPACE, "otlp-sink", OTLP_SINK_OTEL_COLLECTOR_IMAGE, logrWrapper)
-	lumigoOperatorFeature := internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, otlpSinkK8sServiceUrl, otlpSinkK8sServiceUrl, logrWrapper)
+	lumigoOperatorFeature := internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, otlpSinkK8sServiceUrl, logrWrapper)
 
 	testEnv.Setup(
 		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),
@@ -233,7 +233,6 @@ func TestMain(m *testing.M) {
 		 * Otel Collector image is on Docker hub, no need to pull it into Kind (pulling into Kind
 		 * works only for local image, in the local Docker daemon).
 		 */
-		// envfuncs.LoadDockerImageToCluster(kindClusterName, OTLP_SINK_OTEL_COLLECTOR_IMAGE),
 		envfuncs.CreateNamespace(OTLP_SINK_NAMESPACE),
 		otlpSinkFeature,
 		lumigoOperatorFeature,

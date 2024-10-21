@@ -127,6 +127,10 @@ func doOtlpSink(ctx context.Context, client klient.Client, namespaceName string,
 									Value: fmt.Sprintf("%s/logs.json", otlpSinkDataDir),
 								},
 								{
+									Name:  "METRICS_PATH",
+									Value: fmt.Sprintf("%s/metrics.json", otlpSinkDataDir),
+								},
+								{
 									Name:  "OTLP_PORT",
 									Value: strconv.Itoa(int(otlpSinkPort)),
 								},
