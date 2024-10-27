@@ -2,6 +2,8 @@
 {{- $config := (datasource "config") -}}
 {{- $debug := $config.debug | conv.ToBool -}}
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
+{{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
+{{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
 receivers:
   otlp:
     protocols:
@@ -9,13 +11,13 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
-{{- if env.Getenv "LUMIGO_INFRA_METRICS_TOKEN" }}
+{{- if $infraMetricsToken }}
   prometheus:
     config:
       scrape_configs:
         - job_name: 'k8s-infra-metrics'
           metrics_path: /metrics
-          scrape_interval: 5s
+          scrape_interval: {{ $infraMetricsFrequency }}
           scheme: https
           tls_config:
             insecure_skip_verify: true
@@ -25,7 +27,7 @@ receivers:
             credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - job_name: 'k8s-infra-metrics-cadvisor'
           metrics_path: /metrics/cadvisor
-          scrape_interval: 5s
+          scrape_interval: {{ $infraMetricsFrequency }}
           scheme: https
           tls_config:
             insecure_skip_verify: true
@@ -35,7 +37,7 @@ receivers:
             credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - job_name: 'k8s-infra-metrics-resources'
           metrics_path: /metrics/resource
-          scrape_interval: 5s
+          scrape_interval: {{ $infraMetricsFrequency }}
           scheme: https
           tls_config:
             insecure_skip_verify: true
@@ -132,7 +134,7 @@ exporters:
     endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
-{{- if env.Getenv "LUMIGO_INFRA_METRICS_TOKEN" }}
+{{- if $infraMetricsToken }}
   otlphttp/lumigo_metrics:
     endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     headers:
@@ -244,7 +246,7 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
-{{- if env.Getenv "LUMIGO_INFRA_METRICS_TOKEN" }}
+{{- if $infraMetricsToken }}
     metrics:
       receivers:
       - prometheus

@@ -252,6 +252,8 @@ spec:
             secretKeyRef:
               name: {{ .Values.lumigoToken.secretName }}
               key: {{ .Values.lumigoToken.secretKey }}
+        - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
+          value: {{ .Values.clusterCollection.metrics.enabled }}
 {{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"

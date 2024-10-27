@@ -31,6 +31,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorTelemetryProxyImage).(string))
 	operatorDebug := ctx.Value(ContextKeyLumigoOperatorDebug).(bool)
 	kubernetesClusterName := ctx.Value(ContextKeyKubernetesClusterName).(string)
+	lumigoToken := ctx.Value(ContextKeyLumigoToken).(string)
 
 	var curDir, _ = os.Getwd()
 	chartDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(curDir))), "charts", "lumigo-operator")
@@ -50,11 +51,12 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.logs_url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl)),
-		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", ctx.Value(ContextKeyLumigoToken).(string))), // Use the the test-token for infra metrics as well
+		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken)), // Use the the test-token for infra metrics as well
 		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)), // Operator debug logging at runtime
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),
+
 	); err != nil {
 		return ctx, fmt.Errorf("failed to invoke helm install operation due to an error: %w", err)
 	}

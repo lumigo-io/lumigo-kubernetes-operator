@@ -2,6 +2,7 @@ package kind
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 
 				if len(metrics) < 1 {
 					// No metrics received yet
-					return false, nil
+					return false, fmt.Errorf("no metrics received yet")
 				}
 
 				metricNames := make([]string, 0)
@@ -68,8 +69,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				}
 
 				if !strings.Contains(strings.Join(metricNames, " "), "container_fs_usage_bytes") {
-					t.Logf("Metrics received: %v", metricNames)
-					return false, nil
+					return false, fmt.Errorf("could not find container_fs_usage_bytes among collected metrics: %v", metricNames)
 				}
 
 				return true, nil
