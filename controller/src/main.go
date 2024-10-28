@@ -72,7 +72,7 @@ func main() {
 	flag.BoolVar(&uninstall, "uninstall", false,
 		"Whether the execution of this manager is actually aimed at initiating the uninstallation procedure.")
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
