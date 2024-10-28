@@ -130,11 +130,16 @@ spec:
       key: token # This must match the key in the Kubernetes secret (don't touch)
 ```
 
-After creating the secret, deploy it in the desired namespace:
+After creating `lumigo.yml`, deploy it in the desired namespace:
 
 ```sh
 kubectl apply -f lumigo.yml -n <YOUR_NAMESPACE>
 ```
+
+> ℹ️ **Important note**
+>
+> Apply the secret and the custom resource to the namespace you wish to start tracing, not to `lumigo-system`.
+
 
 Each `Lumigo` resource keeps in its state a list of resources it currently instruments:
 
@@ -159,6 +164,31 @@ Status:
     Resource Version:  320123
     UID:               93d6d809-ac2a-43a9-bc07-f0d4e314efcc
 ```
+
+#### Disabling automatic tracing
+
+The tracing feature can be entirely turned-off in case it's not desired, by setting the `spec.tracing.enabled` field to `false` in the `Lumigo` resource:
+
+```yaml
+apiVersion: operator.lumigo.io/v1alpha1
+kind: Lumigo
+metadata:
+  labels:
+    app.kubernetes.io/name: lumigo
+    app.kubernetes.io/instance: lumigo
+    app.kubernetes.io/part-of: lumigo-operator
+  name: lumigo
+spec:
+  lumigoToken: ...
+  tracing:
+    enabled: false
+  logging:
+    enabled: true # usually set to when `tracing.enabled` is `false`, otherwise injecting Lumigo into the workload will not be useful
+```
+
+this is usually done when only logs from the workloads should be sent to Lumigo, regardless of the tracing content in which the logs was generated.
+* Note that this does not affect the injection of the Lumigo distro into pods - only the fact that the distro will not send traces to Lumigo.
+For more fine-grained control over the injection in general, see the [Opting out for specific resources](#opting-out-for-specific-resources) section.
 
 #### Logging support
 
