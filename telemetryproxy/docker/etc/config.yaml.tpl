@@ -2,6 +2,8 @@
 {{- $config := (datasource "config") -}}
 {{- $debug := $config.debug | conv.ToBool -}}
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
+{{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
+{{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
 receivers:
   otlp:
     protocols:
@@ -9,6 +11,41 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
+{{- if $infraMetricsToken }}
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'k8s-infra-metrics'
+          metrics_path: /metrics
+          scrape_interval: {{ $infraMetricsFrequency }}
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'k8s-infra-metrics-cadvisor'
+          metrics_path: /metrics/cadvisor
+          scrape_interval: {{ $infraMetricsFrequency }}
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'k8s-infra-metrics-resources'
+          metrics_path: /metrics/resource
+          scrape_interval: {{ $infraMetricsFrequency }}
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+{{- end }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
     namespace: {{ $namespace.name }}
@@ -97,6 +134,12 @@ exporters:
     endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
+{{- if $infraMetricsToken }}
+  otlphttp/lumigo_metrics:
+    endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    headers:
+      Authorization: "LumigoToken {{ env.Getenv "LUMIGO_INFRA_METRICS_TOKEN" }}"
+{{- end }}
 {{- if $debug }}
   logging:
     verbosity: detailed
@@ -203,6 +246,16 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
+{{- if $infraMetricsToken }}
+    metrics:
+      receivers:
+      - prometheus
+      exporters:
+      - otlphttp/lumigo_metrics
+{{- if $debug }}
+      - logging
+{{- end }}
+{{- end }}
     traces:
       # We cannot add a Batch processor to this pipeline as it would break the
       # `headers_setter/lumigo` extension.
