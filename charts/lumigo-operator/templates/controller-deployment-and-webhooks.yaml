@@ -20,6 +20,17 @@ data:
   tls.key: {{ $cert.Key | b64enc }}
   ca.crt: {{ $ca.Cert | b64enc }}
 ---
+{{- if and .Values.lumigoToken.value .Values.clusterCollection.metrics.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.lumigoToken.secretName }}
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+data:
+  "{{ .Values.lumigoToken.secretKey }}": {{ .Values.lumigoToken.value | b64enc }}
+{{- end }}
+---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
@@ -233,6 +244,17 @@ spec:
           value: "{{ .Values.endpoint.otlp.url }}"
         - name: LUMIGO_LOGS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: LUMIGO_METRICS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.metrics_url }}"
+{{- if and .Values.lumigoToken.value .Values.clusterCollection.metrics.enabled }}
+        - name: LUMIGO_INFRA_METRICS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.lumigoToken.secretName }}
+              key: {{ .Values.lumigoToken.secretKey }}
+        - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
+          value: "{{ .Values.clusterCollection.metrics.frequency }}"
+{{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD

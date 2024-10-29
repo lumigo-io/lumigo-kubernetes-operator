@@ -31,8 +31,11 @@ FROM alpine:latest
 
 # Be able to validate the TLS cert of the Lumigo SaaS endpoint
 RUN apk add ca-certificates
-# Update OtelCollector config on namespace file change
-RUN apk add bash gomplate procps
+
+RUN apk add bash procps
+# `apk add gomplate` installs a version with a vulenrability of CVE-2024-34158.
+# Once the package is updated, we can install it via `apk`
+COPY --from=hairyhenderson/gomplate:latest /gomplate /bin/gomplate
 
 COPY --from=chmod-helper /lumigo /lumigo
 

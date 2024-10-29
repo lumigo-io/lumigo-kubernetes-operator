@@ -16,7 +16,8 @@ exporters:
     path: ${LOGS_PATH}
   file/traces:
     path: ${TRACES_PATH}
-
+  file/metrics:
+    path: ${METRICS_PATH}
 service:
   pipelines:
     logs:
@@ -35,3 +36,8 @@ service:
 {{- if $config.lumigo_token }}
       - otlphttp/lumigo
 {{ end }}
+    metrics:
+      receivers:
+      - otlp
+      exporters:
+      - file/metrics

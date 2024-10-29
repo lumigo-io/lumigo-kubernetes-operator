@@ -63,3 +63,12 @@ endpoint:
   otlp:
     url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
     logs_url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+    metrics_url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+lumigoToken:
+  secretName: lumigo-credentials
+  secretKey: token
+  value:
+clusterCollection:
+  metrics:
+    enabled: true
+    frequency: 15s
