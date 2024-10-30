@@ -1,0 +1,115 @@
+
+{{- if .Values.clusterCollection.logs.viaFiles.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.fullname" . }}-logfiles-collector-config
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      filelog:
+        include:
+          # filesystem structure for logs is:
+          # /var/log/pods/<namespace>_<pod-name>_<uid>/<container-name>/<container-name>-0.log
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/kube-system_*/*/*.log
+          - /var/log/pods/lumigo-system_*/*/*.log
+        start_at: end
+        include_file_path: true
+
+    exporters:
+      otlphttp:
+        endpoint: ${env:LUMIGO_LOGS_ENDPOINT}
+        headers:
+          Authorization: "LumigoToken ${env:LUMIGO_TOKEN}"
+      debug:
+        verbosity: detailed
+
+    processors:
+      batch:
+      attributes:
+        actions:
+          - key: "k8s.container.log.file.path"
+            from_attribute: "log.file.path"
+            action: "upsert"
+          - key: "log.file.path"
+            action: "delete"
+
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [attributes, batch]
+          exporters: [otlphttp, debug]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "helm.fullname" . }}-logfiles-collector
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfiles-collector
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: logfiles-collector
+    lumigo.auto-trace: 'false' # We don't want the operator to inject itself into this daemonset
+spec:
+  selector:
+    matchLabels:
+      control-plane: logfiles-collector
+    {{- include "helm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+      {{- include "helm.selectorLabels" . | nindent 8 }}
+        control-plane: logfiles-collector
+        lumigo.auto-trace: 'false' # We don't want the operator to inject itself into pods from this daemonset
+    spec:
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:latest
+        env:
+        - name: LUMIGO_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.lumigoToken.secretName }}
+              key: {{ .Values.lumigoToken.secretKey }}
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.logs_url }}"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otel-collector-config
+        - name: varlogpods
+          mountPath: /var/log/pods/
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+        command:
+        - "/otelcol-contrib"
+        - "--config=/etc/otel-collector-config/otel-collector-config.yaml"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 200m
+            memory: 128Mi
+        securityContext:
+      securityContext:
+        runAsUser: 0
+        privileged: false
+        readOnlyRootFilesystem: true
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "helm.fullname" . }}-logfiles-collector-config
+      - name: varlogpods
+        hostPath:
+          path: /var/log/pods/
+          type: Directory
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+          type: Directory
+---
+{{- end }}
