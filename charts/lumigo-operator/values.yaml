@@ -72,3 +72,6 @@ clusterCollection:
   metrics:
     enabled: true
     frequency: 15s
+  logs:
+    viaFiles:
+      enabled: false

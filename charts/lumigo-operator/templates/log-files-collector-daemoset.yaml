@@ -22,7 +22,7 @@ data:
       otlphttp:
         endpoint: ${env:LUMIGO_LOGS_ENDPOINT}
         headers:
-          Authorization: "LumigoToken ${env:LUMIGO_TOKEN}"
+          Authorization: LumigoToken ${env:LUMIGO_TOKEN}
       debug:
         verbosity: detailed
 
@@ -37,6 +37,9 @@ data:
             action: "delete"
 
     service:
+      telemetry:
+        logs:
+          level: debug
       pipelines:
         logs:
           receivers: [filelog]
