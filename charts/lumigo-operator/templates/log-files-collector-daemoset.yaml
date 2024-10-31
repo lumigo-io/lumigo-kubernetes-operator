@@ -31,7 +31,7 @@ data:
             id: parser-crio
             regex:
               '^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
-            output: extract_metadata_from_filepath
+            output: overwrite-log-body
             timestamp:
               parse_from: attributes.time
               layout_type: gotime
@@ -41,7 +41,7 @@ data:
             id: parser-containerd
             regex:
               '^(?P<time>[^ ^Z]+Z) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
-            output: extract_metadata_from_filepath
+            output: overwrite-log-body
             timestamp:
               parse_from: attributes.time
               layout: '%Y-%m-%dT%H:%M:%S.%LZ'
@@ -58,7 +58,7 @@ data:
             to: body
           # Extract metadata from file path
           - type: regex_parser
-            id: extract_metadata_from_filepath
+            id: extract-metadata-from-filepath
             regex: '^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$'
             parse_from: attributes["log.file.path"]
             cache:
@@ -88,14 +88,18 @@ data:
         endpoint: ${env:LUMIGO_LOGS_ENDPOINT}
         headers:
           Authorization: LumigoToken ${env:LUMIGO_TOKEN}
+{{- if .Values.debug.enabled }}
       debug:
         verbosity: detailed
+{{- end }}
     processors:
       batch:
     service:
+{{- if .Values.debug.enabled }}
       telemetry:
         logs:
           level: debug
+{{- end }}
       pipelines:
         logs:
           receivers:
@@ -104,7 +108,9 @@ data:
             - batch
           exporters:
             - otlphttp
+{{- if .Values.debug.enabled }}
             - debug
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: DaemonSet
