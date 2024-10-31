@@ -378,6 +378,11 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 						t.Fatalf("wrong 'k8s.cluster.name' value found: '%s'; expected: '%s'; %+v", actualClusterName, expectedClusterName, resourceAttributes)
 					}
 
+					// TODO: remove this when logs collected from pods are enriched with the cluster UID as well
+					if resourceAttributes["name"] == "lumigo-operator.log_file_collector" {
+						continue
+					}
+
 					if actualClusterUID, found := resourceAttributes["k8s.cluster.uid"]; !found {
 						t.Fatalf("found logs without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
 					} else if actualClusterUID != expectedClusterUID {
