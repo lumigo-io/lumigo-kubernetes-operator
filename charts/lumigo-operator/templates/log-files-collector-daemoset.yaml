@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "helm.fullname" . }}-logfiles-collector-config
+  name: {{ include "helm.fullname" . }}-cluster-agent-config
 data:
   otel-collector-config.yaml: |
     receivers:
@@ -123,24 +123,24 @@ data:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ include "helm.fullname" . }}-logfiles-collector
+  name: {{ include "helm.fullname" . }}-cluster-agent
   labels:
   {{- include "helm.labels" . | nindent 4 }}
-    app.kubernetes.io/component: logfiles-collector
+    app.kubernetes.io/component: cluster-agent
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
-    control-plane: logfiles-collector
+    control-plane: cluster-agent
     lumigo.auto-trace: 'false' # We don't want the operator to inject itself into this daemonset
 spec:
   selector:
     matchLabels:
-      control-plane: logfiles-collector
+      control-plane: cluster-agent
     {{- include "helm.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
       {{- include "helm.selectorLabels" . | nindent 8 }}
-        control-plane: logfiles-collector
+        control-plane: cluster-agent
         lumigo.auto-trace: 'false' # We don't want the operator to inject itself into pods from this daemonset
     spec:
       containers:
@@ -175,7 +175,7 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: {{ include "helm.fullname" . }}-logfiles-collector-config
+          name: {{ include "helm.fullname" . }}-cluster-agent-config
       - name: varlogpods
         hostPath:
           path: /var/log/pods/
