@@ -53,6 +53,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken)), // Use the the test-token for infra metrics as well
 		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)), // Operator debug logging at runtime
+		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.viaFiles.enabled=%v", true)), // Enable log collection via pod logs-files
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),

@@ -43,7 +43,7 @@ var (
 // 2. A Lumigo operator installed into the Kubernetes cluster referenced by the
 //    `kubectl` configuration
 
-func TestLumigoOperatorEventsAndObjects(t *testing.T) {
+func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 	logger := testr.New(t)
 
 	testAppDeploymentFeature := features.New("TestApp").
@@ -474,6 +474,67 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 				}
 
 				t.Logf("Found application logs: %d", len(applicationLogs))
+				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for application logs: %v", err)
+			}
+
+			return ctx
+		}).
+		Assess("Application logs are collected successfully via pod files and added k8s.* attributes", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				applicationLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if appLogs, err := exportRequestToApplicationLogRecords(exportRequest); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						applicationLogs = append(applicationLogs, appLogs...)
+					}
+				}
+
+				if len(applicationLogs) < 1 {
+					// No application logs received yet
+					t.Fatalf("No application logs found in '%s'. \r\nMake sure log files are emitted under /var/logs/pods/ in the cluster node", logsPath)
+					return false, nil
+				}
+
+				found := false
+				for _, appLog := range applicationLogs {
+					value, found := appLog.Attributes().Get("log.file.path")
+					// Make sure the log came from log files and not the distro,
+					// as the logs.json file is shared between several tests reporting to the same OTLP sink
+					if found && strings.HasPrefix(value.AsString(), "/var/log/pods/") {
+						t.Logf("Found application log: %s", appLog.Body().AsString())
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					t.Fatalf("No application logs found in '%s'. \r\nMake sure log files are emitted under /var/logs/pods/ in the cluster node", logsPath)
+				}
+
 				return true, nil
 			}); err != nil {
 				t.Fatalf("Failed to wait for application logs: %v", err)

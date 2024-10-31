@@ -137,7 +137,7 @@ spec:
     spec:
       containers:
       - name: otel-collector
-        image: otel/opentelemetry-collector-contrib:latest
+        image: {{ .Values.logFileCollector.image.repository }}:{{ .Values.logFileCollector.image.tag }}
         env:
         - name: LUMIGO_TOKEN
           valueFrom:
@@ -156,13 +156,7 @@ spec:
         command:
         - "/otelcol-contrib"
         - "--config=/etc/otel-collector-config/otel-collector-config.yaml"
-        resources:
-          limits:
-            cpu: 500m
-            memory: 256Mi
-          requests:
-            cpu: 200m
-            memory: 128Mi
+        resources: {{- toYaml .Values.logFileCollector.resources | nindent 10 }}
         securityContext:
       securityContext:
         runAsUser: 0
@@ -175,9 +169,12 @@ spec:
       - name: varlogpods
         hostPath:
           path: /var/log/pods/
+          # We use "Directory" type since /var/log/pods must exist, and this validates it.
           type: Directory
       - name: varlibdockercontainers
         hostPath:
           path: /var/lib/docker/containers
-          type: Directory
+          # We use "" since /var/log/pods is a symlink pointing to different paths on different container engines,
+          # we mount all possible actual paths for all container engines, and those that don't exist will be ignored.
+          type: ""
 {{- end }}
