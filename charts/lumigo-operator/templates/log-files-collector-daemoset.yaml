@@ -99,6 +99,7 @@ data:
           - context: log
             statements:
               - set(instrumentation_scope.name, "lumigo-operator.log_file_collector")
+              - set(attributes["k8s.cluster.name"], "${env:KUBERNETES_CLUSTER_NAME}")
       batch:
     service:
 {{- if .Values.debug.enabled }}
@@ -153,6 +154,8 @@ spec:
               key: {{ .Values.lumigoToken.secretKey }}
         - name: LUMIGO_LOGS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: KUBERNETES_CLUSTER_NAME
+          value: "{{ .Values.cluster.name }}"
         volumeMounts:
         - name: config
           mountPath: /etc/otel-collector-config
