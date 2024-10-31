@@ -1,4 +1,4 @@
-{{- if .Values.clusterCollection.logs.viaFiles.enabled }}
+{{- if .Values.clusterCollection.logs.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
