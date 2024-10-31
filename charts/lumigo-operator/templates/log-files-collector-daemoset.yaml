@@ -93,6 +93,11 @@ data:
         verbosity: detailed
 {{- end }}
     processors:
+      transform:
+        log_statements:
+          - context: log
+            statements:
+              - set(instrumentation_scope.name, "lumigo-operator.log_file_collector")
       batch:
     service:
 {{- if .Values.debug.enabled }}
@@ -105,6 +110,7 @@ data:
           receivers:
             - filelog
           processors:
+            - transform
             - batch
           exporters:
             - otlphttp
