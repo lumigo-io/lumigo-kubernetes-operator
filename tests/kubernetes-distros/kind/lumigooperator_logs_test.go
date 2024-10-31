@@ -414,7 +414,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if e, err := exportRequestToHeartbeatLogRecords(exportRequest); err != nil {
+					if e, err := exportRequestLogRecords(exportRequest, filterHeartbeatLogRecords); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
 						eventLogs = append(eventLogs, e...)
@@ -460,7 +460,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if appLogs, err := exportRequestToApplicationLogRecords(exportRequest); err != nil {
+					if appLogs, err := exportRequestLogRecords(exportRequest, filterApplicationLogRecords); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
 						applicationLogs = append(applicationLogs, appLogs...)
@@ -506,7 +506,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if appLogs, err := exportRequestToPodLogRecords(exportRequest); err != nil {
+					if appLogs, err := exportRequestLogRecords(exportRequest, filterPodLogRecords); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
 						applicationLogs = append(applicationLogs, appLogs...)
@@ -619,9 +619,9 @@ func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord,
 }
 
 func scopeLogsToLogRecords(scopeLogs plog.ScopeLogs) []plog.LogRecord {
-	l := scopeLogs.LogRecords().Len()
-	logRecords := make([]plog.LogRecord, l)
-	for i := 0; i < l; i++ {
+	scopeLogsLen := scopeLogs.LogRecords().Len()
+	logRecords := make([]plog.LogRecord, scopeLogsLen)
+	for i := 0; i < scopeLogsLen; i++ {
 		logRecords[i] = scopeLogs.LogRecords().At(i)
 	}
 	return logRecords
@@ -645,66 +645,34 @@ func removeDuplicateStrings(s []string) []string {
 	return s[:prev]
 }
 
-func exportRequestToHeartbeatLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
-	eventLogs := make([]plog.LogRecord, 0)
+type LogRecordFilter func(plog.ResourceLogs) ([]plog.LogRecord, error)
+
+func exportRequestLogRecords(exportRequest plogotlp.ExportRequest, filter LogRecordFilter) ([]plog.LogRecord, error) {
+	allLogRecords := make([]plog.LogRecord, 0)
 	logs := exportRequest.Logs()
 
-	l := logs.ResourceLogs().Len()
-	for i := 0; i < l; i++ {
-		e, err := resourceLogsToHeartbeatLogRecords(logs.ResourceLogs().At(i))
+	for i := 0; i < logs.ResourceLogs().Len(); i++ {
+		resourceLogRecords, err := filter(logs.ResourceLogs().At(i))
 		if err != nil {
 			return nil, err
 		}
 
-		eventLogs = append(eventLogs, e...)
+		allLogRecords = append(allLogRecords, resourceLogRecords...)
 	}
 
-	return eventLogs, nil
+	return allLogRecords, nil
 }
 
-func exportRequestToApplicationLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
-	applicationLogs := make([]plog.LogRecord, 0)
-	logs := exportRequest.Logs()
 
-	l := logs.ResourceLogs().Len()
-	for i := 0; i < l; i++ {
-		e, err := resourceLogsToApplicationLogRecords(logs.ResourceLogs().At(i))
-		if err != nil {
-			return nil, err
-		}
-
-		applicationLogs = append(applicationLogs, e...)
-	}
-
-	return applicationLogs, nil
-}
-
-func exportRequestToPodLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
-	podFileLogs := make([]plog.LogRecord, 0)
-	logs := exportRequest.Logs()
-
-	l := logs.ResourceLogs().Len()
-	for i := 0; i < l; i++ {
-		e, err := resourceLogsToPodLogRecords(logs.ResourceLogs().At(i))
-		if err != nil {
-			return nil, err
-		}
-
-		podFileLogs = append(podFileLogs, e...)
-	}
-
-	return podFileLogs, nil
-}
-
-func resourceLogsToApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal")
 }
 
-func resourceLogsToHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+func filterHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat")
 }
 
-func resourceLogsToPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+func filterPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector")
 }
 
