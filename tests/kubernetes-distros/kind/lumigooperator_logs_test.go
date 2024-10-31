@@ -506,7 +506,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if appLogs, err := exportRequestToApplicationLogRecords(exportRequest); err != nil {
+					if appLogs, err := exportRequestToPodLogRecords(exportRequest); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
 						applicationLogs = append(applicationLogs, appLogs...)
@@ -519,23 +519,19 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					return false, nil
 				}
 
-				found := false
 				for _, appLog := range applicationLogs {
 					value, found := appLog.Attributes().Get("log.file.path")
 					// Make sure the log came from log files and not the distro,
 					// as the logs.json file is shared between several tests reporting to the same OTLP sink
 					if found && strings.HasPrefix(value.AsString(), "/var/log/pods/") {
 						t.Logf("Found application log: %s", appLog.Body().AsString())
-						found = true
-						break
+						return true, nil
 					}
 				}
 
-				if !found {
-					t.Fatalf("No application logs found in '%s'. \r\nMake sure log files are emitted under /var/logs/pods/ in the cluster node", logsPath)
-				}
+				t.Fatal("No application logs found matching the 'log.file.path' attribute")
 
-				return true, nil
+				return false, nil
 			}); err != nil {
 				t.Fatalf("Failed to wait for application logs: %v", err)
 			}
@@ -683,12 +679,33 @@ func exportRequestToApplicationLogRecords(exportRequest plogotlp.ExportRequest) 
 	return applicationLogs, nil
 }
 
+func exportRequestToPodLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
+	podFileLogs := make([]plog.LogRecord, 0)
+	logs := exportRequest.Logs()
+
+	l := logs.ResourceLogs().Len()
+	for i := 0; i < l; i++ {
+		e, err := resourceLogsToPodLogRecords(logs.ResourceLogs().At(i))
+		if err != nil {
+			return nil, err
+		}
+
+		podFileLogs = append(podFileLogs, e...)
+	}
+
+	return podFileLogs, nil
+}
+
 func resourceLogsToApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal")
 }
 
 func resourceLogsToHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat")
+}
+
+func resourceLogsToPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector")
 }
 
 func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string) ([]plog.LogRecord, error) {
