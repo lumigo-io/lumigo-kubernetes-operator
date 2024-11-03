@@ -379,7 +379,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					}
 
 					// TODO: remove this when logs collected from pods are enriched with the cluster UID as well
-					if resourceAttributes["name"] == "lumigo-operator.log_file_collector" {
+					if exportRequest.Logs().ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().Scope().Name() == "lumigo-operator.log_file_collector" {
 						continue
 					}
 
