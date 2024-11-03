@@ -99,7 +99,7 @@ data:
           - context: log
             statements:
               - set(instrumentation_scope.name, "lumigo-operator.log_file_collector")
-              - set(attributes["k8s.cluster.name"], "${env:KUBERNETES_CLUSTER_NAME}")
+              - set(resource.attributes["k8s.cluster.name"], "${env:KUBERNETES_CLUSTER_NAME}")
       batch:
     service:
 {{- if .Values.debug.enabled }}
@@ -168,10 +168,9 @@ spec:
         - "--config=/etc/otel-collector-config/otel-collector-config.yaml"
         resources: {{- toYaml .Values.logFileCollector.resources | nindent 10 }}
         securityContext:
-      securityContext:
-        runAsUser: 0
-        privileged: false
-        readOnlyRootFilesystem: true
+          runAsUser: 0
+          privileged: false
+          readOnlyRootFilesystem: true
       volumes:
       - name: config
         configMap:
