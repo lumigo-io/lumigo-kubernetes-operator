@@ -153,6 +153,7 @@ spec:
             secretKeyRef:
               name: {{ .Values.lumigoToken.secretName }}
               key: {{ .Values.lumigoToken.secretKey }}
+              optional: true
         - name: LUMIGO_LOGS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.logs_url }}"
         - name: KUBERNETES_CLUSTER_NAME
