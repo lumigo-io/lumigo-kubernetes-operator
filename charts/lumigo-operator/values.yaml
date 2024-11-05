@@ -40,6 +40,17 @@ controllerManager:
         cpu: 10m
         memory: 128Mi
   replicas: 1
+logFileCollector:
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: 0.112.0
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 10m
+      memory: 128Mi
 injectorWebhook:
   lumigoInjector:
     image:
@@ -72,3 +83,5 @@ clusterCollection:
   metrics:
     enabled: true
     frequency: 15s
+  logs:
+    enabled: false

@@ -1,0 +1,186 @@
+{{- if .Values.clusterCollection.logs.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.fullname" . }}-cluster-agent-config
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/kube-system_*/*/*.log
+          - /var/log/pods/lumigo-system_*/*/*.log
+          # Exclude logs from the otlp-sink in tests (Kind cluster)
+          - /var/log/pods/local-path-storage_*/*/*.log
+          - /var/log/pods/otlp-sink_*/*/*.log
+        start_at: end
+        include_file_path: true
+        include_file_name: false
+        operators:
+          # Find out which format is used by kubernetes
+          - type: router
+            id: get-format
+            routes:
+              - output: parser-docker
+                expr: 'body matches "^\\{"'
+              - output: parser-crio
+                expr: 'body matches "^[^ Z]+ "'
+              - output: parser-containerd
+                expr: 'body matches "^[^ Z]+Z"'
+          # Parse CRI-O format
+          - type: regex_parser
+            id: parser-crio
+            regex:
+              '^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            output: overwrite-log-body
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
+          # Parse CRI-Containerd format
+          - type: regex_parser
+            id: parser-containerd
+            regex:
+              '^(?P<time>[^ ^Z]+Z) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            output: overwrite-log-body
+            timestamp:
+              parse_from: attributes.time
+              layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+          # Parse Docker format
+          - type: json_parser
+            id: parser-docker
+            output: overwrite-log-body
+            timestamp:
+              parse_from: attributes.time
+              layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+          - type: move
+            id: overwrite-log-body
+            from: attributes["log"]
+            to: body
+          # Extract metadata from file path
+          - type: regex_parser
+            id: extract-metadata-from-filepath
+            regex: '^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$'
+            parse_from: attributes["log.file.path"]
+            cache:
+              size: 128 # default maximum amount of Pods per Node is 110
+          # Rename attributes
+          - type: move
+            from: attributes.stream
+            to: attributes["log.iostream"]
+          - type: move
+            from: attributes.container_name
+            to: resource["k8s.container.name"]
+          - type: move
+            from: attributes.namespace
+            to: resource["k8s.namespace.name"]
+          - type: move
+            from: attributes.pod_name
+            to: resource["k8s.pod.name"]
+          - type: move
+            from: attributes.restart_count
+            to: resource["k8s.container.restart_count"]
+          - type: move
+            from: attributes.uid
+            to: resource["k8s.pod.uid"]
+    exporters:
+      otlphttp:
+        endpoint: ${env:LUMIGO_LOGS_ENDPOINT}
+        headers:
+          Authorization: LumigoToken ${env:LUMIGO_TOKEN}
+{{- if .Values.debug.enabled }}
+      debug:
+        verbosity: detailed
+{{- end }}
+    processors:
+      transform:
+        log_statements:
+          - context: log
+            statements:
+              - set(instrumentation_scope.name, "lumigo-operator.log_file_collector")
+              - set(resource.attributes["k8s.cluster.name"], "${env:KUBERNETES_CLUSTER_NAME}")
+      batch:
+    service:
+{{- if .Values.debug.enabled }}
+      telemetry:
+        logs:
+          level: debug
+{{- end }}
+      pipelines:
+        logs:
+          receivers:
+            - filelog
+          processors:
+            - transform
+            - batch
+          exporters:
+            - otlphttp
+{{- if .Values.debug.enabled }}
+            - debug
+{{- end }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "helm.fullname" . }}-cluster-agent
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-agent
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: cluster-agent
+    lumigo.auto-trace: 'false' # We don't want the operator to inject itself into this daemonset
+spec:
+  selector:
+    matchLabels:
+      control-plane: cluster-agent
+    {{- include "helm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+      {{- include "helm.selectorLabels" . | nindent 8 }}
+        control-plane: cluster-agent
+        lumigo.auto-trace: 'false' # We don't want the operator to inject itself into pods from this daemonset
+    spec:
+      containers:
+      - name: otel-collector
+        image: {{ .Values.logFileCollector.image.repository }}:{{ .Values.logFileCollector.image.tag }}
+        env:
+        - name: LUMIGO_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.lumigoToken.secretName }}
+              key: {{ .Values.lumigoToken.secretKey }}
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: KUBERNETES_CLUSTER_NAME
+          value: "{{ .Values.cluster.name }}"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otel-collector-config
+        - name: varlogpods
+          mountPath: /var/log/pods/
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+        command:
+        - "/otelcol-contrib"
+        - "--config=/etc/otel-collector-config/otel-collector-config.yaml"
+        resources: {{- toYaml .Values.logFileCollector.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "helm.fullname" . }}-cluster-agent-config
+      - name: varlogpods
+        hostPath:
+          path: /var/log/pods/
+          # We use "Directory" type since /var/log/pods must exist, and this validates it.
+          type: Directory
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+          # We use "" since /var/log/pods is a symlink pointing to different paths on different container engines,
+          # we mount all possible actual paths for all container engines, and those that don't exist will be ignored.
+          type: ""
+{{- end }}

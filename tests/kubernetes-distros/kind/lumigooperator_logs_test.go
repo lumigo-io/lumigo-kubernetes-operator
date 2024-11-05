@@ -43,7 +43,7 @@ var (
 // 2. A Lumigo operator installed into the Kubernetes cluster referenced by the
 //    `kubectl` configuration
 
-func TestLumigoOperatorEventsAndObjects(t *testing.T) {
+func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 	logger := testr.New(t)
 
 	testAppDeploymentFeature := features.New("TestApp").
@@ -379,7 +379,10 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 					}
 
 					if actualClusterUID, found := resourceAttributes["k8s.cluster.uid"]; !found {
+						// TODO: remove when logs collected from files have the cluster UID
+						if resourceLogs.ScopeLogs().At(0).Scope().Name() != "lumigo-operator.log_file_collector" {
 						t.Fatalf("found logs without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
+						}
 					} else if actualClusterUID != expectedClusterUID {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
 					}
@@ -414,7 +417,7 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if e, err := exportRequestToHeartbeatLogRecords(exportRequest); err != nil {
+					if e, err := exportRequestLogRecords(exportRequest, filterHeartbeatLogRecords); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
 						eventLogs = append(eventLogs, e...)
@@ -460,7 +463,7 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if appLogs, err := exportRequestToApplicationLogRecords(exportRequest); err != nil {
+					if appLogs, err := exportRequestLogRecords(exportRequest, filterApplicationLogRecords); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
 						applicationLogs = append(applicationLogs, appLogs...)
@@ -475,6 +478,63 @@ func TestLumigoOperatorEventsAndObjects(t *testing.T) {
 
 				t.Logf("Found application logs: %d", len(applicationLogs))
 				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for application logs: %v", err)
+			}
+
+			return ctx
+		}).
+		Assess("Application logs are collected successfully via pod files and added k8s.* attributes", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				applicationLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if appLogs, err := exportRequestLogRecords(exportRequest, filterPodLogRecords); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						applicationLogs = append(applicationLogs, appLogs...)
+					}
+				}
+
+				if len(applicationLogs) < 1 {
+					// No application logs received yet
+					t.Fatalf("No application logs found in '%s'. \r\nMake sure log files are emitted under /var/logs/pods/ in the cluster node", logsPath)
+					return false, nil
+				}
+
+				for _, appLog := range applicationLogs {
+					value, found := appLog.Attributes().Get("log.file.path")
+					// Make sure the log came from log files and not the distro,
+					// as the logs.json file is shared between several tests reporting to the same OTLP sink
+					if found && strings.HasPrefix(value.AsString(), "/var/log/pods/") {
+						t.Logf("Found application log: %s", appLog.Body().AsString())
+						return true, nil
+					}
+				}
+
+				t.Fatal("No application logs found matching the 'log.file.path' attribute")
+
+				return false, nil
 			}); err != nil {
 				t.Fatalf("Failed to wait for application logs: %v", err)
 			}
@@ -562,9 +622,9 @@ func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord,
 }
 
 func scopeLogsToLogRecords(scopeLogs plog.ScopeLogs) []plog.LogRecord {
-	l := scopeLogs.LogRecords().Len()
-	logRecords := make([]plog.LogRecord, l)
-	for i := 0; i < l; i++ {
+	scopeLogsLen := scopeLogs.LogRecords().Len()
+	logRecords := make([]plog.LogRecord, scopeLogsLen)
+	for i := 0; i < scopeLogsLen; i++ {
 		logRecords[i] = scopeLogs.LogRecords().At(i)
 	}
 	return logRecords
@@ -588,46 +648,35 @@ func removeDuplicateStrings(s []string) []string {
 	return s[:prev]
 }
 
-func exportRequestToHeartbeatLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
-	eventLogs := make([]plog.LogRecord, 0)
+type LogRecordFilter func(plog.ResourceLogs) ([]plog.LogRecord, error)
+
+func exportRequestLogRecords(exportRequest plogotlp.ExportRequest, filter LogRecordFilter) ([]plog.LogRecord, error) {
+	allLogRecords := make([]plog.LogRecord, 0)
 	logs := exportRequest.Logs()
 
-	l := logs.ResourceLogs().Len()
-	for i := 0; i < l; i++ {
-		e, err := resourceLogsToHeartbeatLogRecords(logs.ResourceLogs().At(i))
+	for i := 0; i < logs.ResourceLogs().Len(); i++ {
+		resourceLogRecords, err := filter(logs.ResourceLogs().At(i))
 		if err != nil {
 			return nil, err
 		}
 
-		eventLogs = append(eventLogs, e...)
+		allLogRecords = append(allLogRecords, resourceLogRecords...)
 	}
 
-	return eventLogs, nil
+	return allLogRecords, nil
 }
 
-func exportRequestToApplicationLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, error) {
-	applicationLogs := make([]plog.LogRecord, 0)
-	logs := exportRequest.Logs()
 
-	l := logs.ResourceLogs().Len()
-	for i := 0; i < l; i++ {
-		e, err := resourceLogsToApplicationLogRecords(logs.ResourceLogs().At(i))
-		if err != nil {
-			return nil, err
-		}
-
-		applicationLogs = append(applicationLogs, e...)
-	}
-
-	return applicationLogs, nil
-}
-
-func resourceLogsToApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal")
 }
 
-func resourceLogsToHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+func filterHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat")
+}
+
+func filterPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector")
 }
 
 func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string) ([]plog.LogRecord, error) {
