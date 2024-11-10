@@ -106,16 +106,16 @@ service:
     logs:
       level: debug
 {{- end }}
-pipelines:
-  logs:
-    receivers:
-      - filelog
-    processors:
-      - transform
-      - batch
-    exporters:
-      - otlphttp
+  pipelines:
+    logs:
+      receivers:
+        - filelog
+      processors:
+        - transform
+        - batch
+      exporters:
+        - otlphttp
 {{- if .Values.debug.enabled }}
-      - debug
+        - debug
 {{- end }}
 {{- end }}
