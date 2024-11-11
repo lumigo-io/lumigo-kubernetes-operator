@@ -29,6 +29,7 @@ import (
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/tests/kubernetes-distros/kind/internal"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	apimachinerywait "k8s.io/apimachinery/pkg/util/wait"
@@ -522,17 +523,27 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					return false, nil
 				}
 
+				foundFileLogRecord := false
 				for _, appLog := range applicationLogs {
-					value, found := appLog.Attributes().Get("log.file.path")
 					// Make sure the log came from log files and not the distro,
 					// as the logs.json file is shared between several tests reporting to the same OTLP sink
+					value, found := appLog.Attributes().Get("log.file.path")
 					if found && strings.HasPrefix(value.AsString(), "/var/log/pods/") {
+						foundFileLogRecord = true
 						t.Logf("Found application log: %s", appLog.Body().AsString())
-						return true, nil
+						// Make sure the log body was parsed as JSON by the cluster-agent collector
+						if appLog.Body().Type() == pcommon.ValueTypeMap {
+							t.Logf("Found a JSON-object application log: %v", appLog.Body().Map())
+							return true, nil
+						}
 					}
 				}
 
-				t.Fatal("No application logs found matching the 'log.file.path' attribute")
+				if (foundFileLogRecord) {
+					t.Fatalf("No application logs found with a JSON-object body")
+					} else {
+					t.Fatalf("No application logs found matching the 'log.file.path' attribute")
+				}
 
 				return false, nil
 			}); err != nil {
