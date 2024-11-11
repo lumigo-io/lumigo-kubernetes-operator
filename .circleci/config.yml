@@ -13,7 +13,7 @@ workflows:
         context: common
         filters:
           branches:
-            ignore: master
+            ignore: main
 
     - lumigo-orb/be-deploy:
         context: common
