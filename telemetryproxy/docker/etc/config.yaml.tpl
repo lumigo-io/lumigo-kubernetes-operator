@@ -15,7 +15,7 @@ receivers:
   prometheus:
     config:
       scrape_configs:
-        - job_name: 'k8s-infra-metrics'
+- job_name: 'k8s-infra-metrics'
           metrics_path: /metrics
           scrape_interval: {{ $infraMetricsFrequency }}
           scheme: https
@@ -45,6 +45,11 @@ receivers:
             - role: node
           authorization:
             credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'prometheus-node-exporter'
+          scrape_interval: 15s
+          static_configs:
+            - targets: ['{{ getenv "LUMIGO_CLUSTER_AGENT_SERVICE" }}:{{ getenv "LUMIGO_CLUSTER_AGENT_PROM_NODE_EXPORTER_PORT" }}']
+
 {{- end }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
@@ -154,6 +159,16 @@ exporters:
 {{- end }}
 
 processors:
+  filter/filter-prom-metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          # Exclude Prometheus scrape metrics
+          - 'scrape_.+'
+          - 'up'
+          # Exclude Go runtime metrics
+          - 'go_.+'
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 {{- range $i, $namespace := $namespaces }}
@@ -250,6 +265,8 @@ service:
     metrics:
       receivers:
       - prometheus
+      processors:
+      - filter/filter-prom-metrics
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}

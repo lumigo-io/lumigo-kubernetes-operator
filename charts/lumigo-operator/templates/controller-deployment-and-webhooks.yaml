@@ -255,6 +255,10 @@ spec:
               optional: true
         - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
           value: "{{ .Values.clusterCollection.metrics.frequency }}"
+        - name: LUMIGO_CLUSTER_AGENT_SERVICE
+          value: "{{ include "helm.fullname" . }}-cluster-agent-service.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_CLUSTER_AGENT_PROM_NODE_EXPORTER_PORT
+          value: "{{ .Values.prometheusNodeExporter.service.port }}"
 {{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"

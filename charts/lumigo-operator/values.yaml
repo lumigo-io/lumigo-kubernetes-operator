@@ -51,6 +51,19 @@ logFileCollector:
     requests:
       cpu: 10m
       memory: 128Mi
+prometheusNodeExporter:
+  image:
+    repository: prom/node-exporter
+    tag: v1.8.2
+  service:
+    port: 9100
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
 injectorWebhook:
   lumigoInjector:
     image:
