@@ -14,8 +14,13 @@ spec:
     {{- include "helm.selectorLabels" . | nindent 4 }}
     control-plane: cluster-agent
   ports:
-    - protocol: TCP
-      port: 9100
+    - name: prometheus-node-exporter
+      protocol: TCP
+      port: {{ .Values.prometheusNodeExporter.service.port }}
       targetPort: {{ .Values.prometheusNodeExporter.service.port }}
+    - name: kube-state-metrics
+      protocol: TCP
+      port: {{ .Values.kubeStateMetrics.service.port }}
+      targetPort: {{ .Values.kubeStateMetrics.service.port }}
   type: ClusterIP
 {{- end }}

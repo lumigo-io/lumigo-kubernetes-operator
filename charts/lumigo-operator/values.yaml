@@ -51,6 +51,19 @@ logFileCollector:
     requests:
       cpu: 10m
       memory: 128Mi
+kubeStateMetrics:
+  image:
+    repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+    tag: v2.14.0
+  service:
+    port: 8100
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
 prometheusNodeExporter:
   image:
     repository: prom/node-exporter
