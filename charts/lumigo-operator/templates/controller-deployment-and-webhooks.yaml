@@ -1,12 +1,33 @@
 {{/*
 Since Helm does not support creating new global values, templating the values.yaml, or even sharing variables between templates in the same chart,
-we are forkec to put in the same file all resources that are related with self-signed certificate.
+we are forced to put in the same file all resources that are related with self-signed certificate.
  */}}
-{{- $altNames := list ( printf "%s.%s" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-webhooks-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) -}}
+{{- $altNames := list ( printf "%s.%s" (include "helm.fullname" .) .Release.Name ) ( printf "%s-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-webhooks-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) -}}
 {{- $ca := genCA "lumigo-webhooks-ca" 365 -}}
 {{- $cert := genSignedCert ( include "helm.name" . ) nil $altNames 365 $ca -}}
 {{- $certFingerprint := $cert.Cert | b64enc | substr 10 25 | quote }}
 {{- $lumigoOperatorVersion := .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+{{- define "kubeStateMetrics.service" }}
+  {{- $currentContext := . -}}
+  {{- $services := lookup "v1" "Service" .Release.Namespace "" -}}
+    {{- range $services.items -}}
+    {{- if and (hasKey .metadata.labels "app.kubernetes.io/name") (eq (index .metadata.labels "app.kubernetes.io/name") "kube-state-metrics") -}}
+      {{- printf "%s.%s.svc.cluster.local" .metadata.name $currentContext.Release.Namespace }}
+    {{- end -}}
+  {{- end -}}
+{{- end }}
+
+{{- define "kubeStateMetrics.port" }}
+{{- $services := lookup "v1" "Service" .Release.Namespace "" -}}
+  {{- range $services.items -}}
+    {{- if and (hasKey .metadata.labels "app.kubernetes.io/name") (eq (index .metadata.labels "app.kubernetes.io/name") "kube-state-metrics") -}}
+      {{- range .spec.ports -}}
+        {{- if eq .name "http" }}{{ .port | quote }}{{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+
 ---
 apiVersion: v1
 kind: Secret
@@ -259,8 +280,10 @@ spec:
           value: "{{ include "helm.fullname" . }}-cluster-agent-service.{{ .Release.Namespace }}.svc.cluster.local"
         - name: LUMIGO_PROM_NODE_EXPORTER_PORT
           value: "{{ .Values.prometheusNodeExporter.service.port }}"
+        - name: LUMIGO_KUBE_STATE_METRICS_SERVICE
+          value: {{ include "kubeStateMetrics.service" . }}
         - name: LUMIGO_KUBE_STATE_METRICS_PORT
-          value: "{{ .Values.kubeStateMetrics.service.port }}"
+          value: {{ include "kubeStateMetrics.port" . }}
 {{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"

@@ -47,14 +47,14 @@ receivers:
             credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - job_name: 'prometheus-node-exporter'
           metrics_path: /metrics
-          scrape_interval: 15s
+          scrape_interval: {{ $infraMetricsFrequency }}
           static_configs:
             - targets: ['{{ getenv "LUMIGO_CLUSTER_AGENT_SERVICE" }}:{{ getenv "LUMIGO_PROM_NODE_EXPORTER_PORT" }}']
         - job_name: 'kube-state-metrics'
           metrics_path: /metrics
-          scrape_interval: 15s
+          scrape_interval: {{ $infraMetricsFrequency }}
           static_configs:
-            - targets: ['{{ getenv "LUMIGO_CLUSTER_AGENT_SERVICE" }}:{{ getenv "LUMIGO_KUBE_STATE_METRICS_PORT" }}']
+            - targets: ['{{ getenv "LUMIGO_KUBE_STATE_METRICS_SERVICE" }}:{{ getenv "LUMIGO_KUBE_STATE_METRICS_PORT" }}']
 {{- end }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
@@ -191,7 +191,7 @@ processors:
         match_type: regexp
         resource_attributes:
         # We add k8s.namespace.name in the 'transform/add_ns_attributes_ns_<$namespace.name>' processor
-{{- $namespaceNames := slice }}
+{{- $namespaceNames := coll.Slice }}
 {{- range $i, $namespace := $namespaces }}
 {{- $namespaceNames = $namespaceNames | append $namespace.name }}
 {{- end }}

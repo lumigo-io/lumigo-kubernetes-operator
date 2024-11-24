@@ -18,9 +18,5 @@ spec:
       protocol: TCP
       port: {{ .Values.prometheusNodeExporter.service.port }}
       targetPort: {{ .Values.prometheusNodeExporter.service.port }}
-    - name: kube-state-metrics
-      protocol: TCP
-      port: {{ .Values.kubeStateMetrics.service.port }}
-      targetPort: {{ .Values.kubeStateMetrics.service.port }}
   type: ClusterIP
 {{- end }}
