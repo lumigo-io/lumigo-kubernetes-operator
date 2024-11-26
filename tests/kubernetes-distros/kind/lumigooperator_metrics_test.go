@@ -68,8 +68,21 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					metricNames = append(metricNames, metric.Name())
 				}
 
-				if !strings.Contains(strings.Join(metricNames, " "), "container_fs_usage_bytes") {
+				allMetricNames := strings.Join(metricNames, " ")
+
+				// A sample for the presence of a cadvisor metrics
+				if !strings.Contains(allMetricNames, "container_fs_usage_bytes") {
 					return false, fmt.Errorf("could not find container_fs_usage_bytes among collected metrics: %v", metricNames)
+				}
+
+				// A sample for the presence of a Prometheus Node Exporter metrics
+				if !strings.Contains(allMetricNames, "node_memory_MemTotal_bytes") {
+					return false, fmt.Errorf("could not find node_memory_MemTotal_bytes among collected metrics: %v", metricNames)
+				}
+
+				// A sample for the presence of a kube-state-metrics metrics
+				if !strings.Contains(allMetricNames, "kube_pod_container_status_restarts_total") {
+					return false, fmt.Errorf("could not find kube_pod_container_status_restarts_total among collected metrics: %v", metricNames)
 				}
 
 				return true, nil
