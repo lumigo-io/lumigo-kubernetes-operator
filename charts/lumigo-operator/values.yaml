@@ -100,3 +100,7 @@ clusterCollection:
     frequency: 15s
   logs:
     enabled: false
+# controls the port in the KSM sub-chart
+kube-state-metrics:
+  service:
+    port: 8086
