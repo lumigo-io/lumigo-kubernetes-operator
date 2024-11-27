@@ -638,6 +638,9 @@ jobs:
           git commit -m "v${{ needs.validate-release-increment.outputs.version }}"
 
           git tag "v${{ needs.validate-release-increment.outputs.version }}" $(git rev-parse HEAD)
+      - name: Get dependencies (pull sub-charts into the main chart)
+        run: |
+          helm dependency update charts/lumigo-operator
       - name: Package Helm chart
         run: |
           helm package charts/lumigo-operator --destination packages/
