@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -38,6 +39,10 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	logger.Info("Installing Operator via Helm", "Chart dir", chartDir)
 
 	manager := helm.New(kubeconfigFilePath)
+	err := exec.Command("helm", "dependency", "update", chartDir).Run()
+	if err != nil {
+		return ctx, fmt.Errorf("failed to run helm dependency update: %w", err)
+	}
 	if err := manager.RunInstall(
 		helm.WithName("lumigo"),
 		helm.WithChart(chartDir),

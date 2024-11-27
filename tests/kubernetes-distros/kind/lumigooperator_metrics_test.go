@@ -30,7 +30,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 
 			metricsPath := filepath.Join(otlpSinkDataPath, "metrics.json")
 
-			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+			if err := apimachinerywait.PollImmediateWithContext(ctx, 10 * time.Second , 4 * time.Minute, func(context.Context) (bool, error) {
 				metricsBytes, err := os.ReadFile(metricsPath)
 				if err != nil {
 					return false, err
@@ -59,30 +59,34 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				}
 
 				if len(metrics) < 1 {
-					// No metrics received yet
 					return false, fmt.Errorf("no metrics received yet")
 				}
 
-				metricNames := make([]string, 0)
+				seenMetricNames := make(map[string]bool)
+				uniqueMetricNames := make([]string, 0)
 				for _, metric := range metrics {
-					metricNames = append(metricNames, metric.Name())
+					if !seenMetricNames[metric.Name()] {
+						seenMetricNames[metric.Name()] = true
+						uniqueMetricNames = append(uniqueMetricNames, metric.Name())
+					}
 				}
 
-				allMetricNames := strings.Join(metricNames, " ")
-
-				// A sample for the presence of a cadvisor metrics
-				if !strings.Contains(allMetricNames, "container_fs_usage_bytes") {
-					return false, fmt.Errorf("could not find container_fs_usage_bytes among collected metrics: %v", metricNames)
+				allMetricNames := strings.Join(uniqueMetricNames, " ")
+				expectedSampleMetrics := []string{
+					// A sample for cadvisor metrics
+					"container_fs_usage_bytes",
+					// A sample for kube-state-metrics metrics
+					"kube_pod_status_scheduled",
+					// A sample for Prometheus Node Exporter metrics
+					"node_cpu_seconds_total",
 				}
 
-				// A sample for the presence of a Prometheus Node Exporter metrics
-				if !strings.Contains(allMetricNames, "node_memory_MemTotal_bytes") {
-					return false, fmt.Errorf("could not find node_memory_MemTotal_bytes among collected metrics: %v", metricNames)
-				}
-
-				// A sample for the presence of a kube-state-metrics metrics
-				if !strings.Contains(allMetricNames, "kube_pod_container_status_restarts_total") {
-					return false, fmt.Errorf("could not find kube_pod_container_status_restarts_total among collected metrics: %v", metricNames)
+				t.Logf("Collected metrics so far: %v\n", uniqueMetricNames)
+				for _, expectedSampleMetric := range expectedSampleMetrics {
+					if !strings.Contains(allMetricNames, expectedSampleMetric) {
+						t.Logf("could not find %s among collected metrics", expectedSampleMetric)
+						return false, nil
+					}
 				}
 
 				return true, nil

@@ -6,6 +6,8 @@ receivers:
         endpoint: "0.0.0.0:${OTLP_PORT}"
 
 exporters:
+  logging:
+    loglevel: debug
 {{- if $config.lumigo_token }}
   otlphttp/lumigo:
     endpoint: {{ $config.lumigo_endpoint }}
@@ -41,3 +43,4 @@ service:
       - otlp
       exporters:
       - file/metrics
+      - logging
