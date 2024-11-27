@@ -116,6 +116,8 @@ jobs:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
+          helm dependency build charts/lumigo-operator
+
           helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
