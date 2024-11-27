@@ -643,7 +643,8 @@ jobs:
           git tag "v${{ needs.validate-release-increment.outputs.version }}" $(git rev-parse HEAD)
       - name: Get dependencies (pull sub-charts into the main chart)
         run: |
-          helm dependency update charts/lumigo-operator
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build charts/lumigo-operator
       - name: Package Helm chart
         run: |
           helm package charts/lumigo-operator --destination packages/
