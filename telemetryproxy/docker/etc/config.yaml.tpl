@@ -174,6 +174,9 @@ processors:
           - 'up'
           # Exclude Go runtime metrics
           - 'go_.+'
+          # Exclude API server metrics
+          - 'apiserver_.+'
+          - 'authentication_token_.+'
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 {{- range $i, $namespace := $namespaces }}
