@@ -116,6 +116,7 @@ jobs:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
+          helm repo add https://prometheus-community.github.io/helm-charts
           helm dependency build charts/lumigo-operator
 
           helm upgrade --install lumigo charts/lumigo-operator \
