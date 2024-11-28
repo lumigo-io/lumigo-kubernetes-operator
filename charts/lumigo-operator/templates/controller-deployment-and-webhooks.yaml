@@ -1,8 +1,8 @@
 {{/*
 Since Helm does not support creating new global values, templating the values.yaml, or even sharing variables between templates in the same chart,
-we are forkec to put in the same file all resources that are related with self-signed certificate.
+we are forced to put in the same file all resources that are related with self-signed certificate.
  */}}
-{{- $altNames := list ( printf "%s.%s" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-webhooks-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) -}}
+{{- $altNames := list ( printf "%s.%s" (include "helm.fullname" .) .Release.Name ) ( printf "%s-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-webhooks-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) -}}
 {{- $ca := genCA "lumigo-webhooks-ca" 365 -}}
 {{- $cert := genSignedCert ( include "helm.name" . ) nil $altNames 365 $ca -}}
 {{- $certFingerprint := $cert.Cert | b64enc | substr 10 25 | quote }}
@@ -255,6 +255,14 @@ spec:
               optional: true
         - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
           value: "{{ .Values.clusterCollection.metrics.frequency }}"
+        - name: LUMIGO_CLUSTER_AGENT_SERVICE
+          value: "{{ include "helm.fullname" . }}-cluster-agent-service.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_PROM_NODE_EXPORTER_PORT
+          value: "{{ .Values.prometheusNodeExporter.service.port }}"
+        - name: LUMIGO_KUBE_STATE_METRICS_SERVICE
+          value: "{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_KUBE_STATE_METRICS_PORT
+          value: "{{ index .Values "kube-state-metrics" "service" "port" }}"
 {{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"

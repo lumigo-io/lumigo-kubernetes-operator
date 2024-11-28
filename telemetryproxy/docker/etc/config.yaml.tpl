@@ -45,6 +45,16 @@ receivers:
             - role: node
           authorization:
             credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'prometheus-node-exporter'
+          metrics_path: /metrics
+          scrape_interval: {{ $infraMetricsFrequency }}
+          static_configs:
+            - targets: ['{{ getenv "LUMIGO_CLUSTER_AGENT_SERVICE" }}:{{ getenv "LUMIGO_PROM_NODE_EXPORTER_PORT" }}']
+        - job_name: 'kube-state-metrics'
+          metrics_path: /metrics
+          scrape_interval: {{ $infraMetricsFrequency }}
+          static_configs:
+            - targets: ['{{ getenv "LUMIGO_KUBE_STATE_METRICS_SERVICE" }}:{{ getenv "LUMIGO_KUBE_STATE_METRICS_PORT" }}']
 {{- end }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
@@ -154,6 +164,19 @@ exporters:
 {{- end }}
 
 processors:
+  filter/filter-prom-metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          # Exclude Prometheus scrape metrics
+          - 'scrape_.+'
+          - 'up'
+          # Exclude Go runtime metrics
+          - 'go_.+'
+          # Exclude API server metrics
+          - 'apiserver_.+'
+          - 'authentication_token_.+'
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 {{- range $i, $namespace := $namespaces }}
@@ -171,7 +194,7 @@ processors:
         match_type: regexp
         resource_attributes:
         # We add k8s.namespace.name in the 'transform/add_ns_attributes_ns_<$namespace.name>' processor
-{{- $namespaceNames := slice }}
+{{- $namespaceNames := coll.Slice }}
 {{- range $i, $namespace := $namespaces }}
 {{- $namespaceNames = $namespaceNames | append $namespace.name }}
 {{- end }}
@@ -250,6 +273,8 @@ service:
     metrics:
       receivers:
       - prometheus
+      processors:
+      - filter/filter-prom-metrics
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}

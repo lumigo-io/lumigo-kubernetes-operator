@@ -11,3 +11,8 @@ home: https://github.com/lumigo-io/lumigo-kubernetes-operator/
 icon: https://raw.githubusercontent.com/lumigo-io/lumigo-kubernetes-operator/main/images/lumigo.png
 version: '0'
 appVersion: '0'
+dependencies:
+  - name: kube-state-metrics
+    version: 5.27.0
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: "{{ and .Values.clusterCollection.metrics.enabled .Values.kubeStateMetrics.install }}"
