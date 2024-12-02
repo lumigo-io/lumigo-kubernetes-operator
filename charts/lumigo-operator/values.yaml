@@ -51,6 +51,21 @@ logFileCollector:
     requests:
       cpu: 10m
       memory: 128Mi
+kubeStateMetrics:
+  install: true
+prometheusNodeExporter:
+  image:
+    repository: prom/node-exporter
+    tag: v1.8.2
+  service:
+    port: 9100
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
 injectorWebhook:
   lumigoInjector:
     image:
@@ -85,3 +100,7 @@ clusterCollection:
     frequency: 15s
   logs:
     enabled: false
+# controls the port in the KSM sub-chart
+kube-state-metrics:
+  service:
+    port: 8086

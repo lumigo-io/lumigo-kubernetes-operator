@@ -1,0 +1,22 @@
+{{- if .Values.clusterCollection.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "helm.fullname" . }}-cluster-agent-service
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-agent
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: cluster-agent
+spec:
+  selector:
+    {{- include "helm.selectorLabels" . | nindent 4 }}
+    control-plane: cluster-agent
+  ports:
+    - name: prometheus-node-exporter
+      protocol: TCP
+      port: {{ .Values.prometheusNodeExporter.service.port }}
+      targetPort: {{ .Values.prometheusNodeExporter.service.port }}
+  type: ClusterIP
+{{- end }}

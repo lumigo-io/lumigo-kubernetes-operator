@@ -116,6 +116,9 @@ jobs:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build charts/lumigo-operator
+
           helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
@@ -638,6 +641,10 @@ jobs:
           git commit -m "v${{ needs.validate-release-increment.outputs.version }}"
 
           git tag "v${{ needs.validate-release-increment.outputs.version }}" $(git rev-parse HEAD)
+      - name: Get dependencies (pull sub-charts into the main chart)
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build charts/lumigo-operator
       - name: Package Helm chart
         run: |
           helm package charts/lumigo-operator --destination packages/
