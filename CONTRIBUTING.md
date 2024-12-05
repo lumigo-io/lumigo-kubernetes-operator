@@ -75,6 +75,7 @@ To avoid strange issues with Docker caching the wrong images in your test enviro
 ```sh
 export IMG_VERSION=1 # Incremend this every time to try a deploy
 make docker-build docker-push
+helm dependency build
 helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" --set "debug.enabled=true"
 ```
 
