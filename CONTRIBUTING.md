@@ -14,7 +14,7 @@ Install [minikube](https://minikube.sigs.k8s.io/docs/start/), [Helm](https://hel
 
 Set up your Docker engine to use insecure registries (on Mac OS with Docker Desktop for Mac, the file to edit is `~/.docker/daemon.json`):
 
-```json
+```js
 {
   ...
   "insecure-registries" : [
@@ -203,5 +203,15 @@ export IMG_VERSION=<incremental_number> # Avoid image cache issues
 make docker-build docker-push
 (cd tests/kubernetes-distros/kind && go test)
 ```
+
+#### Running specific tests
+
+If you're focusing on a specific set of tests in a file, you can run those only using the follwing syntax:
+```sh
+export IMG_VERSION=<incremental_number> # Avoid image cache issues
+make docker-build docker-push
+(cd tests/kubernetes-distros/kind && go test -run TestLumigoOperatorInfraMetrics -assess "some text")
+```
+That will run only the tests under the test functions named `TestLumigoOperatorInfraMetrics`, and only the ones having `some text` in their title.
 
 **Note:** The build of the `controller` and `telemetry-proxy` images assume the local repository setup documented in the [Local testing with Minikube](#local-testing-with-minikube) section.
