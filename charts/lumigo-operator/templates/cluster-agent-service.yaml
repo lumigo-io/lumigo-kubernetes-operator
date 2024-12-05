@@ -18,5 +18,6 @@ spec:
       protocol: TCP
       port: {{ .Values.prometheusNodeExporter.service.port }}
       targetPort: {{ .Values.prometheusNodeExporter.service.port }}
-  type: ClusterIP
+      nodePort: 32700
+  type: NodePort
 {{- end }}
