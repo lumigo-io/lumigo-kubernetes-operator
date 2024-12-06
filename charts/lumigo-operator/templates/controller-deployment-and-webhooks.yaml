@@ -258,7 +258,7 @@ spec:
         - name: LUMIGO_CLUSTER_AGENT_SERVICE
           value: "{{ include "helm.fullname" . }}-cluster-agent-service.{{ .Release.Namespace }}.svc.cluster.local"
         - name: LUMIGO_PROM_NODE_EXPORTER_PORT
-          value: "{{ .Values.prometheusNodeExporter.service.port }}"
+          value: "{{ .Values.prometheusNodeExporter.service.nodePort }}"
         - name: LUMIGO_KUBE_STATE_METRICS_SERVICE
           value: "{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
         - name: LUMIGO_KUBE_STATE_METRICS_PORT

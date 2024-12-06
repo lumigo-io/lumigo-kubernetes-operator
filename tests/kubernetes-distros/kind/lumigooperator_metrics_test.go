@@ -71,22 +71,45 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					}
 				}
 
-				allMetricNames := strings.Join(uniqueMetricNames, " ")
-				expectedSampleMetrics := []string{
-					// A sample for cadvisor metrics
-					"container_fs_usage_bytes",
-					// A sample for kube-state-metrics metrics
-					"kube_pod_status_scheduled",
-					// A sample for Prometheus Node Exporter metrics
-					"node_cpu_seconds_total",
+				prometheusNodeExporterMetricsFound := false
+				cadvisorMetricsFound := false
+				kubeStateMetricsFound := false
+
+				for _, metric := range metrics {
+					if metric.Name() == "node_cpu_seconds_total" {
+						prometheusNodeExporterMetricsFound = true
+						for i := 0; i < metric.Sum().DataPoints().Len(); i++ {
+							attributes := metric.Sum().DataPoints().At(i).Attributes()
+							_, nodeAttributeExists := attributes.Get("node")
+							if !nodeAttributeExists {
+								t.Logf("could not find attribute 'node' for metric 'node_cpu_seconds_total'")
+								return false, nil
+							}
+						}
+					}
+
+					if metric.Name() == "container_fs_usage_bytes" {
+						cadvisorMetricsFound = true
+					}
+
+					if metric.Name() == "kube_pod_status_scheduled" {
+						kubeStateMetricsFound = true
+					}
 				}
 
-				t.Logf("Collected metrics so far: %v\n", uniqueMetricNames)
-				for _, expectedSampleMetric := range expectedSampleMetrics {
-					if !strings.Contains(allMetricNames, expectedSampleMetric) {
-						t.Logf("could not find %s among collected metrics", expectedSampleMetric)
-						return false, nil
-					}
+				if !prometheusNodeExporterMetricsFound {
+					t.Logf("could not find Prometheus Node Exporter metrics. Seen metrics: %v", uniqueMetricNames)
+					return false, nil
+				}
+
+				if !cadvisorMetricsFound {
+					t.Logf("could not find cAdvisor metrics. Seen metrics: %v", uniqueMetricNames)
+					return false, nil
+				}
+
+				if !kubeStateMetricsFound {
+					t.Logf("could not find kube-state-metrics. Seen metrics: %v", uniqueMetricNames)
+					return false, nil
 				}
 
 				return true, nil

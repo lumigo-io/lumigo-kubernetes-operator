@@ -49,11 +49,12 @@ receivers:
           kubernetes_sd_configs:
             - role: node
           relabel_configs:
-            # Relabel to set the target address to <InternalIP>:32700
             - source_labels: [__meta_kubernetes_node_address_InternalIP]
               action: replace
               target_label: __address__
-              replacement: '$$1:32700'
+              # Scrape a custom port provided by LUMIGO_PROM_NODE_EXPORTER_PORT.
+              # '$$1' escapes '$1', as Gomplate otherwise thinks it's an environment variable.
+              replacement: '$$1:$LUMIGO_PROM_NODE_EXPORTER_PORT'
             - source_labels: [__meta_kubernetes_node_name]
               action: replace
               target_label: node

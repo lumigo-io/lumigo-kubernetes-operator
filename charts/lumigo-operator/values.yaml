@@ -59,6 +59,7 @@ prometheusNodeExporter:
     tag: v1.8.2
   service:
     port: 9100
+    nodePort: 30090
   resources:
     limits:
       cpu: 500m
