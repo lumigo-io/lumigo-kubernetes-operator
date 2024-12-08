@@ -46,10 +46,21 @@ receivers:
           authorization:
             credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - job_name: 'prometheus-node-exporter'
-          metrics_path: /metrics
-          scrape_interval: {{ $infraMetricsFrequency }}
-          static_configs:
-            - targets: ['{{ getenv "LUMIGO_CLUSTER_AGENT_SERVICE" }}:{{ getenv "LUMIGO_PROM_NODE_EXPORTER_PORT" }}']
+          kubernetes_sd_configs:
+            - role: node
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_node_address_InternalIP]
+              action: replace
+              target_label: __address__
+              # Scrape a custom port provided by LUMIGO_PROM_NODE_EXPORTER_PORT.
+              # '$$1' escapes '$1', as Gomplate otherwise thinks it's an environment variable.
+              replacement: '$$1:$LUMIGO_PROM_NODE_EXPORTER_PORT'
+            - source_labels: [__meta_kubernetes_node_name]
+              action: replace
+              target_label: node
+          metrics_path: "/metrics"
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - job_name: 'kube-state-metrics'
           metrics_path: /metrics
           scrape_interval: {{ $infraMetricsFrequency }}
