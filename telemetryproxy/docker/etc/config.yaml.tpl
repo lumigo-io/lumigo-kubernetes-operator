@@ -159,6 +159,8 @@ exporters:
   otlphttp/lumigo_metrics:
     endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     headers:
+      # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
+      # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
       Authorization: "LumigoToken {{ $infraMetricsToken }}"
 {{- end }}
 {{- if $debug }}
@@ -217,10 +219,10 @@ processors:
     - context: resource
       statements:
       - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
-#   metric_statements:
-#   - context: resource
-#     statements:
-#     - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
+    metric_statements:
+    - context: resource
+      statements:
+      - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
     log_statements:
     - context: resource
       statements:
@@ -257,11 +259,11 @@ processors:
       statements:
       - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
       - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
-#   metric_statements:
-#   - context: resource
-#     statements:
-#     - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
-#     - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
+    metric_statements:
+    - context: resource
+      statements:
+      - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
+      - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
     log_statements:
     - context: resource
       statements:
@@ -286,6 +288,9 @@ service:
       - prometheus
       processors:
       - filter/filter-prom-metrics
+      - k8sdataenricherprocessor
+      - transform/inject_operator_details_into_resource
+      - transform/add_cluster_name
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
