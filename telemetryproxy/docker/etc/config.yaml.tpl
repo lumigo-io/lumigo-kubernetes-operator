@@ -289,6 +289,8 @@ service:
       processors:
       - filter/filter-prom-metrics
       - k8sdataenricherprocessor
+      - transform/inject_operator_details_into_resource
+      - transform/add_cluster_name
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
