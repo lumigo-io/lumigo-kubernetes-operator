@@ -48,6 +48,7 @@ func NewFactory() processor.Factory {
 		createDefaultConfig,
 		processor.WithTraces(createTracesProcessor, stability),
 		processor.WithLogs(createLogsProcessor, stability),
+		processor.WithMetrics(createMetricsProcessor, stability),
 	)
 }
 
@@ -59,7 +60,7 @@ func createDefaultConfig() component.Config {
 
 func createTracesProcessor(
 	ctx context.Context,
-	params processor.CreateSettings,
+	params processor.Settings,
 	cfg component.Config,
 	next consumer.Traces,
 ) (processor.Traces, error) {
@@ -68,7 +69,7 @@ func createTracesProcessor(
 
 func createTracesProcessorWithOptions(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	next consumer.Traces,
 ) (processor.Traces, error) {
@@ -89,7 +90,7 @@ func createTracesProcessorWithOptions(
 
 func createLogsProcessor(
 	ctx context.Context,
-	params processor.CreateSettings,
+	params processor.Settings,
 	cfg component.Config,
 	nextLogsConsumer consumer.Logs,
 ) (processor.Logs, error) {
@@ -98,7 +99,7 @@ func createLogsProcessor(
 
 func createLogsProcessorWithOptions(
 	ctx context.Context,
-	set processor.CreateSettings,
+	set processor.Settings,
 	cfg component.Config,
 	nextLogsConsumer consumer.Logs,
 ) (processor.Logs, error) {
@@ -117,8 +118,38 @@ func createLogsProcessorWithOptions(
 	}
 }
 
+func createMetricsProcessor(
+	ctx context.Context,
+	params processor.Settings,
+	cfg component.Config,
+	nextMetricsConsumer consumer.Metrics,
+) (processor.Metrics, error) {
+	return createMetricsProcessorWithOptions(ctx, params, cfg, nextMetricsConsumer)
+}
+
+func createMetricsProcessorWithOptions(
+	ctx context.Context,
+	set processor.Settings,
+	cfg component.Config,
+	nextMetricsConsumer consumer.Metrics,
+) (processor.Metrics, error) {
+	if kp, err := createKubernetesProcessor(set, cfg); err != nil {
+		return nil, err
+	} else {
+		return processorhelper.NewMetricsProcessor(
+			ctx,
+			set,
+			cfg,
+			nextMetricsConsumer,
+			kp.processMetrics,
+			processorhelper.WithCapabilities(consumerCapabilities),
+			processorhelper.WithStart(kp.Start),
+			processorhelper.WithShutdown(kp.Shutdown))
+	}
+}
+
 func createKubernetesProcessor(
-	params processor.CreateSettings,
+	params processor.Settings,
 	cfg component.Config,
 ) (*kubernetesprocessor, error) {
 	apiConfig := cfg.(*Config).APIConfig
