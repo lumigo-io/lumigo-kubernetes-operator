@@ -290,7 +290,9 @@ service:
       - filter/filter-prom-metrics
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
+{{- if $clusterName }}
       - transform/add_cluster_name
+{{- end }}
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
