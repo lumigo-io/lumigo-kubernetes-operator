@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +52,29 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					exportRequest := pmetricotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if m, err := exportRequestToMetricRecords(exportRequest); err != nil {
+					allResourceMetrics, err := exportRequestToResourceMetrics(exportRequest);
+					if err != nil {
+						return false, fmt.Errorf("Cannot extract resource metrics from export request: %v", err)
+					}
+
+					for _, resourceMetrics := range allResourceMetrics {
+						clusterName, exists := resourceMetrics.Resource().Attributes().Get("k8s.cluster.name")
+						if !exists {
+							return false, fmt.Errorf("Cannot find cluster name in resource metrics")
+						}
+						if clusterName.AsString() != ctx.Value(internal.ContextKeyKubernetesClusterName) {
+							return false, fmt.Errorf("Cluster name mismatch: actual %v, expected: %v", clusterName, internal.ContextKeyKubernetesClusterName)
+						}
+						clusterUid, exists := resourceMetrics.Resource().Attributes().Get("k8s.cluster.uid")
+						if !exists {
+							return false, fmt.Errorf("Cannot find cluster UID in resource metrics")
+						}
+						if !isValidUUID(clusterUid.AsString()) {
+							return false, fmt.Errorf("Invalid cluster UID: %v", clusterUid)
+						}
+					}
+
+					if m, err := extractMetrics(allResourceMetrics); err != nil {
 						t.Fatalf("Cannot extract metrics from export request: %v", err)
 					} else {
 						metrics = append(metrics, m...)
@@ -124,13 +147,22 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 	testEnv.Test(t, testAppDeploymentFeature)
 }
 
-func exportRequestToMetricRecords(exportRequest pmetricotlp.ExportRequest) ([]pmetric.Metric, error) {
-	allMetrics := make([]pmetric.Metric, 0)
+func exportRequestToResourceMetrics(exportRequest pmetricotlp.ExportRequest) ([]pmetric.ResourceMetrics, error) {
+	allResourceMetrics := make([]pmetric.ResourceMetrics, 0)
 
 	for i := 0; i < exportRequest.Metrics().ResourceMetrics().Len(); i++ {
-		resourceMetric := exportRequest.Metrics().ResourceMetrics().At(i)
-		for j := 0; j < resourceMetric.ScopeMetrics().Len(); j++ {
-			scopeMetric := resourceMetric.ScopeMetrics().At(j)
+		allResourceMetrics = append(allResourceMetrics, exportRequest.Metrics().ResourceMetrics().At(i))
+	}
+
+	return allResourceMetrics, nil
+}
+
+func extractMetrics(resourceMetricsList []pmetric.ResourceMetrics) ([]pmetric.Metric, error) {
+	allMetrics := make([]pmetric.Metric, 0)
+
+	for i := 0; i < len(resourceMetricsList); i++ {
+		for j := 0; j < resourceMetricsList[i].ScopeMetrics().Len(); j++ {
+			scopeMetric := resourceMetricsList[i].ScopeMetrics().At(j)
 			for k := 0; k < scopeMetric.Metrics().Len(); k++ {
 				metric := scopeMetric.Metrics().At(k)
 				allMetrics = append(allMetrics, metric)
@@ -139,4 +171,10 @@ func exportRequestToMetricRecords(exportRequest pmetricotlp.ExportRequest) ([]pm
 	}
 
 	return allMetrics, nil
+}
+
+func isValidUUID(uuid string) bool {
+	regex := `^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[1-5][a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$`
+	r := regexp.MustCompile(regex)
+	return r.MatchString(uuid)
 }

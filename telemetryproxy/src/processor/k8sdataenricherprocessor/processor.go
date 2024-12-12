@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"go.uber.org/zap"
@@ -79,11 +80,15 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, tr ptrace.Trac
 	return tr, nil
 }
 
+func (kp *kubernetesprocessor) addResourceClusterAttributes(resourceAttributes pcommon.Map) {
+	resourceAttributes.PutStr(K8SProviderIdKey, kp.kube.GetProviderId())
+	resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+}
+
 func (kp *kubernetesprocessor) addResourceAttributes(ctx context.Context, resource pcommon.Resource) {
 	resourceAttributes := resource.Attributes()
 
-	resourceAttributes.PutStr(K8SProviderIdKey, kp.kube.GetProviderId())
-	resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+	kp.addResourceClusterAttributes(resourceAttributes)
 
 	pod, found := kp.getPod(ctx, &resource)
 	if !found {
@@ -224,6 +229,18 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 	}
 
 	return ld, nil
+}
+
+func (kp *kubernetesprocessor) processMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
+	resourceMetrics := metrics.ResourceMetrics()
+
+	for i := 0; i < resourceMetrics.Len(); i++ {
+		rm := resourceMetrics.At(i)
+
+		kp.addResourceClusterAttributes(rm.Resource().Attributes());
+	}
+
+	return metrics, nil
 }
 
 func (kp *kubernetesprocessor) processResourceLogs(ctx context.Context, resourceLogs *plog.ResourceLogs) {
