@@ -207,6 +207,7 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsClientImageName, testJsClientImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsServerImageName, testJsServerImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppPythonImageName, testPythonImageName)
+	ctx = context.WithValue(ctx, internal.ContextTestAppBusyboxContainerNamePrefix, "busybox-logger")
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 

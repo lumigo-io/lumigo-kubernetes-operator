@@ -134,6 +134,11 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 										},
 									},
 								},
+								{
+									Name:    envconf.RandomName(ctx.Value(internal.ContextTestAppBusyboxContainerNamePrefix).(string), 12),
+									Image:   "busybox:1.37.0",
+									Command: []string{"sh", "-c", "while true; do echo $(date) - Hello from busybox; sleep 5; done"},
+								},
 							},
 						},
 					},
@@ -529,6 +534,10 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					// as the logs.json file is shared between several tests reporting to the same OTLP sink
 					value, found := appLog.Attributes().Get("log.file.path")
 					if found && strings.HasPrefix(value.AsString(), "/var/log/pods/") {
+						if strings.Contains(value.AsString(), ctx.Value(internal.ContextTestAppBusyboxContainerNamePrefix).(string)) {
+							t.Fatalf("Found a log file record from the excluded container: %s", value.AsString())
+						}
+
 						foundFileLogRecord = true
 						t.Logf("Found application log: %s", appLog.Body().AsString())
 						// Make sure the log body was parsed as JSON by the cluster-agent collector
