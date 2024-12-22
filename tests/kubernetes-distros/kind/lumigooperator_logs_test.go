@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
+	operatorv1alpha1conditions "github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/tests/kubernetes-distros/kind/internal"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -87,6 +88,18 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			}
 			operatorv1alpha1.AddToScheme(r.GetScheme())
 			r.Create(ctx, lumigo)
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*1, func(context.Context) (bool, error) {
+				currentLumigo := &operatorv1alpha1.Lumigo{}
+
+				if err := r.Get(ctx, lumigo.Name, lumigo.Namespace, currentLumigo); err != nil {
+					return false, err
+				}
+
+				return operatorv1alpha1conditions.IsActive(currentLumigo), err
+			}); err != nil {
+				t.Fatal(err)
+			}
 
 			deploymentName := "testdeployment"
 
@@ -162,6 +175,19 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			}))
 
 			logger.Info("Deployment is ready")
+
+			// // Restart deployment to make sure it gets injected with the injector sidecar
+			// annotations := deployment.GetAnnotations()
+			// annotations["force-this-deployment-to-restart"] = "by-changing-some-random-annotation"
+			// deployment.SetAnnotations(annotations)
+			// if err := config.Client().Resources().Update(ctx, deployment); err != nil {
+			// 	t.Fatalf("Failed to restart deployment: %v", err)
+			// }
+
+			// wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
+			// 	d := object.(*appsv1.Deployment)
+			// 	return d.Status.AvailableReplicas == replicas && d.Status.ReadyReplicas == replicas
+			// }))
 
 			// Tear it all down
 			if err := client.Resources().Delete(ctx, deployment); err != nil {
