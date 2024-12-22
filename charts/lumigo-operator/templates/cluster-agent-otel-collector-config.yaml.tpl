@@ -5,7 +5,7 @@ receivers:
       - /var/log/pods/*/*/*.log
     {{ if .Values.clusterCollection.logs.include }}
     {{- range .Values.clusterCollection.logs.include }}
-      - /var/log/pods/{{ .namespacePattern | default "*" }}_{{ .podPattern | default "*" }}_*/{{ .containerPattern | default "*" }}.log
+      - /var/log/pods/{{ .namespacePattern | default "*" }}_{{ .podPattern | default "*" }}_*/{{ .containerPattern | default "*" }}/*.log
     {{- end }}
     {{- end }}
     exclude:
@@ -16,7 +16,7 @@ receivers:
       - /var/log/pods/otlp-sink_*/*/*.log
       {{ if .Values.clusterCollection.logs.exclude }}
       {{- range .Values.clusterCollection.logs.exclude }}
-      - /var/log/pods/{{ .namespacePattern | default "*" }}_{{ .podPattern | default "*" }}_*/{{ .containerPattern | default "*" }}.log
+      - /var/log/pods/{{ .namespacePattern | default "*" }}_{{ .podPattern | default "*" }}_*/{{ .containerPattern | default "*" }}/*.log
       {{- end }}
       {{- end }}
     start_at: end

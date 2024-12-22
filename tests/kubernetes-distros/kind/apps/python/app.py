@@ -2,7 +2,6 @@ import sys
 import time
 import logging
 import json
-from lumigo_opentelemetry import logger_provider
 
 logger = logging.getLogger("test")
 logger.setLevel(logging.INFO)
@@ -16,5 +15,9 @@ while True:
     message = sys.argv[1] if len(sys.argv) > 1 else "Hello, World!"
     formatter = json.dumps if len(sys.argv) > 2 and sys.argv[2] == "json" else str
     logger.info(formatter({"message": message}))
-    logger_provider.force_flush()
+    try:
+        from lumigo_opentelemetry import logger_provider
+        logger_provider.force_flush()
+    except Exception as e:
+        logger.error(f"Failed to flush logs via distro: {e}")
     time.sleep(5)

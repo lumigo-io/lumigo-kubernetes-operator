@@ -40,10 +40,10 @@ func TestLumigoOperatorTraces(t *testing.T) {
 
 	deploymentName := "app"
 	cronJobName := "load-generator"
-	namespaceName := envconf.RandomName("test-ns", 12)
 
 	testAppDeploymentFeature := features.New("TestApp").
-		Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+	Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+			namespaceName := envconf.RandomName(ctx.Value(internal.ContextTestAppNamespacePrefix).(string), 12)
 			testJsAppClientImage := ctx.Value(internal.ContextTestAppJsClientImageName).(string)
 			testJsAppServerImage := ctx.Value(internal.ContextTestAppJsServerImageName).(string)
 
@@ -242,6 +242,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			return ctx
 		}).
 		Assess("CronJob traces have the 'k8s.cronjob.id' resource attribute set", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			namespaceName := envconf.RandomName(ctx.Value(internal.ContextTestAppNamespacePrefix).(string), 12)
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
 			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
@@ -312,6 +313,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			return ctx
 		}).
 		Assess("Deployment traces have the 'k8s.deployment.uid' resource attribute set", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			namespaceName := envconf.RandomName(ctx.Value(internal.ContextTestAppNamespacePrefix).(string), 12)
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 
 			tracesPath := filepath.Join(otlpSinkDataPath, "traces.json")
@@ -554,6 +556,7 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			return ctx
 		}).
 		Assess("LUMIGO_ENABLE_TRACES reflects spec.tracing.enabled", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			namespaceName := envconf.RandomName(ctx.Value(internal.ContextTestAppNamespacePrefix).(string), 12)
 			if err := apimachinerywait.PollImmediateUntilWithContext(
 				ctx,
 				time.Second*5,
