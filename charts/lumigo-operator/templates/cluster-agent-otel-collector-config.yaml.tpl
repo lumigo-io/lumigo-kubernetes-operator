@@ -2,11 +2,12 @@
 receivers:
   filelog:
     include:
-      - /var/log/pods/*/*/*.log
     {{ if .Values.clusterCollection.logs.include }}
     {{- range .Values.clusterCollection.logs.include }}
       - /var/log/pods/{{ .namespacePattern | default "*" }}_{{ .podPattern | default "*" }}_*/{{ .containerPattern | default "*" }}/*.log
     {{- end }}
+    {{- else }}
+      - /var/log/pods/*/*/*.log
     {{- end }}
     exclude:
       - /var/log/pods/kube-system_*/*/*.log
