@@ -33,7 +33,6 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	operatorDebug := ctx.Value(ContextKeyLumigoOperatorDebug).(bool)
 	kubernetesClusterName := ctx.Value(ContextKeyKubernetesClusterName).(string)
 	lumigoToken := ctx.Value(ContextKeyLumigoToken).(string)
-	busyboxIncludedContainerNamePrefix := ctx.Value(ContextTestAppBusyboxIncludedContainerNamePrefix).(string)
 	busyboxExcludedContainerNamePrefix := ctx.Value(ContextTestAppBusyboxExcludedContainerNamePrefix).(string)
 	testNamespacePrefix := ctx.Value(ContextTestAppNamespacePrefix).(string)
 
@@ -62,8 +61,6 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken)), // Use the the test-token for infra metrics as well
 		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)), // Operator debug logging at runtime
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.enabled=%v", true)), // Enable log collection via pod logs-files
-		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.include[0].namespacePattern=%s*", testNamespacePrefix)),
-		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.include[0].containerPattern=%s*", busyboxIncludedContainerNamePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].namespacePattern=%s*", testNamespacePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].containerPattern=%s*", busyboxExcludedContainerNamePrefix)),
 		helm.WithArgs("--debug"), // Helm debug output on install
