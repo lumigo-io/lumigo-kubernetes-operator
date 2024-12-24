@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
+	operatorv1alpha1conditions "github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/tests/kubernetes-distros/kind/internal"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -51,7 +52,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 		Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 			client := config.Client()
 
-			namespaceName := envconf.RandomName("test-ns", 12)
+			namespaceName := envconf.RandomName(ctx.Value(internal.ContextTestAppNamespacePrefix).(string), 12)
 			if err := client.Resources().Create(ctx, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: namespaceName,
@@ -87,6 +88,18 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			}
 			operatorv1alpha1.AddToScheme(r.GetScheme())
 			r.Create(ctx, lumigo)
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*1, func(context.Context) (bool, error) {
+				currentLumigo := &operatorv1alpha1.Lumigo{}
+
+				if err := r.Get(ctx, lumigo.Name, lumigo.Namespace, currentLumigo); err != nil {
+					return false, err
+				}
+
+				return operatorv1alpha1conditions.IsActive(currentLumigo), err
+			}); err != nil {
+				t.Fatal(err)
+			}
 
 			deploymentName := "testdeployment"
 
@@ -134,6 +147,16 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 										},
 									},
 								},
+								{
+									Name:    envconf.RandomName(ctx.Value(internal.ContextTestAppBusyboxIncludedContainerNamePrefix).(string), 12),
+									Image:   "busybox:1.37.0",
+									Command: []string{"sh", "-c", "while true; do echo $(date) - Hello from included busybox; sleep 5; done"},
+								},
+								{
+									Name:    envconf.RandomName(ctx.Value(internal.ContextTestAppBusyboxExcludedContainerNamePrefix).(string), 12),
+									Image:   "busybox:1.37.0",
+									Command: []string{"sh", "-c", "while true; do echo $(date) - Hello from excluded busybox; sleep 5; done"},
+								},
 							},
 						},
 					},
@@ -152,6 +175,19 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			}))
 
 			logger.Info("Deployment is ready")
+
+			// // Restart deployment to make sure it gets injected with the injector sidecar
+			// annotations := deployment.GetAnnotations()
+			// annotations["force-this-deployment-to-restart"] = "by-changing-some-random-annotation"
+			// deployment.SetAnnotations(annotations)
+			// if err := config.Client().Resources().Update(ctx, deployment); err != nil {
+			// 	t.Fatalf("Failed to restart deployment: %v", err)
+			// }
+
+			// wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
+			// 	d := object.(*appsv1.Deployment)
+			// 	return d.Status.AvailableReplicas == replicas && d.Status.ReadyReplicas == replicas
+			// }))
 
 			// Tear it all down
 			if err := client.Resources().Delete(ctx, deployment); err != nil {
@@ -523,13 +559,22 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					return false, nil
 				}
 
-				foundFileLogRecord := false
+				foundApplicationLogRecord := false
+				foundLogFromIncludedContainer := false
 				for _, appLog := range applicationLogs {
 					// Make sure the log came from log files and not the distro,
 					// as the logs.json file is shared between several tests reporting to the same OTLP sink
 					value, found := appLog.Attributes().Get("log.file.path")
 					if found && strings.HasPrefix(value.AsString(), "/var/log/pods/") {
-						foundFileLogRecord = true
+						if strings.Contains(value.AsString(), ctx.Value(internal.ContextTestAppBusyboxExcludedContainerNamePrefix).(string)) {
+							t.Fatalf("Found a log file record from the excluded container: %s", value.AsString())
+						}
+
+						if strings.Contains(value.AsString(), ctx.Value(internal.ContextTestAppBusyboxIncludedContainerNamePrefix).(string)) {
+							foundLogFromIncludedContainer = true
+						}
+
+						foundApplicationLogRecord = true
 						t.Logf("Found application log: %s", appLog.Body().AsString())
 						// Make sure the log body was parsed as JSON by the cluster-agent collector
 						if appLog.Body().Type() == pcommon.ValueTypeMap {
@@ -539,7 +584,11 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					}
 				}
 
-				if (foundFileLogRecord) {
+				if (!foundLogFromIncludedContainer) {
+					t.Fatalf("No logs found from the included container %s", ctx.Value(internal.ContextTestAppBusyboxIncludedContainerNamePrefix).(string))
+				}
+
+				if (foundApplicationLogRecord) {
 					t.Fatalf("No application logs found with a JSON-object body")
 					} else {
 					t.Fatalf("No application logs found matching the 'log.file.path' attribute")

@@ -25,6 +25,9 @@ spec:
     {{- include "helm.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        # This effectively triggers a restart of the Daemonset pods when the config changes, which is otherwise not the case for ConfigMaps in k8s.
+        lumigo.io/config-version: {{ include "clusterAgent.otelCollectorConfig" . | sha256sum | substr 0 10 | quote }}
       labels:
       {{- include "helm.selectorLabels" . | nindent 8 }}
         control-plane: cluster-agent

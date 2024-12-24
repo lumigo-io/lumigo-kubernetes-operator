@@ -2,13 +2,24 @@
 receivers:
   filelog:
     include:
+    {{ if .Values.clusterCollection.logs.include }}
+    {{- range .Values.clusterCollection.logs.include }}
+      - /var/log/pods/{{ .namespacePattern | default "*" }}_{{ .podPattern | default "*" }}_*/{{ .containerPattern | default "*" }}/*.log
+    {{- end }}
+    {{- else }}
       - /var/log/pods/*/*/*.log
+    {{- end }}
     exclude:
       - /var/log/pods/kube-system_*/*/*.log
       - /var/log/pods/lumigo-system_*/*/*.log
       # Exclude logs from the otlp-sink in tests (Kind cluster)
       - /var/log/pods/local-path-storage_*/*/*.log
       - /var/log/pods/otlp-sink_*/*/*.log
+      {{ if .Values.clusterCollection.logs.exclude }}
+      {{- range .Values.clusterCollection.logs.exclude }}
+      - /var/log/pods/{{ .namespacePattern | default "*" }}_{{ .podPattern | default "*" }}_*/{{ .containerPattern | default "*" }}/*.log
+      {{- end }}
+      {{- end }}
     start_at: end
     include_file_path: true
     include_file_name: false

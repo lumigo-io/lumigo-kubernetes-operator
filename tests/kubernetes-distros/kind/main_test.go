@@ -207,6 +207,9 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsClientImageName, testJsClientImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsServerImageName, testJsServerImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppPythonImageName, testPythonImageName)
+	ctx = context.WithValue(ctx, internal.ContextTestAppBusyboxIncludedContainerNamePrefix, "busybox-included")
+	ctx = context.WithValue(ctx, internal.ContextTestAppBusyboxExcludedContainerNamePrefix, "busybox-excluded")
+	ctx = context.WithValue(ctx, internal.ContextTestAppNamespacePrefix, "test-logs-ns")
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 

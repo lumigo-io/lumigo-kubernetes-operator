@@ -210,6 +210,45 @@ spec:
     enabled: true # enables log forwarding for pods with tracing injected
 ```
 
+#### Logging support via pod log files
+
+Workloads that are using runtimes not supported by current Lumigo OTEL distro (e.g. Go, Rust) can still send logs to Lumigo, via logs files from containers that k8s manages on each node in the cluster.
+The Lumigo Kubernetes operator will automatically collect logs from those files and send them to Lumigo, once the following setting is applied when installing the operator:
+
+```sh
+helm upgrade -i lumigo lumigo/lumigo-operator \
+  # ...
+  --set "clusterCollection.logFiles.enabled=true"
+  --set "lumigoToken.value=t_123456789012345678901"
+```
+
+this will automatically collect logs from the file `/var/log/pods` folder in each node, and forward them to Lumigo (with the exception of the `kube-system` and `lumigo-system` namespaces).
+To further customize the workloads patterns for log collection, the following settings can be provided:
+
+```sh
+echo "
+lumigoToken:
+  value: t_123456789012345678901
+clusterCollection:
+  logFiles:
+    enabled: true
+  logs:
+    include:
+      - namespacePattern: some-ns
+        podPattern: some-pod-*
+        containerPattern: some-container-*
+    exclude:
+      - containerPattern: some-other-container-*
+" | helm upgrade -i lumigo lumigo/lumigo-operator --values -
+```
+In the example above, logs from all containers prefixed with `some-container-` running in pods prefixed with `some-pod-` (effectively, pods from a specific deployment) under the `some-ns` namespace will be collected, with the exception of logs from containers prefixed with `some-other-container-` from the aforementioned namespace and pods.
+
+Notes about the settings:
+1. `include` and `exclude` are arrays of glob patterns to include or exclude logs, where each pattern being a combination of `namespacePattern`, `podPattern` and `containerPattern` (all are optional).
+2. If a pattern is not provided for one of the components, it will be considered as a wildcard pattern - e.g. including pods while specifying `podPattern` will include all containers of those pods in all namespaces.
+3. Each `exclude` value is checked against the paths matched by `include`, meaning if a path is matched by both `include` and `exclude`, it will be excluded.
+4. By default, all logs from all pods in all namespaces are included, with no exclusions. Exceptions are the `kube-system` and `lumigo-system` namespaces, that will be always added to the default or provided exclusion list.
+
 #### Opting out for specific resources
 
 To prevent the Lumigo Kubernetes operator from injecting tracing to pods managed by some resource in a namespace that contains a `Lumigo` resource, add the `lumigo.auto-trace` label set to `false`:
