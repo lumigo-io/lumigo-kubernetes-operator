@@ -218,7 +218,8 @@ The Lumigo Kubernetes operator will automatically collect logs from those files 
 ```sh
 helm upgrade -i lumigo lumigo/lumigo-operator \
   # ...
-  --set clusterCollection.logFiles.enabled=true
+  --set "clusterCollection.logFiles.enabled=true"
+  --set "lumigoToken.value=t_123456789012345678901"
 ```
 
 this will automatically collect logs from the file `/var/log/pods` folder in each node, and forward them to Lumigo (with the exception of the `kube-system` and `lumigo-system` namespaces).
@@ -226,6 +227,8 @@ To further customize the workloads patterns for log collection, the following se
 
 ```sh
 echo "
+lumigoToken:
+  value: t_123456789012345678901
 clusterCollection:
   logFiles:
     enabled: true
@@ -238,6 +241,7 @@ clusterCollection:
       - containerPattern: some-other-container-*
 " | helm upgrade -i lumigo lumigo/lumigo-operator --values -
 ```
+In the example above, logs from all containers prefixed with `some-container-` running in pods prefixed with `some-pod-` (effectively, pods from a specific deployment) under the `some-ns` namespace will be collected, with the exception of logs from containers prefixed with `some-other-container-` from the aforementioned namespace and pods.
 
 Notes about the settings:
 1. `include` and `exclude` are arrays of glob patterns to include or exclude logs, where each pattern being a combination of `namespacePattern`, `podPattern` and `containerPattern` (all are optional).
