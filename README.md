@@ -225,7 +225,19 @@ this will automatically collect logs from the file `/var/log/pods` folder in eac
 To further customize the workloads patterns for log collection, the following settings can be provided:
 
 ```sh
-helm upgrade -i lumigo lumigo/lumigo-operator \
+echo "
+clusterCollection:
+  logFiles:
+    enabled: true
+  logs:
+    include:
+      - namespacePattern: some-ns
+        podPattern: some-pod-*
+        containerPattern: some-container-*
+    exclude:
+      - containerPattern: some-other-container-*
+" | helm upgrade -i lumigo lumigo/lumigo-operator --values -
+
   # ...
   --set clusterCollection.logFiles.enabled=true
   # Include all logs from all pods prefixed `included-pod-*` in the namespace `included-ns`
