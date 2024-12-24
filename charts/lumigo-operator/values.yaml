@@ -99,7 +99,7 @@ clusterCollection:
   metrics:
     enabled: true
     frequency: 15s
-  logs:
+  logFiles:
     enabled: false
 # controls the port in the KSM sub-chart
 kube-state-metrics:

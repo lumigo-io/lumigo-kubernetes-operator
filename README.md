@@ -210,7 +210,7 @@ spec:
     enabled: true # enables log forwarding for pods with tracing injected
 ```
 
-#### Logging support via pod log files
+#### Fetching container logs via files
 
 Workloads that are using runtimes not supported by current Lumigo OTEL distro (e.g. Go, Rust) can still send logs to Lumigo, via logs files from containers that k8s manages on each node in the cluster.
 The Lumigo Kubernetes operator will automatically collect logs from those files and send them to Lumigo, once the following setting is applied when installing the operator:
@@ -232,7 +232,6 @@ lumigoToken:
 clusterCollection:
   logFiles:
     enabled: true
-  logs:
     include:
       - namespacePattern: some-ns
         podPattern: some-pod-*
