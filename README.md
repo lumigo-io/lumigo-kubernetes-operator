@@ -237,19 +237,6 @@ clusterCollection:
     exclude:
       - containerPattern: some-other-container-*
 " | helm upgrade -i lumigo lumigo/lumigo-operator --values -
-
-  # ...
-  --set clusterCollection.logFiles.enabled=true
-  # Include all logs from all pods prefixed `included-pod-*` in the namespace `included-ns`
-  --set clusterCollection.logs.include[0].namespacePattern=included-ns
-  --set clusterCollection.logs.include[0].podPattern=included-pod-*
-  # From the included logs above, exclude logs from containers prefixed `exclude-container-*`
-  --set clusterCollection.logs.exclude[0].containerPattern=exclude-container-*
-  # Another combination of included resources
-  --set clusterCollection.logs.include[1].namespacePattern=included-ns-2
-  --set clusterCollection.logs.include[1].podPattern=included-pod-2*
-  # Another combination of excluded resources
-  --set clusterCollection.logs.exclude[1].containerPattern=exclude-container-2*
 ```
 
 Notes about the settings:
