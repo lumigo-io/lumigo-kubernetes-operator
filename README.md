@@ -218,7 +218,7 @@ The Lumigo Kubernetes operator will automatically collect logs from those files 
 ```sh
 helm upgrade -i lumigo lumigo/lumigo-operator \
   # ...
-  --set "clusterCollection.logFiles.enabled=true"
+  --set "clusterCollection.logs.enabled=true"
   --set "lumigoToken.value=t_123456789012345678901"
 ```
 
@@ -230,7 +230,7 @@ echo "
 lumigoToken:
   value: t_123456789012345678901
 clusterCollection:
-  logFiles:
+  logs:
     enabled: true
     include:
       - namespacePattern: some-ns
