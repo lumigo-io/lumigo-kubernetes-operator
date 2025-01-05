@@ -105,3 +105,5 @@ clusterCollection:
 kube-state-metrics:
   service:
     port: 8086
+  extraArgs:
+    - --metric-labels-allowlist=namespaces=[namespace],daemonsets=[daemonset,namespace],deployments=[deployment,namespace],replicasets=[replicaset,namespace],statefulsets=[statefulset,namespace],jobs=[job,namespace],cronjobs=[cronjob,namespace],pods=[pod,namespace],nodes=[node]
