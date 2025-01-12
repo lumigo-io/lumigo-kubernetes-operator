@@ -97,6 +97,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				prometheusNodeExporterMetricsFound := false
 				cadvisorMetricsFound := false
 				kubeStateMetricsFound := false
+				labelMetricsFound := false
 
 				for _, metric := range metrics {
 					if metric.Name() == "node_cpu_seconds_total" {
@@ -118,6 +119,10 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					if metric.Name() == "kube_pod_status_scheduled" {
 						kubeStateMetricsFound = true
 					}
+
+					if metric.Name() == "kube_deployment_labels" {
+						labelMetricsFound = true
+					}
 				}
 
 				if !prometheusNodeExporterMetricsFound {
@@ -132,6 +137,11 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 
 				if !kubeStateMetricsFound {
 					t.Logf("could not find kube-state-metrics. Seen metrics: %v", uniqueMetricNames)
+					return false, nil
+				}
+
+				if !labelMetricsFound {
+					t.Logf("could not find label metrics. Seen metrics: %v", uniqueMetricNames)
 					return false, nil
 				}
 
