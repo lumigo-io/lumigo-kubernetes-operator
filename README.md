@@ -85,6 +85,24 @@ To upgrade to a newer version of the Lumigo Kubernetes operator, run:
 helm repo update
 helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 ```
+### Tracing, logging and metrics methods
+
+#### Tracing
+
+|            | Pros                                                                                                                                                                                        | Cons                                                    |
+|------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| Lumigo CRD | * Granular - different namespaces can be traced to different Lumigo projects<br>* The same CRD can also be used for collecting logs from that namespace<br>* Correlation of traces and logs | * Supports only a set of runtimes and logging libraries |
+
+#### Logging
+
+|                           | Pros                                                                                                                                                                                                                                                                                                                  | Cons                                                                                                                                                                                        |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Lumigo CRD                | * Correlates traces and logs (if traces are enabled) <br>* Shows full context for k8s logs (e.g. parent deployment of a pod emitting the log) <br>* Granular reporting - logs from each namespace can be reported to a different Lumigo project                                                                        | * Mutates pod definitions to enable auto-instrumetation <br>* Supports only a specific set of logging libraries and runtimes (Python, Node.js, Java)<br>* Requires enablement per namespace |
+| Container file collection | * Does not mutate any pod definitions<br>* Supports logs from all logging libraries and runtimes<br>* Does not show full logs context (namespace + pod + container, additional k8s context will be added in the future)<br>* Applies to the entire cluster with a single token (inclusion / exclusion can be applied) | * Does not correlate logs and traces<br>* No granularity - all logs are reported to the same Lumigo project                                                                                 |
+
+#### Metrics
+
+Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default once the `lumigoToken.value` is set during the Helm installation.
 
 ### Enabling automatic tracing
 
