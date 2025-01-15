@@ -89,16 +89,26 @@ helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 
 #### Tracing
 
-|            | Pros                                                                                                                                                                                        | Cons                                                    |
-|------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
-| Lumigo CRD | * Granular - different namespaces can be traced to different Lumigo projects<br>* The same CRD can also be used for collecting logs from that namespace<br>* Correlation of traces and logs | * Supports only a set of runtimes and logging libraries |
+|            | Granularity | Correlates traces & logs | Reusable for other features |    Non-intrusive   |
+|:----------:|:-----------:|:------------------------:|:---------------------------:|:------------------:|
+| Lumigo CRD |      V<sup>*</sup>     |             V            |             V<sup>**</sup>             | X<sup>***<br></sup> |
+
+<sup>*</sup> traces from different namespaces can be reported to different project in Lumigo
+
+<sup>**</sup> the same CRD can be used to apply logging for a given namespace
+
+<sup>***</sup> Pods are mutated to added auto-instrumentation for supported libraries
 
 #### Logging
 
-|                           | Pros                                                                                                                                                                                                                                                                                                                  | Cons                                                                                                                                                                                        |
-|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Lumigo CRD                | * Correlates traces and logs (if traces are enabled) <br>* Shows full context for k8s logs (e.g. parent deployment of a pod emitting the log) <br>* Granular reporting - logs from each namespace can be reported to a different Lumigo project                                                                        | * Mutates pod definitions to enable auto-instrumetation <br>* Supports only a specific set of logging libraries and runtimes (Python, Node.js, Java)<br>* Requires enablement per namespace |
-| Container file collection | * Does not mutate any pod definitions<br>* Supports logs from all logging libraries and runtimes<br>* Does not show full logs context (namespace + pod + container, additional k8s context will be added in the future)<br>* Applies to the entire cluster with a single token (inclusion / exclusion can be applied) | * Does not correlate logs and traces<br>* No granularity - all logs are reported to the same Lumigo project                                                                                 |
+|                           | Correlates traces & logs | Full K8s context per log line | Granular | Full runtime / logger support |    Non-intrusive   |
+|---------------------------|:------------------------:|:-----------------------------:|:--------:|:-----------------------------:|:------------------:|
+| Lumigo CRD                |             v            |               V               |     V    |               X               | X<sup>**<br></sup> |
+| Container file collection |             X            |         X<sup>*</sup>         |     X    |               V               |          V         |
+
+<sup>*</sup> only the namespace, pod and container emitting the logs line are added as log labels. Deployment, Job, etc. are planned to be added
+
+<sup>**</sup> Pods are mutated to added auto-instrumentation for supported logging libraries
 
 #### Metrics
 
