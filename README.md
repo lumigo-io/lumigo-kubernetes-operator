@@ -13,13 +13,18 @@ The Kubernetes operator of Lumigo provides a one-click solution to monitoring Ku
 Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](https://helm.sh/):
 
 ```sh
-helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
-helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --set cluster.name=<cluster_name>
+helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator && \
+helm install lumigo lumigo/lumigo-operator \
+  --namespace lumigo-system \
+  --create-namespace \
+  --set cluster.name=<cluster_name> \
+  --set lumigoToken.value=<token>
 ```
-**Note:** You have the option to alter the namespace from `lumigo-system` to a name of your choosing, but its important to be aware that doing so might cause slight discrepancies throughout the steps below.
 
-(The `cluster.name` is optional, but highly advised, see the [Naming your cluster](#naming-your-cluster) section.)
-
+**Notes:** 
+1. You have the option to alter the namespace from `lumigo-system` to a name of your choosing, but its important to be aware that doing so might cause slight discrepancies throughout the steps below.
+2. The `lumigoToken.value` is optional, but is highly recommended in order properly populate the cluster overview info in the Lumigo platform and have many other K8s-sourced metrics reported automatically. You can use the token from any Lumigo project, and cluster-wide metrics will be forwarded to it once the installation is complete.
+3. The `cluster.name` is optional, but highly advised, see the [Naming your cluster](#naming-your-cluster) section.
 
 You can verify that the Lumigo Kubernetes operator is up and running with:
 
@@ -85,6 +90,24 @@ To upgrade to a newer version of the Lumigo Kubernetes operator, run:
 helm repo update
 helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 ```
+### Tracing, logging and metrics methods
+
+#### Tracing
+
+|            | Scoping                                                                          | Correlation               | Reusable for other features                                          | Mutates pods                                                         |
+|------------|----------------------------------------------------------------------------------|---------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------|
+| [Lumigo CRD](#enabling-automatic-tracing) | Traces from different namespaces can be reported to different projects in Lumigo | Correlates traces to logs | The same CRD can be also used to apply logging for a given namespace | Pods are mutated to add auto-instrumentation for supported libraries |
+
+#### Logging
+
+|                           | Scoping                                                                        | Correlation               | Reusable for other features                                          | K8s context per log line                                                                                                   | Mutates pods                                                       | Supported runtimes and loggers                                                     |
+|---------------------------|--------------------------------------------------------------------------------|---------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|------------------------------------------------------------------------------------|
+| [Lumigo CRD](#logging-support)                | Logs from different namespaces can be reported to different projects in Lumigo | Correlates logs to traces | The same CRD can be also used to apply logging for a given namespace | Each log line shows the entire resource change from container and pod to the parent resource (Deployment, Daemonset, etc). | Pods are mutated to add auto-instrumentation for supported loggers | Python, Node and Java <br>(with a selection of supported loggers for each runtime) |
+| [Container file collection](#fetching-container-logs-via-files) | All logs are reported to a single Lumigo project                                   | X                         | X                                                                    | Each log line shows only the source container, pod and namespace.                                                          | X                                                                  | Full support - all logs from all runtimes and logging libraries are collected      |
+
+#### Metrics
+
+Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default once the `lumigoToken.value` is set during the Helm installation.
 
 ### Enabling automatic tracing
 
