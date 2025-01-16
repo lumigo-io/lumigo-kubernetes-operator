@@ -23,10 +23,8 @@ helm install lumigo lumigo/lumigo-operator \
 
 **Notes:** 
 1. You have the option to alter the namespace from `lumigo-system` to a name of your choosing, but its important to be aware that doing so might cause slight discrepancies throughout the steps below.
-2. The `lumigoToken.value` is optional, but is highly recommended in order properly populate the cluster overview info in the Lumigo platform and have many other K8s-sourced metrics reported automatically.
-The token used here can of any Lumigo project - cluster-wide metrics will be forwarded to it after the installtion is complete.
+2. The `lumigoToken.value` is optional, but is highly recommended in order properly populate the cluster overview info in the Lumigo platform and have many other K8s-sourced metrics reported automatically. You can use the token from any Lumigo project, and cluster-wide metrics will be forwarded to it once the installation is complete.
 3. The `cluster.name` is optional, but highly advised, see the [Naming your cluster](#naming-your-cluster) section.
-
 
 You can verify that the Lumigo Kubernetes operator is up and running with:
 
