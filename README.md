@@ -107,7 +107,7 @@ helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 
 #### Metrics
 
-Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default once the `lumigoToken.value` is set during the Helm installation.
+Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default assuming you either set `lumigoToken.value` in the Helm values, or reference an existing Kubernetes secret.
 
 ### Enabling automatic tracing
 
