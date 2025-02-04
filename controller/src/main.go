@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -44,7 +45,11 @@ import (
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/defaulter"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/injector"
+
 	//+kubebuilder:scaffold:imports
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -59,11 +64,20 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+type QuickstartSetting struct {
+	Namespace     string `json:"namespace"`
+	TracesEnabled bool   `json:"tracesEnabled"`
+	LogsEnabled   bool   `json:"logsEnabled"`
+}
+
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var uninstall bool
+	var quickstart string
+	var lumigoToken string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -71,6 +85,9 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&uninstall, "uninstall", false,
 		"Whether the execution of this manager is actually aimed at initiating the uninstallation procedure.")
+	flag.StringVar(&quickstart, "quickstart", "", "Quickstart settings")
+	flag.StringVar(&lumigoToken, "lumigo-token", "", "Lumigo token for quickstart setup")
+
 	opts := zap.Options{
 		Development: false,
 	}
@@ -80,14 +97,28 @@ func main() {
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 
-	if !uninstall {
-		setupLog.Info("starting manager")
-		if err := startManager(metricsAddr, probeAddr, enableLeaderElection); err != nil {
-			logger.Error(err, "Manager failed")
+	if uninstall {
+		if err := uninstallHook(); err != nil {
+			setupLog.Error(err, "Uninstallation hook failed")
 			os.Exit(1)
 		}
-	} else if err := uninstallHook(); err != nil {
-		setupLog.Error(err, "Unistallation hook failed")
+	}
+
+	if quickstart != "" {
+		if lumigoToken == "" {
+			logger.Error(fmt.Errorf("Quickstart mode request, but Lumigo token was not provided"), "missing token")
+			os.Exit(1)
+		}
+		if err := createQuickstartObjects(lumigoToken); err != nil {
+			logger.Error(err, "Failed to create quickstart objects")
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	setupLog.Info("starting manager")
+	if err := startManager(metricsAddr, probeAddr, enableLeaderElection); err != nil {
+		logger.Error(err, "Manager failed")
 		os.Exit(1)
 	}
 }
@@ -285,4 +316,83 @@ func uninstallHook() error {
 	}
 
 	return <-deletionCompletedChannel
+}
+
+func createQuickstartObjects(lumigoToken string) error {
+	jsonData := `[{"namespace": "harel-test-ns1", "tracesEnabled": true, "logsEnabled": true}]`
+
+	var settings []QuickstartSetting
+	err := json.Unmarshal([]byte(jsonData), &settings)
+	if err != nil {
+		return err
+	}
+
+	config := ctrl.GetConfigOrDie()
+	s := runtime.NewScheme()
+	operatorv1alpha1.AddToScheme(s)
+	corev1.AddToScheme(s)
+
+	client, err := client.New(config, client.Options{Scheme: s})
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	ctx := context.Background()
+	logger := ctrl.Log.WithName("quickstart")
+
+	quickstartSecretName := "lumigo-credentials"
+	quickstartSecretKey := "token"
+
+	for _, setting := range settings {
+		// Create secret with the Lumigo quickstart token
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      quickstartSecretName,
+				Namespace: setting.Namespace,
+			},
+			StringData: map[string]string{
+				quickstartSecretKey: lumigoToken,
+			},
+		}
+		if err := client.Create(ctx, secret); err != nil {
+			if k8serrors.IsAlreadyExists(err) {
+				logger.Info("Lumigo secret already exists, skipping creation during quickstart", "namespace", setting.Namespace, "secret", quickstartSecretName)
+			} else {
+				logger.Error(err, "Failed to create Lumigo secret during quickstart", "namespace", setting.Namespace, "secret", quickstartSecretName)
+				continue
+			}
+		}
+
+		// Create Lumigo CRD
+		lumigo := &operatorv1alpha1.Lumigo{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "lumigo",
+				Namespace: setting.Namespace,
+			},
+			Spec: operatorv1alpha1.LumigoSpec{
+				LumigoToken: operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: quickstartSecretName,
+						Key:  quickstartSecretKey,
+					},
+				},
+				Tracing: operatorv1alpha1.TracingSpec{
+					Enabled: &setting.TracesEnabled,
+				},
+				Logging: operatorv1alpha1.LoggingSpec{
+					Enabled: &setting.LogsEnabled,
+				},
+			},
+		}
+		if err := client.Create(ctx, lumigo); err != nil {
+			if k8serrors.IsAlreadyExists(err) {
+				logger.Error(err, "Lumigo resource already exists, skipping namespace from quickstart setup", "namespace", setting.Namespace)
+			} else {
+				logger.Error(err, "Failed to create Lumigo CRD during quickstart", "namespace", setting.Namespace)
+				continue
+			}
+		}
+	}
+
+	return nil
 }
