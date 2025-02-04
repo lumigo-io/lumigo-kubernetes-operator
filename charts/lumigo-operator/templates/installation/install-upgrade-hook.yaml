@@ -29,7 +29,11 @@ spec:
       containers:
       - name: install-hook
         image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
-        command: ["/manager", "--quickstart", "{{ .Values.quickstart }}", "--lumigo-token", "{{ .Values.lumigoToken }}"]
+        command:
+          - "/manager"
+        args:
+          - "--quickstart={{ .Values.quickstart | toJson }}"
+          - "--lumigo-token={{ .Values.lumigoToken.value }}"
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

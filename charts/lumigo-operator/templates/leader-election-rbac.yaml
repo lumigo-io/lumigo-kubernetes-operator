@@ -57,3 +57,39 @@ subjects:
 - kind: ServiceAccount
   name: 'lumigo-kubernetes-operator'
   namespace: '{{ .Release.Namespace }}'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "helm.fullname" . }}-quickstart-management
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - lumigoes
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "helm.fullname" . }}-quickstart-management
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: '{{ include "helm.fullname" . }}-quickstart-management'
+subjects:
+- kind: ServiceAccount
+  name: 'lumigo-kubernetes-operator'
+  namespace: '{{ .Release.Namespace }}'

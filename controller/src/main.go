@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -75,7 +76,7 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var uninstall bool
-	var quickstart string
+	var quickstartSettings string
 	var lumigoToken string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -85,7 +86,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&uninstall, "uninstall", false,
 		"Whether the execution of this manager is actually aimed at initiating the uninstallation procedure.")
-	flag.StringVar(&quickstart, "quickstart", "", "Quickstart settings")
+	flag.StringVar(&quickstartSettings, "quickstart", "", "Quickstart settings")
 	flag.StringVar(&lumigoToken, "lumigo-token", "", "Lumigo token for quickstart setup")
 
 	opts := zap.Options{
@@ -104,12 +105,13 @@ func main() {
 		}
 	}
 
-	if quickstart != "" {
+	if quickstartSettings != "" {
+		logger.Info(quickstartSettings)
 		if lumigoToken == "" {
-			logger.Error(fmt.Errorf("Quickstart mode request, but Lumigo token was not provided"), "missing token")
+			logger.Error(fmt.Errorf("quickstart mode request, but Lumigo token was not provided"), "missing token")
 			os.Exit(1)
 		}
-		if err := createQuickstartObjects(lumigoToken); err != nil {
+		if err := createQuickstartObjects(quickstartSettings, lumigoToken); err != nil {
 			logger.Error(err, "Failed to create quickstart objects")
 			os.Exit(1)
 		}
@@ -318,11 +320,9 @@ func uninstallHook() error {
 	return <-deletionCompletedChannel
 }
 
-func createQuickstartObjects(lumigoToken string) error {
-	jsonData := `[{"namespace": "harel-test-ns1", "tracesEnabled": true, "logsEnabled": true}]`
-
+func createQuickstartObjects(quickstartSettings string, lumigoToken string) error {
 	var settings []QuickstartSetting
-	err := json.Unmarshal([]byte(jsonData), &settings)
+	err := json.Unmarshal([]byte(quickstartSettings), &settings)
 	if err != nil {
 		return err
 	}
@@ -344,7 +344,6 @@ func createQuickstartObjects(lumigoToken string) error {
 	quickstartSecretKey := "token"
 
 	for _, setting := range settings {
-		// Create secret with the Lumigo quickstart token
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      quickstartSecretName,
@@ -363,34 +362,48 @@ func createQuickstartObjects(lumigoToken string) error {
 			}
 		}
 
-		// Create Lumigo CRD
-		lumigo := &operatorv1alpha1.Lumigo{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "lumigo",
-				Namespace: setting.Namespace,
-			},
-			Spec: operatorv1alpha1.LumigoSpec{
-				LumigoToken: operatorv1alpha1.Credentials{
-					SecretRef: operatorv1alpha1.KubernetesSecretRef{
-						Name: quickstartSecretName,
-						Key:  quickstartSecretKey,
+		var createErr error
+		for attempts := 0; attempts < 6; attempts++ {
+			lumigo := &operatorv1alpha1.Lumigo{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "lumigo",
+					Namespace: setting.Namespace,
+				},
+				Spec: operatorv1alpha1.LumigoSpec{
+					LumigoToken: operatorv1alpha1.Credentials{
+						SecretRef: operatorv1alpha1.KubernetesSecretRef{
+							Name: quickstartSecretName,
+							Key:  quickstartSecretKey,
+						},
+					},
+					Tracing: operatorv1alpha1.TracingSpec{
+						Enabled: &setting.TracesEnabled,
+					},
+					Logging: operatorv1alpha1.LoggingSpec{
+						Enabled: &setting.LogsEnabled,
 					},
 				},
-				Tracing: operatorv1alpha1.TracingSpec{
-					Enabled: &setting.TracesEnabled,
-				},
-				Logging: operatorv1alpha1.LoggingSpec{
-					Enabled: &setting.LogsEnabled,
-				},
-			},
-		}
-		if err := client.Create(ctx, lumigo); err != nil {
-			if k8serrors.IsAlreadyExists(err) {
-				logger.Error(err, "Lumigo resource already exists, skipping namespace from quickstart setup", "namespace", setting.Namespace)
-			} else {
-				logger.Error(err, "Failed to create Lumigo CRD during quickstart", "namespace", setting.Namespace)
-				continue
 			}
+
+			if err := client.Create(ctx, lumigo); err != nil {
+				if k8serrors.IsAlreadyExists(err) {
+					logger.Error(err, "Lumigo resource already exists, skipping namespace from quickstart setup", "namespace", setting.Namespace)
+					break
+				} else {
+					logger.Error(err, "Failed to create Lumigo CRD during quickstart, controller is probably not ready yet. Retrying...", "namespace", setting.Namespace, "attempt", attempts+1)
+					createErr = err
+					time.Sleep(10 * time.Second)
+					continue
+				}
+			}
+			createErr = nil
+			break
+		}
+
+		if createErr == nil {
+			logger.Info("Lumigo CRD successfully created in namespace %s", setting.Namespace)
+		} else {
+			return fmt.Errorf("failed to create Lumigo CRD in namespace %s after multiple attempts: %w", setting.Namespace, createErr)
 		}
 	}
 
