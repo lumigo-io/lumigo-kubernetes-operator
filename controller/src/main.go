@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -363,36 +364,40 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 		}
 
 		var createErr error
-		for attempts := 0; attempts < 6; attempts++ {
-			lumigo := &operatorv1alpha1.Lumigo{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "lumigo",
-					Namespace: setting.Namespace,
-				},
-				Spec: operatorv1alpha1.LumigoSpec{
-					LumigoToken: operatorv1alpha1.Credentials{
-						SecretRef: operatorv1alpha1.KubernetesSecretRef{
-							Name: quickstartSecretName,
-							Key:  quickstartSecretKey,
-						},
-					},
-					Tracing: operatorv1alpha1.TracingSpec{
-						Enabled: &setting.TracesEnabled,
-					},
-					Logging: operatorv1alpha1.LoggingSpec{
-						Enabled: &setting.LogsEnabled,
+		lumigo := &operatorv1alpha1.Lumigo{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "lumigo",
+				Namespace: setting.Namespace,
+			},
+			Spec: operatorv1alpha1.LumigoSpec{
+				LumigoToken: operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: quickstartSecretName,
+						Key:  quickstartSecretKey,
 					},
 				},
-			}
+				Tracing: operatorv1alpha1.TracingSpec{
+					Enabled: &setting.TracesEnabled,
+				},
+				Logging: operatorv1alpha1.LoggingSpec{
+					Enabled: &setting.LogsEnabled,
+				},
+			},
+		}
 
+		for attempts := 0; attempts < 20; attempts++ {
 			if err := client.Create(ctx, lumigo); err != nil {
-				if k8serrors.IsAlreadyExists(err) {
+				lumigoAlreadyExistsInNamespace := strings.Contains(err.Error(), "There is already an instance of operator.lumigo.io/v1alpha1.Lumigo")
+				// checking that Lumigo CRD already exists in the namespace cannot be done via k8serrors.IsAlreadyExists(err),
+				// as the admission webhook rejects it before the IsAlreadyExists gets a chance to be thrown,
+				// Therefore, we check for the error message returned from the admission webhook
+				if lumigoAlreadyExistsInNamespace {
 					logger.Error(err, "Lumigo resource already exists, skipping namespace from quickstart setup", "namespace", setting.Namespace)
 					break
 				} else {
 					logger.Error(err, "Failed to create Lumigo CRD during quickstart, controller is probably not ready yet. Retrying...", "namespace", setting.Namespace, "attempt", attempts+1)
 					createErr = err
-					time.Sleep(10 * time.Second)
+					time.Sleep(5 * time.Second)
 					continue
 				}
 			}

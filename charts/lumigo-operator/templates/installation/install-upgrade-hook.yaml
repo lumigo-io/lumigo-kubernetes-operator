@@ -12,7 +12,7 @@ metadata:
     lumigo.auto-trace: 'false' # We do not need the operator to inject itself
   annotations:
     helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-delete-policy: before-hook-creation #,hook-succeeded # we skip hook-failed so that we can look up logs if it fails
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded # we skip hook-failed, so the job will be kept for troubleshooting in case of a failure
 spec:
   completions: 1
   backoffLimit: 2
@@ -32,8 +32,8 @@ spec:
         command:
           - "/manager"
         args:
-          - "--quickstart={{ .Values.quickstart | toJson }}"
-          - "--lumigo-token={{ .Values.lumigoToken.value }}"
+          - --quickstart={{ .Values.quickstart | toJson }}
+          - --lumigo-token={{ .Values.lumigoToken.value }}
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
