@@ -176,19 +176,6 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 
 			logger.Info("Deployment is ready")
 
-			// // Restart deployment to make sure it gets injected with the injector sidecar
-			// annotations := deployment.GetAnnotations()
-			// annotations["force-this-deployment-to-restart"] = "by-changing-some-random-annotation"
-			// deployment.SetAnnotations(annotations)
-			// if err := config.Client().Resources().Update(ctx, deployment); err != nil {
-			// 	t.Fatalf("Failed to restart deployment: %v", err)
-			// }
-
-			// wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
-			// 	d := object.(*appsv1.Deployment)
-			// 	return d.Status.AvailableReplicas == replicas && d.Status.ReadyReplicas == replicas
-			// }))
-
 			// Tear it all down
 			if err := client.Resources().Delete(ctx, deployment); err != nil {
 				t.Fatal(err)
