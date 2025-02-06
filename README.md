@@ -242,7 +242,7 @@ The Lumigo Kubernetes operator will automatically collect logs from those files 
 helm upgrade -i lumigo lumigo/lumigo-operator \
   # ...
   --set "clusterCollection.logs.enabled=true"
-  --set "lumigoToken.value=t_123456789012345678901"
+  --set "lumigoToken.value=<your Lumigo token>"
 ```
 
 this will automatically collect logs from the file `/var/log/pods` folder in each node, and forward them to Lumigo (with the exception of the `kube-system` and `lumigo-system` namespaces).
@@ -251,7 +251,7 @@ To further customize the workloads patterns for log collection, the following se
 ```sh
 echo "
 lumigoToken:
-  value: t_123456789012345678901
+  value: <your Lumigo token>
 clusterCollection:
   logs:
     enabled: true
