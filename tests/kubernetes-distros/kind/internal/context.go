@@ -19,6 +19,7 @@ var (
 	ContextTestAppBusyboxIncludedContainerNamePrefix    = ContextKey("test-apps/busybox/included-container/name")
 	ContextTestAppBusyboxExcludedContainerNamePrefix    = ContextKey("test-apps/busybox/excluded-container/name")
 	ContextTestAppNamespacePrefix                       = ContextKey("test-apps/namespace/prefix")
+	ContextQuickstartNamespace                          = ContextKey("test-apps/namespace/quickstart")
 )
 
 func (c ContextKey) String() string {

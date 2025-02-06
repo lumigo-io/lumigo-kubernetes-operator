@@ -35,6 +35,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	lumigoToken := ctx.Value(ContextKeyLumigoToken).(string)
 	busyboxExcludedContainerNamePrefix := ctx.Value(ContextTestAppBusyboxExcludedContainerNamePrefix).(string)
 	testNamespacePrefix := ctx.Value(ContextTestAppNamespacePrefix).(string)
+	quickstartNamespace := ctx.Value(ContextQuickstartNamespace).(string)
 
 	var curDir, _ = os.Getwd()
 	chartDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(curDir))), "charts", "lumigo-operator")
@@ -63,6 +64,9 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.enabled=%v", true)), // Enable log collection via pod logs-files
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].namespacePattern=%s*", testNamespacePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].containerPattern=%s*", busyboxExcludedContainerNamePrefix)),
+		helm.WithArgs(fmt.Sprintf("--set quickstart[0].namespace=%s", quickstartNamespace)),
+		helm.WithArgs("--set quickstart[0].logsEnabled=true"),
+		helm.WithArgs("--set quickstart[0].tracesEnabled=true"),
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),

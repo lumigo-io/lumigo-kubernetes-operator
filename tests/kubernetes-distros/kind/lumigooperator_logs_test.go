@@ -587,6 +587,115 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			}
 
 			return ctx
+		}).Setup(
+		func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+			client := config.Client()
+			quickstartNamespace := ctx.Value(internal.ContextQuickstartNamespace).(string)
+
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-quickstart-app",
+					Namespace: quickstartNamespace,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test-quickstart-app",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test-quickstart-app",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:    "quickstart-app",
+									Image:   ctx.Value(internal.ContextTestAppPythonImageName).(string),
+								},
+							},
+						},
+					},
+				},
+			}
+
+			if err := client.Resources().Create(ctx, deployment); err != nil {
+				t.Fatal(err)
+			}
+
+			// Wait for deployment to be ready
+			if err := wait.For(conditions.New(client.Resources()).DeploymentConditionMatch(deployment, appsv1.DeploymentAvailable, corev1.ConditionTrue), wait.WithTimeout(time.Minute*2)); err != nil {
+				t.Fatal(err)
+			}
+
+			logger.Info("quickstart deployment is ready")
+
+			// Tear it all down
+			if err := client.Resources().Delete(ctx, deployment); err != nil {
+				t.Fatal(err)
+			}
+
+			wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
+
+			logger.Info("quickstart deployment is deleted")
+
+			return ctx
+		}).
+		Assess("Application logs are collected from quickstart namespace", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+			quickstartNamespace := ctx.Value(internal.ContextQuickstartNamespace).(string)
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				applicationLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if appLogs, err := exportRequestLogRecords(exportRequest, filterNamespaceAppLogRecords(quickstartNamespace)); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						applicationLogs = append(applicationLogs, appLogs...)
+					}
+				}
+
+				if len(applicationLogs) < 1 {
+					// No application logs received yet
+					t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
+					return false, nil
+				}
+
+				for _, logLine := range(applicationLogs) {
+					if strings.Contains(logLine.Body().AsString(), "something to say to the logs") {
+						t.Logf("Found application logs: %d", len(applicationLogs))
+						return true, nil
+					}
+				}
+
+				t.Fatalf("No logs with expected body found in '%s'", logsPath)
+				return false, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for application logs: %v", err)
+			}
+
+			return ctx
 		}).
 		Feature()
 
@@ -715,28 +824,38 @@ func exportRequestLogRecords(exportRequest plogotlp.ExportRequest, filter LogRec
 
 
 func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal")
+	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", "*")
 }
 
 func filterHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat")
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat", "*")
 }
 
 func filterPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector")
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector", "*")
 }
 
-func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string) ([]plog.LogRecord, error) {
+func filterNamespaceAppLogRecords(namespaceName string) LogRecordFilter {
+	return func(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+		return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", namespaceName)
+	}
+}
+
+func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string, filteredNamespaceName string) ([]plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
 	filteredScopeLogRecords := make([]plog.LogRecord, 0)
 
 	for i := 0; i < l; i++ {
 		scopeLogs := resourceLogs.ScopeLogs().At(i)
 		scopeName := scopeLogs.Scope().Name()
+		namespaceName, hasNamespaceName := resourceLogs.Resource().Attributes().Get("k8s.namespace.name")
 		logRecords := scopeLogsToLogRecords(scopeLogs)
 
-		if scopeName == filteredScopeName {
-				filteredScopeLogRecords = append(filteredScopeLogRecords, logRecords...)
+		scopeMatches := filteredScopeName == "*" || (scopeName == filteredScopeName)
+		namespaceMatches := filteredNamespaceName == "*" || (hasNamespaceName && (namespaceName.AsString() == filteredNamespaceName))
+
+		if scopeMatches && namespaceMatches {
+			filteredScopeLogRecords = append(filteredScopeLogRecords, logRecords...)
 		}
 	}
 
