@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr/testr"
-	"github.com/moby/moby/daemon/logger"
 	"golang.org/x/exp/slices"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
@@ -47,8 +45,6 @@ var (
 //    `kubectl` configuration
 
 func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
-	logger := testr.New(t)
-
 	testAppDeploymentFeature := features.New("TestApp").
 		Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 			client := config.Client()
@@ -798,7 +794,7 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 		return d.Status.AvailableReplicas == expectedReplicas && d.Status.ReadyReplicas == expectedReplicas
 	}))
 
-	logger.Info("Deployment %s/%s is ready", deployment.Namespace, deployment.Name)
+	println("Deployment %s/%s is ready", deployment.Namespace, deployment.Name)
 
 	if err := client.Resources().Delete(ctx, deployment); err != nil {
 		return err
@@ -806,7 +802,7 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 
 	wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
 
-	logger.Info("Deployment %s/%s is deleted", deployment.Namespace, deployment.Name)
+	println("Deployment %s/%s is deleted", deployment.Namespace, deployment.Name)
 
 	return nil
 }
