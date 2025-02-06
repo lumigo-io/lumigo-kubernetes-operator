@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr/testr"
+	"github.com/moby/moby/daemon/logger"
 	"golang.org/x/exp/slices"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
@@ -136,8 +137,8 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 							},
 							Containers: []corev1.Container{
 								{
-									Name:    "myapp",
-									Image:   ctx.Value(internal.ContextTestAppPythonImageName).(string),
+									Name:  "myapp",
+									Image: ctx.Value(internal.ContextTestAppPythonImageName).(string),
 									Resources: corev1.ResourceRequirements{
 										Limits: corev1.ResourceList{
 											corev1.ResourceMemory: resource.MustParse("1Gi"),
@@ -163,27 +164,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 				},
 			}
 
-			if err := client.Resources().Create(ctx, deployment); err != nil {
-				t.Fatal(err)
-			}
-
-			// Wait until the deployment has all its pods running
-			// See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#complete-deployment
-			wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
-				d := object.(*appsv1.Deployment)
-				return d.Status.AvailableReplicas == replicas && d.Status.ReadyReplicas == replicas
-			}))
-
-			logger.Info("Deployment is ready")
-
-			// Tear it all down
-			if err := client.Resources().Delete(ctx, deployment); err != nil {
-				t.Fatal(err)
-			}
-
-			wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
-
-			logger.Info("Deployment is deleted")
+			createAndDeleteTempDeployment(ctx, config, deployment, replicas)
 
 			return ctx
 		}).
@@ -405,7 +386,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					if actualClusterUID, found := resourceAttributes["k8s.cluster.uid"]; !found {
 						// TODO: remove when logs collected from files have the cluster UID
 						if resourceLogs.ScopeLogs().At(0).Scope().Name() != "lumigo-operator.log_file_collector" {
-						t.Fatalf("found logs without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
+							t.Fatalf("found logs without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
 						}
 					} else if actualClusterUID != expectedClusterUID {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
@@ -571,13 +552,13 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					}
 				}
 
-				if (!foundLogFromIncludedContainer) {
+				if !foundLogFromIncludedContainer {
 					t.Fatalf("No logs found from the included container %s", ctx.Value(internal.ContextTestAppBusyboxIncludedContainerNamePrefix).(string))
 				}
 
-				if (foundApplicationLogRecord) {
+				if foundApplicationLogRecord {
 					t.Fatalf("No application logs found with a JSON-object body")
-					} else {
+				} else {
 					t.Fatalf("No application logs found matching the 'log.file.path' attribute")
 				}
 
@@ -589,9 +570,9 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			return ctx
 		}).Setup(
 		func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
-			client := config.Client()
 			quickstartNamespace := ctx.Value(internal.ContextQuickstartNamespace).(string)
 
+			var replicas int32 = 1
 			deployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-quickstart-app",
@@ -612,8 +593,8 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{
-									Name:    "quickstart-app",
-									Image:   ctx.Value(internal.ContextTestAppPythonImageName).(string),
+									Name:  "quickstart-app",
+									Image: ctx.Value(internal.ContextTestAppPythonImageName).(string),
 								},
 							},
 						},
@@ -621,25 +602,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 				},
 			}
 
-			if err := client.Resources().Create(ctx, deployment); err != nil {
-				t.Fatal(err)
-			}
-
-			// Wait for deployment to be ready
-			if err := wait.For(conditions.New(client.Resources()).DeploymentConditionMatch(deployment, appsv1.DeploymentAvailable, corev1.ConditionTrue), wait.WithTimeout(time.Minute*2)); err != nil {
-				t.Fatal(err)
-			}
-
-			logger.Info("quickstart deployment is ready")
-
-			// Tear it all down
-			if err := client.Resources().Delete(ctx, deployment); err != nil {
-				t.Fatal(err)
-			}
-
-			wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
-
-			logger.Info("quickstart deployment is deleted")
+			createAndDeleteTempDeployment(ctx, config, deployment, replicas)
 
 			return ctx
 		}).
@@ -682,7 +645,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					return false, nil
 				}
 
-				for _, logLine := range(applicationLogs) {
+				for _, logLine := range applicationLogs {
 					if strings.Contains(logLine.Body().AsString(), "something to say to the logs") {
 						t.Logf("Found application logs: %d", len(applicationLogs))
 						return true, nil
@@ -822,6 +785,31 @@ func exportRequestLogRecords(exportRequest plogotlp.ExportRequest, filter LogRec
 	return allLogRecords, nil
 }
 
+func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, deployment *appsv1.Deployment, expectedReplicas int32) error {
+	client := config.Client()
+	if err := client.Resources().Create(ctx, deployment); err != nil {
+		return err
+	}
+
+	// Wait until the deployment has all its pods running
+	// See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#complete-deployment
+	wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
+		d := object.(*appsv1.Deployment)
+		return d.Status.AvailableReplicas == expectedReplicas && d.Status.ReadyReplicas == expectedReplicas
+	}))
+
+	logger.Info("Deployment %s/%s is ready", deployment.Namespace, deployment.Name)
+
+	if err := client.Resources().Delete(ctx, deployment); err != nil {
+		return err
+	}
+
+	wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
+
+	logger.Info("Deployment %s/%s is deleted", deployment.Namespace, deployment.Name)
+
+	return nil
+}
 
 func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", "*")
