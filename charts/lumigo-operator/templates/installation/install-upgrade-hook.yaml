@@ -1,4 +1,4 @@
-{{ if and .Values.lumigoToken .Values.quickstart }}
+{{ if and .Values.lumigoToken .Values.monitoredNamespaces }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -32,7 +32,7 @@ spec:
         command:
           - "/manager"
         args:
-          - --quickstart={{ .Values.quickstart | toJson }}
+          - --quickstart={{ .Values.monitoredNamespaces | toJson }}
           - --lumigo-token={{ .Values.lumigoToken.value }}
         securityContext:
           allowPrivilegeEscalation: false

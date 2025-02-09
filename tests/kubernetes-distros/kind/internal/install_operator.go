@@ -59,18 +59,18 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.logs_url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl)),
-		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken)), // Use the the test-token for infra metrics as well
-		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)), // Operator debug logging at runtime
+		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken)),       // Use the the test-token for infra metrics as well
+		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)),         // Operator debug logging at runtime
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.enabled=%v", true)), // Enable log collection via pod logs-files
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].namespacePattern=%s*", testNamespacePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].containerPattern=%s*", busyboxExcludedContainerNamePrefix)),
-		helm.WithArgs(fmt.Sprintf("--set quickstart[0].namespace=%s", quickstartNamespace)),
-		helm.WithArgs("--set quickstart[0].logsEnabled=true"),
-		helm.WithArgs("--set quickstart[0].tracesEnabled=true"),
+		// Enable monitoring of a namespace during installation time
+		helm.WithArgs(fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace)),
+		helm.WithArgs("--set monitoredNamespaces[0].logsEnabled=true"),
+		helm.WithArgs("--set monitoredNamespaces[0].tracesEnabled=true"),
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),
-
 	); err != nil {
 		return ctx, fmt.Errorf("failed to invoke helm install operation due to an error: %w", err)
 	}
