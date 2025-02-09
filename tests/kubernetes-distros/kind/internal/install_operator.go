@@ -64,10 +64,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.enabled=%v", true)), // Enable log collection via pod logs-files
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].namespacePattern=%s*", testNamespacePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].containerPattern=%s*", busyboxExcludedContainerNamePrefix)),
-		// Enable monitoring of a namespace during installation time
-		helm.WithArgs(fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace)),
-		helm.WithArgs("--set monitoredNamespaces[0].logsEnabled=true"),
-		helm.WithArgs("--set monitoredNamespaces[0].tracesEnabled=true"),
+		helm.WithArgs(fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace)), // Enable monitoring of a namespace during installation time
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),

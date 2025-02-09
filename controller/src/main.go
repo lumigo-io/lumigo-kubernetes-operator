@@ -68,8 +68,24 @@ func init() {
 
 type QuickstartSetting struct {
 	Namespace     string `json:"namespace"`
-	TracesEnabled bool   `json:"tracesEnabled"`
-	LogsEnabled   bool   `json:"logsEnabled"`
+	TracesEnabled *bool  `json:"tracesEnabled,omitempty"`
+	LogsEnabled   *bool  `json:"logsEnabled,omitempty"`
+}
+
+func (qs *QuickstartSetting) GetTracesEnabledOrDefault() *bool {
+	if qs.TracesEnabled == nil {
+		newTrue := true
+		return &newTrue
+	}
+	return qs.TracesEnabled
+}
+
+func (qs *QuickstartSetting) GetLogsEnabledOrDefault() *bool {
+	if qs.LogsEnabled == nil {
+		newTrue := true
+		return &newTrue
+	}
+	return qs.LogsEnabled
 }
 
 func main() {
@@ -377,10 +393,10 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 					},
 				},
 				Tracing: operatorv1alpha1.TracingSpec{
-					Enabled: &setting.TracesEnabled,
+					Enabled: setting.GetTracesEnabledOrDefault(),
 				},
 				Logging: operatorv1alpha1.LoggingSpec{
-					Enabled: &setting.LogsEnabled,
+					Enabled: setting.GetLogsEnabledOrDefault(),
 				},
 			},
 		}
