@@ -32,14 +32,8 @@ monitoredNamespaces:
 ```
 
 **Notes**
-1. adding additional namespace can be done by re-running the command above with the only additional namespace added to the `monitoredNamespaces` list (no need to re-include the ones from previous runs).
-2. Removing namespaces monitored via this method can be done by running:
-
-```sh
-kubectl delete lumigo --all --namespace <monitored namespace>
-kubectl delete secret lumigo-credentials --namespace <monitored namespace>
-```
-for each monitored namespace.
+1. adding additional namespace(s) can be done by re-running the command above with the only additional namespace(s) added to the `monitoredNamespaces` list (no need to re-include the ones from previous runs).
+2. Opting out from Lumigo monitoring a namespace specified in the `monitoredNamespaces` list is explained in the [#### Remove injection from existing resources](#remove-injection-from-existing-resources) section.
 
 #### Install only
 
@@ -366,6 +360,12 @@ spec:
 ```
 
 #### Remove injection from existing resources
+
+To opt-out from Lumigo monitoring a namespace, you can delete the Lumigo resource from that namespace along with its corresponding secret:
+```sh
+kubectl delete lumigo --all --namespace <monitored namespace>
+kubectl delete secret lumigo-credentials --namespace <monitored namespace>
+```
 
 By default, when detecting the deletion of the Lumigo resource in a namespace, the Lumigo controller will remove instrumentation from existing resources of the [supported types](#supported-resource-types).
 The injection will cause new pods to be created for daemonsets, deployments, replicasets, statefulsets and jobs; cronjobs will spawn non-injected pods at the next iteration.
