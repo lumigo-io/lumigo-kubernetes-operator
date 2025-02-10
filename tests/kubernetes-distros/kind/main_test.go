@@ -194,6 +194,8 @@ func TestMain(m *testing.M) {
 	testPythonImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_PYTHON_IMG_NAME, runId)
 	testPythonImageArchivePath := filepath.Join(tmpDir, "test-python.tgz")
 
+	quickstartNamespace := "test-quickstart-ns"
+
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
 	ctx = context.WithValue(ctx, internal.ContextKeyKubernetesClusterName, kindClusterName)
 	ctx = context.WithValue(ctx, internal.ContextKeyOtlpSinkConfigPath, dataSinkConfigDir)
@@ -210,6 +212,7 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextTestAppBusyboxIncludedContainerNamePrefix, "busybox-included")
 	ctx = context.WithValue(ctx, internal.ContextTestAppBusyboxExcludedContainerNamePrefix, "busybox-excluded")
 	ctx = context.WithValue(ctx, internal.ContextTestAppNamespacePrefix, "test-logs-ns")
+	ctx = context.WithValue(ctx, internal.ContextQuickstartNamespace, quickstartNamespace)
 
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
@@ -237,6 +240,10 @@ func TestMain(m *testing.M) {
 		 * works only for local image, in the local Docker daemon).
 		 */
 		envfuncs.CreateNamespace(OTLP_SINK_NAMESPACE),
+
+		// Create the namespace on which the quickstart feature will operate
+		envfuncs.CreateNamespace(quickstartNamespace),
+
 		otlpSinkFeature,
 		lumigoOperatorFeature,
 	)

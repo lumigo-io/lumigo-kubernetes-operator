@@ -272,7 +272,7 @@ jobs:
         if: always()
       - name: Store OTLP test data as artifact
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kind-otlp-data
           # Skip container images

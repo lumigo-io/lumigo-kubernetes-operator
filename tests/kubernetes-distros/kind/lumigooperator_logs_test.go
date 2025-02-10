@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr/testr"
 	"golang.org/x/exp/slices"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
@@ -46,8 +45,6 @@ var (
 //    `kubectl` configuration
 
 func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
-	logger := testr.New(t)
-
 	testAppDeploymentFeature := features.New("TestApp").
 		Setup(func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 			client := config.Client()
@@ -136,8 +133,8 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 							},
 							Containers: []corev1.Container{
 								{
-									Name:    "myapp",
-									Image:   ctx.Value(internal.ContextTestAppPythonImageName).(string),
+									Name:  "myapp",
+									Image: ctx.Value(internal.ContextTestAppPythonImageName).(string),
 									Resources: corev1.ResourceRequirements{
 										Limits: corev1.ResourceList{
 											corev1.ResourceMemory: resource.MustParse("1Gi"),
@@ -163,40 +160,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 				},
 			}
 
-			if err := client.Resources().Create(ctx, deployment); err != nil {
-				t.Fatal(err)
-			}
-
-			// Wait until the deployment has all its pods running
-			// See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#complete-deployment
-			wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
-				d := object.(*appsv1.Deployment)
-				return d.Status.AvailableReplicas == replicas && d.Status.ReadyReplicas == replicas
-			}))
-
-			logger.Info("Deployment is ready")
-
-			// // Restart deployment to make sure it gets injected with the injector sidecar
-			// annotations := deployment.GetAnnotations()
-			// annotations["force-this-deployment-to-restart"] = "by-changing-some-random-annotation"
-			// deployment.SetAnnotations(annotations)
-			// if err := config.Client().Resources().Update(ctx, deployment); err != nil {
-			// 	t.Fatalf("Failed to restart deployment: %v", err)
-			// }
-
-			// wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
-			// 	d := object.(*appsv1.Deployment)
-			// 	return d.Status.AvailableReplicas == replicas && d.Status.ReadyReplicas == replicas
-			// }))
-
-			// Tear it all down
-			if err := client.Resources().Delete(ctx, deployment); err != nil {
-				t.Fatal(err)
-			}
-
-			wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
-
-			logger.Info("Deployment is deleted")
+			createAndDeleteTempDeployment(ctx, config, deployment, replicas)
 
 			return ctx
 		}).
@@ -418,7 +382,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					if actualClusterUID, found := resourceAttributes["k8s.cluster.uid"]; !found {
 						// TODO: remove when logs collected from files have the cluster UID
 						if resourceLogs.ScopeLogs().At(0).Scope().Name() != "lumigo-operator.log_file_collector" {
-						t.Fatalf("found logs without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
+							t.Fatalf("found logs without the 'k8s.cluster.uid' resource attribute: %+v", resourceAttributes)
 						}
 					} else if actualClusterUID != expectedClusterUID {
 						t.Fatalf("wrong 'k8s.cluster.uid' value found: '%s'; expected: '%s'; %+v", actualClusterUID, expectedClusterUID, resourceAttributes)
@@ -584,16 +548,107 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					}
 				}
 
-				if (!foundLogFromIncludedContainer) {
+				if !foundLogFromIncludedContainer {
 					t.Fatalf("No logs found from the included container %s", ctx.Value(internal.ContextTestAppBusyboxIncludedContainerNamePrefix).(string))
 				}
 
-				if (foundApplicationLogRecord) {
+				if foundApplicationLogRecord {
 					t.Fatalf("No application logs found with a JSON-object body")
-					} else {
+				} else {
 					t.Fatalf("No application logs found matching the 'log.file.path' attribute")
 				}
 
+				return false, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for application logs: %v", err)
+			}
+
+			return ctx
+		}).Setup(
+		func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
+			quickstartNamespace := ctx.Value(internal.ContextQuickstartNamespace).(string)
+
+			var replicas int32 = 1
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-quickstart-app",
+					Namespace: quickstartNamespace,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test-quickstart-app",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test-quickstart-app",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "quickstart-app",
+									Image: ctx.Value(internal.ContextTestAppPythonImageName).(string),
+								},
+							},
+						},
+					},
+				},
+			}
+
+			createAndDeleteTempDeployment(ctx, config, deployment, replicas)
+
+			return ctx
+		}).
+		Assess("Application logs are collected from quickstart namespace", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+			quickstartNamespace := ctx.Value(internal.ContextQuickstartNamespace).(string)
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				applicationLogs := make([]plog.LogRecord, 0)
+
+				/*
+				 * Logs come in multiple lines, and two different scopes; we need to split by '\n'.
+				 * bufio.NewScanner fails because our lines are "too long" (LOL).
+				 */
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if appLogs, err := exportRequestLogRecords(exportRequest, filterNamespaceAppLogRecords(quickstartNamespace)); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						applicationLogs = append(applicationLogs, appLogs...)
+					}
+				}
+
+				if len(applicationLogs) < 1 {
+					// No application logs received yet
+					t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
+					return false, nil
+				}
+
+				for _, logLine := range applicationLogs {
+					if strings.Contains(logLine.Body().AsString(), "something to say to the logs") {
+						t.Logf("Found application logs: %d", len(applicationLogs))
+						return true, nil
+					}
+				}
+
+				t.Fatalf("No logs with expected body found in '%s'", logsPath)
 				return false, nil
 			}); err != nil {
 				t.Fatalf("Failed to wait for application logs: %v", err)
@@ -726,30 +781,65 @@ func exportRequestLogRecords(exportRequest plogotlp.ExportRequest, filter LogRec
 	return allLogRecords, nil
 }
 
+func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, deployment *appsv1.Deployment, expectedReplicas int32) error {
+	client := config.Client()
+	if err := client.Resources().Create(ctx, deployment); err != nil {
+		return err
+	}
+
+	// Wait until the deployment has all its pods running
+	// See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#complete-deployment
+	wait.For(conditions.New(config.Client().Resources()).ResourceMatch(deployment, func(object k8s.Object) bool {
+		d := object.(*appsv1.Deployment)
+		return d.Status.AvailableReplicas == expectedReplicas && d.Status.ReadyReplicas == expectedReplicas
+	}))
+
+	println("Deployment %s/%s is ready", deployment.Namespace, deployment.Name)
+
+	if err := client.Resources().Delete(ctx, deployment); err != nil {
+		return err
+	}
+
+	wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
+
+	println("Deployment %s/%s is deleted", deployment.Namespace, deployment.Name)
+
+	return nil
+}
 
 func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal")
+	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", "*")
 }
 
 func filterHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat")
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat", "*")
 }
 
 func filterPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector")
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector", "*")
 }
 
-func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string) ([]plog.LogRecord, error) {
+func filterNamespaceAppLogRecords(namespaceName string) LogRecordFilter {
+	return func(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+		return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", namespaceName)
+	}
+}
+
+func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string, filteredNamespaceName string) ([]plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
 	filteredScopeLogRecords := make([]plog.LogRecord, 0)
 
 	for i := 0; i < l; i++ {
 		scopeLogs := resourceLogs.ScopeLogs().At(i)
 		scopeName := scopeLogs.Scope().Name()
+		namespaceName, hasNamespaceName := resourceLogs.Resource().Attributes().Get("k8s.namespace.name")
 		logRecords := scopeLogsToLogRecords(scopeLogs)
 
-		if scopeName == filteredScopeName {
-				filteredScopeLogRecords = append(filteredScopeLogRecords, logRecords...)
+		scopeMatches := filteredScopeName == "*" || (scopeName == filteredScopeName)
+		namespaceMatches := filteredNamespaceName == "*" || (hasNamespaceName && (namespaceName.AsString() == filteredNamespaceName))
+
+		if scopeMatches && namespaceMatches {
+			filteredScopeLogRecords = append(filteredScopeLogRecords, logRecords...)
 		}
 	}
 

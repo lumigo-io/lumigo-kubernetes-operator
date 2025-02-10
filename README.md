@@ -10,7 +10,34 @@ The Kubernetes operator of Lumigo provides a one-click solution to monitoring Ku
 
 ### Installation
 
-Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](https://helm.sh/):
+Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](https://helm.sh/), with one of the following methods:
+
+#### Install & monitor namespaces
+
+The following command installs the operator and immediately applies monitoring to the specified namespaces, with traces or logs enabled or disabled as specified (defaulting to `true` for both):
+
+```sh
+echo "
+cluster:
+  name: <your cluster name>
+lumigoToken:
+  value: <your Lumigo token>
+monitoredNamespaces:
+  - namespace: my-namespace-1-traces-and-logs
+  - namespace: my-namespace-only-traces
+    loggingEnabled: false
+  - namespace: my-namespace-only-logs
+    tracingEnabled: false
+" | helm upgrade -i lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --values -
+```
+
+**Notes**
+1. adding additional namespace(s) can be done by re-running the command above with the only additional namespace(s) added to the `monitoredNamespaces` list (no need to re-include the ones from previous runs).
+2. Opting out from Lumigo monitoring a namespace specified in the `monitoredNamespaces` list is explained in the [#### Remove injection from existing resources](#remove-injection-from-existing-resources) section.
+
+#### Install only
+
+The following command installs the operator but requires you to create a secret and a Lumigo CRD per each monitored namespace, as described in the [Enabling automatic tracing](#enabling-automatic-tracing) section:
 
 ```sh
 helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator && \
@@ -21,7 +48,7 @@ helm install lumigo lumigo/lumigo-operator \
   --set lumigoToken.value=<token>
 ```
 
-**Notes:** 
+**Notes:**
 1. You have the option to alter the namespace from `lumigo-system` to a name of your choosing, but its important to be aware that doing so might cause slight discrepancies throughout the steps below.
 2. The `lumigoToken.value` is optional, but is highly recommended in order properly populate the cluster overview info in the Lumigo platform and have many other K8s-sourced metrics reported automatically. You can use the token from any Lumigo project, and cluster-wide metrics will be forwarded to it once the installation is complete.
 3. The `cluster.name` is optional, but highly advised, see the [Naming your cluster](#naming-your-cluster) section.
@@ -333,6 +360,12 @@ spec:
 ```
 
 #### Remove injection from existing resources
+
+To opt-out from Lumigo monitoring a namespace, you can delete the Lumigo resource from that namespace along with its corresponding secret:
+```sh
+kubectl delete lumigo --all --namespace <monitored namespace>
+kubectl delete secret lumigo-credentials --namespace <monitored namespace>
+```
 
 By default, when detecting the deletion of the Lumigo resource in a namespace, the Lumigo controller will remove instrumentation from existing resources of the [supported types](#supported-resource-types).
 The injection will cause new pods to be created for daemonsets, deployments, replicasets, statefulsets and jobs; cronjobs will spawn non-injected pods at the next iteration.
