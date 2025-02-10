@@ -31,6 +31,16 @@ monitoredNamespaces:
 " | helm upgrade -i lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --values -
 ```
 
+**Notes**
+1. adding additional namespace can be done by re-running the command above with the only additional namespace added to the `monitoredNamespaces` list (no need to re-include the ones from previous runs).
+2. Removing namespaces monitored via this method can be done by running:
+
+```sh
+kubectl delete lumigo --all --namespace <monitored namespace>
+kubectl delete secret lumigo-credentials --namespace <monitored namespace>
+```
+for each monitored namespace.
+
 #### Install only
 
 The following command installs the operator but requires you to create a secret and a Lumigo CRD per each monitored namespace, as described in the [Enabling automatic tracing](#enabling-automatic-tracing) section:
