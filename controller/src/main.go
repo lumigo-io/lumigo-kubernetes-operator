@@ -67,25 +67,25 @@ func init() {
 }
 
 type QuickstartSetting struct {
-	Namespace     string `json:"namespace"`
-	TracesEnabled *bool  `json:"tracesEnabled,omitempty"`
-	LogsEnabled   *bool  `json:"logsEnabled,omitempty"`
+	Namespace       string 	`json:"namespace"`
+	TracingEnabled  *bool  	`json:"tracingEnabled,omitempty"`
+	LoggingEnabled  *bool  	`json:"loggingEnabled,omitempty"`
 }
 
 func (qs *QuickstartSetting) GetTracesEnabledOrDefault() *bool {
-	if qs.TracesEnabled == nil {
+	if qs.TracingEnabled == nil {
 		newTrue := true
 		return &newTrue
 	}
-	return qs.TracesEnabled
+	return qs.TracingEnabled
 }
 
 func (qs *QuickstartSetting) GetLogsEnabledOrDefault() *bool {
-	if qs.LogsEnabled == nil {
+	if qs.LoggingEnabled == nil {
 		newTrue := true
 		return &newTrue
 	}
-	return qs.LogsEnabled
+	return qs.LoggingEnabled
 }
 
 func main() {
