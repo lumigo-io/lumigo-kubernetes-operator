@@ -17,17 +17,19 @@ Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](htt
 The following command installs the operator and immediately applies monitoring to the specified namespaces, with traces or logs enabled or disabled as specified (defaulting to `true` for both):
 
 ```sh
+helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator && \
 echo "
 cluster:
-  name: <your cluster name>
+  name: <cluster name>
 lumigoToken:
-  value: <your Lumigo token>
+  value: <Lumigo token>
 monitoredNamespaces:
-  - namespace: my-namespace-1-traces-and-logs
-  - namespace: my-namespace-only-traces
+  - namespace: <namespace for tracing and logging>
+    loggingEnabled: true
+    tracingEnabled: true
+  - namespace: <namespace for tracing>
     loggingEnabled: false
-  - namespace: my-namespace-only-logs
-    tracingEnabled: false
+    tracingEnabled: true
 " | helm upgrade -i lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --values -
 ```
 
@@ -41,7 +43,7 @@ The following command installs the operator but requires you to create a secret 
 
 ```sh
 helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator && \
-helm install lumigo lumigo/lumigo-operator \
+helm upgrade -i lumigo lumigo/lumigo-operator \
   --namespace lumigo-system \
   --create-namespace \
   --set cluster.name=<cluster_name> \
