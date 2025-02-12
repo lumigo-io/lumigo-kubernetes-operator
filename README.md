@@ -24,10 +24,10 @@ cluster:
 lumigoToken:
   value: <Lumigo token>
 monitoredNamespaces:
-  - namespace: <namespace for tracing and logging>
+  - namespace: <namespace>
     loggingEnabled: true
     tracingEnabled: true
-  - namespace: <namespace for tracing>
+  - namespace: <namespace>
     loggingEnabled: false
     tracingEnabled: true
 " | helm upgrade -i lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --values -
