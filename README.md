@@ -18,6 +18,7 @@ The following command installs the operator and immediately applies monitoring t
 
 ```sh
 helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator && \
+helm repo update && \
 echo "
 cluster:
   name: <cluster name>
