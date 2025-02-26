@@ -581,37 +581,37 @@ func (c *KubeClient) EnsureObjectReferenceIsKnown(objectReference corev1.ObjectR
 			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
 		}
 	case AppsV1DaemonSet:
-		if _, found, err := c.getDaemonSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+		if _, found, err := c.GetDaemonSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
 			return err
 		} else if !found {
 			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
 		}
 	case AppsV1Deployment:
-		if _, found, err := c.getDeployment(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+		if _, found, err := c.GetDeployment(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
 			return err
 		} else if !found {
 			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
 		}
 	case AppsV1ReplicaSet:
-		if _, found, err := c.getReplicaSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+		if _, found, err := c.GetReplicaSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
 			return err
 		} else if !found {
 			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
 		}
 	case AppsV1StatefulSet:
-		if _, found, err := c.getStatefulSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+		if _, found, err := c.GetStatefulSet(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
 			return err
 		} else if !found {
 			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
 		}
 	case BatchV1CronJob:
-		if _, found, err := c.getCronJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+		if _, found, err := c.GetCronJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
 			return err
 		} else if !found {
 			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
 		}
 	case BatchV1Job:
-		if _, found, err := c.getJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
+		if _, found, err := c.GetJob(objectReference.Name, objectReference.Namespace, objectReference.ResourceVersion); err != nil {
 			return err
 		} else if !found {
 			return errors.NewNotFound(gvkToGroupResource(gvk), objectReference.Name)
@@ -881,27 +881,27 @@ func (c *KubeClient) resolveObject(gvk schema.GroupVersionKind, name, namespace 
 		}
 	case AppsV1DaemonSet:
 		{
-			return c.getDaemonSet(name, namespace, "")
+			return c.GetDaemonSet(name, namespace, "")
 		}
 	case AppsV1Deployment:
 		{
-			return c.getDeployment(name, namespace, "")
+			return c.GetDeployment(name, namespace, "")
 		}
 	case AppsV1ReplicaSet:
 		{
-			return c.getReplicaSet(name, namespace, "")
+			return c.GetReplicaSet(name, namespace, "")
 		}
 	case AppsV1StatefulSet:
 		{
-			return c.getStatefulSet(name, namespace, "")
+			return c.GetStatefulSet(name, namespace, "")
 		}
 	case BatchV1CronJob:
 		{
-			return c.getCronJob(name, namespace, "")
+			return c.GetCronJob(name, namespace, "")
 		}
 	case BatchV1Job:
 		{
-			return c.getJob(name, namespace, "")
+			return c.GetJob(name, namespace, "")
 		}
 	default:
 		{
@@ -923,7 +923,7 @@ func (c *KubeClient) resolveOwnerReferences(gvk schema.GroupVersionKind, name, n
 		}
 	case AppsV1DaemonSet:
 		{
-			if daemonset, found, err := c.getDaemonSet(name, namespace, ""); err != nil {
+			if daemonset, found, err := c.GetDaemonSet(name, namespace, ""); err != nil {
 				return []metav1.OwnerReference{}, err
 			} else if found {
 				return daemonset.OwnerReferences, nil
@@ -931,7 +931,7 @@ func (c *KubeClient) resolveOwnerReferences(gvk schema.GroupVersionKind, name, n
 		}
 	case AppsV1Deployment:
 		{
-			if deployment, found, err := c.getDeployment(name, namespace, ""); err != nil {
+			if deployment, found, err := c.GetDeployment(name, namespace, ""); err != nil {
 				return []metav1.OwnerReference{}, err
 			} else if found {
 				return deployment.OwnerReferences, nil
@@ -939,7 +939,7 @@ func (c *KubeClient) resolveOwnerReferences(gvk schema.GroupVersionKind, name, n
 		}
 	case AppsV1ReplicaSet:
 		{
-			if replicaSet, found, err := c.getReplicaSet(name, namespace, ""); err != nil {
+			if replicaSet, found, err := c.GetReplicaSet(name, namespace, ""); err != nil {
 				return []metav1.OwnerReference{}, err
 			} else if found {
 				return replicaSet.OwnerReferences, nil
@@ -947,7 +947,7 @@ func (c *KubeClient) resolveOwnerReferences(gvk schema.GroupVersionKind, name, n
 		}
 	case AppsV1StatefulSet:
 		{
-			if statefulSet, found, err := c.getStatefulSet(name, namespace, ""); err != nil {
+			if statefulSet, found, err := c.GetStatefulSet(name, namespace, ""); err != nil {
 				return []metav1.OwnerReference{}, err
 			} else if found {
 				return statefulSet.OwnerReferences, nil
@@ -955,7 +955,7 @@ func (c *KubeClient) resolveOwnerReferences(gvk schema.GroupVersionKind, name, n
 		}
 	case BatchV1CronJob:
 		{
-			if cronJob, found, err := c.getCronJob(name, namespace, ""); err != nil {
+			if cronJob, found, err := c.GetCronJob(name, namespace, ""); err != nil {
 				return []metav1.OwnerReference{}, err
 			} else if found {
 				return cronJob.OwnerReferences, nil
@@ -963,7 +963,7 @@ func (c *KubeClient) resolveOwnerReferences(gvk schema.GroupVersionKind, name, n
 		}
 	case BatchV1Job:
 		{
-			if job, found, err := c.getJob(name, namespace, ""); err != nil {
+			if job, found, err := c.GetJob(name, namespace, ""); err != nil {
 				return []metav1.OwnerReference{}, err
 			} else if found {
 				return job.OwnerReferences, nil
@@ -1098,7 +1098,7 @@ func (c *KubeClient) getPod(name, namespace, resourceVersion string) (*corev1.Po
 	}
 }
 
-func (c *KubeClient) getDaemonSet(name, namespace, resourceVersion string) (*appsv1.DaemonSet, bool, error) {
+func (c *KubeClient) GetDaemonSet(name, namespace, resourceVersion string) (*appsv1.DaemonSet, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -1140,7 +1140,7 @@ func (c *KubeClient) getDaemonSet(name, namespace, resourceVersion string) (*app
 	}
 }
 
-func (c *KubeClient) getDeployment(name, namespace, resourceVersion string) (*appsv1.Deployment, bool, error) {
+func (c *KubeClient) GetDeployment(name, namespace, resourceVersion string) (*appsv1.Deployment, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -1183,7 +1183,7 @@ func (c *KubeClient) getDeployment(name, namespace, resourceVersion string) (*ap
 	}
 }
 
-func (c *KubeClient) getReplicaSet(name, namespace, resourceVersion string) (*appsv1.ReplicaSet, bool, error) {
+func (c *KubeClient) GetReplicaSet(name, namespace, resourceVersion string) (*appsv1.ReplicaSet, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -1226,7 +1226,7 @@ func (c *KubeClient) getReplicaSet(name, namespace, resourceVersion string) (*ap
 	}
 }
 
-func (c *KubeClient) getStatefulSet(name, namespace, resourceVersion string) (*appsv1.StatefulSet, bool, error) {
+func (c *KubeClient) GetStatefulSet(name, namespace, resourceVersion string) (*appsv1.StatefulSet, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -1268,7 +1268,7 @@ func (c *KubeClient) getStatefulSet(name, namespace, resourceVersion string) (*a
 	}
 }
 
-func (c *KubeClient) getCronJob(name, namespace, resourceVersion string) (*batchv1.CronJob, bool, error) {
+func (c *KubeClient) GetCronJob(name, namespace, resourceVersion string) (*batchv1.CronJob, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)
@@ -1310,7 +1310,7 @@ func (c *KubeClient) getCronJob(name, namespace, resourceVersion string) (*batch
 	}
 }
 
-func (c *KubeClient) getJob(name, namespace, resourceVersion string) (*batchv1.Job, bool, error) {
+func (c *KubeClient) GetJob(name, namespace, resourceVersion string) (*batchv1.Job, bool, error) {
 	var cacheKey string
 	if resourceVersion == "" {
 		cacheKey = fmt.Sprintf("%s/%s", namespace, name)

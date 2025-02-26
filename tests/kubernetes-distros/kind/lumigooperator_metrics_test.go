@@ -31,7 +31,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 
 			metricsPath := filepath.Join(otlpSinkDataPath, "metrics.json")
 
-			if err := apimachinerywait.PollImmediateWithContext(ctx, 10 * time.Second , 4 * time.Minute, func(context.Context) (bool, error) {
+			if err := apimachinerywait.PollImmediateWithContext(ctx, 10*time.Second, 4*time.Minute, func(context.Context) (bool, error) {
 				metricsBytes, err := os.ReadFile(metricsPath)
 				if err != nil {
 					return false, err
@@ -52,7 +52,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					exportRequest := pmetricotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					allResourceMetrics, err := exportRequestToResourceMetrics(exportRequest);
+					allResourceMetrics, err := exportRequestToResourceMetrics(exportRequest)
 					if err != nil {
 						return false, fmt.Errorf("Cannot extract resource metrics from export request: %v", err)
 					}
@@ -98,6 +98,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				cadvisorMetricsFound := false
 				kubeStateMetricsFound := false
 				labelMetricsFound := false
+				ownerMetricsFound := false
 
 				for _, metric := range metrics {
 					if metric.Name() == "node_cpu_seconds_total" {
@@ -123,6 +124,24 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					if metric.Name() == "kube_deployment_labels" {
 						labelMetricsFound = true
 					}
+
+					if metric.Name() == "kube_pod_owner" {
+						ownerMetricsFound = true
+						for i := 0; i < metric.Gauge().DataPoints().Len(); i++ {
+							attributes := metric.Gauge().DataPoints().At(i).Attributes()
+							ownerKindAttr, found := attributes.Get("owner_kind")
+							if !found {
+								t.Logf("could not find attribute 'owner_kind' for metric 'kube_pod_owner'")
+								return false, nil
+							} else if ownerKindAttr.AsString() == "ReplicaSet" {
+								_, ownerUidFound := attributes.Get("owner_uid")
+								if !ownerUidFound {
+									t.Logf("could not find attribute 'owner_uid' for metric 'kube_pod_owner'")
+									return false, nil
+								}
+							}
+						}
+					}
 				}
 
 				if !prometheusNodeExporterMetricsFound {
@@ -142,6 +161,11 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 
 				if !labelMetricsFound {
 					t.Logf("could not find label metrics. Seen metrics: %v", uniqueMetricNames)
+					return false, nil
+				}
+
+				if !ownerMetricsFound {
+					t.Logf("could not find owner metrics. Seen metrics: %v", uniqueMetricNames)
 					return false, nil
 				}
 
