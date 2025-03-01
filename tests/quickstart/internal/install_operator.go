@@ -36,7 +36,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	quickstartNamespace := ctx.Value(ContextQuickstartNamespace).(string)
 
 	var curDir, _ = os.Getwd()
-	chartDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(curDir))), "charts", "lumigo-operator")
+	chartDir := filepath.Join(filepath.Dir(filepath.Dir(curDir)), "charts", "lumigo-operator")
 	logger.Info("Installing Operator via Helm", "Chart dir", chartDir)
 
 	manager := helm.New(kubeconfigFilePath)
@@ -54,9 +54,12 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
+		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
+		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.logs_url=%s", otlpSinkUrl)),
+		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken)),                        // Use the the test-token for infra metrics as well
-		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)),                          // Operator debug logging at runtime
 		helm.WithArgs(fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace)), // Enable monitoring of a namespace during installation time
+		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)),                          // Operator debug logging at runtime
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),
