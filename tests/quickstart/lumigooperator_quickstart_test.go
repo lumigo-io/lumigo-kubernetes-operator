@@ -48,6 +48,14 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 					return false, nil
 				}
 
+				lumigo := lumigoes.Items[0]
+				if lumigo.Spec.Tracing.Enabled == nil || *lumigo.Spec.Tracing.Enabled != true {
+					t.Fatalf("Value of Spec.Tracing.Enabled from the Lumigo CRD found in the quickstart namespace is not true (found %v)", lumigo.Spec.Tracing.Enabled)
+				}
+				if lumigo.Spec.Logging.Enabled == nil || *lumigo.Spec.Logging.Enabled != true {
+					t.Fatalf("Value of Spec.Logging.Enabled from the Lumigo CRD found in the quickstart namespace is not true (found %v)", lumigo.Spec.Tracing.Enabled)
+				}
+
 				return true, nil
 			}); err != nil {
 				t.Fatalf("Failed to wait for CRD created during operator installation: %v", err)
