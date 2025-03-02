@@ -104,8 +104,7 @@ func TestMain(m *testing.M) {
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
 	logrWrapper := stdr.New(logger)
-	lumigoOperatorFeature := internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, "http://nothing.real.com", logrWrapper)
-
+	newFalse := false
 	testEnv.Setup(
 		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(telemetryProxyImageName, filepath.Join(repoRoot, "telemetryproxy"), telemetryProxyImageArchivePath, logger),
@@ -116,7 +115,12 @@ func TestMain(m *testing.M) {
 		// Create the namespace on which the quickstart feature will operate
 		envfuncs.CreateNamespace(quickstartNamespace),
 
-		lumigoOperatorFeature,
+		// First installation
+		internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, "http://nothing.real.com", logrWrapper, false),
+		// Create a CRD after the installation
+		internal.CreateCRD(quickstartNamespace, &newFalse, &newFalse),
+		// Upgrade and modify the CRD via the monitoredNamespaces setting (quickstart installation)
+		internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, "http://nothing.real.com", logrWrapper, true),
 	)
 
 	testEnv.Finish(

@@ -27,7 +27,7 @@ const (
 	DEFAULT_IMG_VERSION         = "latest"
 )
 
-func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfigFilePath string, lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) (context.Context, error) {
+func installOrUpgradeLumigoOperator(ctx context.Context, client klient.Client, kubeconfigFilePath string, lumigoNamespace string, otlpSinkUrl string, logger logr.Logger, applyMonitoredNamespaces bool) (context.Context, error) {
 	controllerImageName, controllerImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorControllerImage).(string))
 	telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorTelemetryProxyImage).(string))
 	operatorDebug := ctx.Value(ContextKeyLumigoOperatorDebug).(bool)
@@ -44,25 +44,35 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	if err != nil {
 		return ctx, fmt.Errorf("failed to run helm dependency update: %w", err)
 	}
-	if err := manager.RunInstall(
+	helmArgs := []string{
+		"--install",
+		"--create-namespace",
+		fmt.Sprintf("--set cluster.name=%s", kubernetesClusterName),
+		fmt.Sprintf("--set controllerManager.manager.image.repository=%s", controllerImageName),
+		fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag),
+		fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName),
+		fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag),
+		fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl),
+		fmt.Sprintf("--set endpoint.otlp.logs_url=%s", otlpSinkUrl),
+		fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl),
+		fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken), // Use the the test-token for infra metrics as well
+		fmt.Sprintf("--set debug.enabled=%v", operatorDebug),   // Operator debug logging at runtime
+		"--debug", // Helm debug output on install
+	}
+	if applyMonitoredNamespaces {
+		monitoredNamespacesArgs := []string{
+			fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace),
+			fmt.Sprintf("--set monitoredNamespaces[0].loggingEnabled=%t", true),
+			fmt.Sprintf("--set monitoredNamespaces[0].tracingEnabled=%t", true),
+		}
+		// Enable monitoring of a namespace on upgrade time
+		helmArgs = append(helmArgs, monitoredNamespacesArgs...)
+	}
+	if err := manager.RunUpgrade(
 		helm.WithName("lumigo"),
 		helm.WithChart(chartDir),
 		helm.WithNamespace(lumigoNamespace),
-		helm.WithArgs("--create-namespace"),
-		helm.WithArgs(fmt.Sprintf("--set cluster.name=%s", kubernetesClusterName)),
-		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.repository=%s", controllerImageName)),
-		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
-		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
-		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
-		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
-		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.logs_url=%s", otlpSinkUrl)),
-		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl)),
-		helm.WithArgs(fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken)),                        // Use the the test-token for infra metrics as well
-		helm.WithArgs(fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace)), // Enable monitoring of a namespace during installation time
-		helm.WithArgs(fmt.Sprintf("--set debug.enabled=%v", operatorDebug)),                          // Operator debug logging at runtime
-		helm.WithArgs("--debug"), // Helm debug output on install
-		helm.WithWait(),
-		helm.WithTimeout("3m"),
+		helm.WithArgs(helmArgs...),
 	); err != nil {
 		return ctx, fmt.Errorf("failed to invoke helm install operation due to an error: %w", err)
 	}
@@ -79,14 +89,14 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	return ctx, nil
 }
 
-func LumigoOperatorEnvFunc(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
+func LumigoOperatorEnvFunc(lumigoNamespace string, otlpSinkUrl string, logger logr.Logger, applyMonitoredNamespaces bool) func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
 		client, err := config.NewClient()
 		if err != nil {
 			return ctx, err
 		}
 
-		return installLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, logger)
+		return installOrUpgradeLumigoOperator(ctx, client, config.KubeconfigFile(), lumigoNamespace, otlpSinkUrl, logger, applyMonitoredNamespaces)
 	}
 }
 

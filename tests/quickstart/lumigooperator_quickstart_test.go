@@ -2,6 +2,7 @@ package kind
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 	}
 
 	testAppDeploymentFeature := features.New("TestApp").
-		Assess("Lumigo CRD is created in the namespace mentioned in the quickstart settings", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+		Assess("Lumigo CRD is modified after an upgrade for a namespace mentioned in the quickstart settings", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			if err := apimachinerywait.PollImmediateWithContext(ctx, 10*time.Second, 4*time.Minute, func(context.Context) (bool, error) {
 				client := cfg.Client()
 				r, err := resources.New(client.RESTConfig())
@@ -49,16 +50,22 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 				}
 
 				lumigo := lumigoes.Items[0]
-				if lumigo.Spec.Tracing.Enabled == nil || *lumigo.Spec.Tracing.Enabled != true {
-					t.Fatalf("Value of Spec.Tracing.Enabled from the Lumigo CRD found in the quickstart namespace is not true (found %v)", lumigo.Spec.Tracing.Enabled)
+				if lumigo.Spec.Tracing.Enabled == nil {
+					return false, fmt.Errorf("Spec.Tracing.Enabled in the Lumigo CRD found in the quickstart namespace is not set")
 				}
-				if lumigo.Spec.Logging.Enabled == nil || *lumigo.Spec.Logging.Enabled != true {
-					t.Fatalf("Value of Spec.Logging.Enabled from the Lumigo CRD found in the quickstart namespace is not true (found %v)", lumigo.Spec.Tracing.Enabled)
+				if *lumigo.Spec.Tracing.Enabled != true {
+					return false, fmt.Errorf("Value of Spec.Tracing.Enabled from the Lumigo CRD found in the quickstart namespace is set to false, expected: true")
+				}
+				if lumigo.Spec.Logging.Enabled == nil {
+					return false, fmt.Errorf("Spec.Logging.Enabled in the Lumigo CRD found in the quickstart namespace is not set")
+				}
+				if *lumigo.Spec.Logging.Enabled != true {
+					return false, fmt.Errorf("Value of Spec.Logging.Enabled from the Lumigo CRD found in the quickstart namespace is set to false, expected: true")
 				}
 
 				return true, nil
 			}); err != nil {
-				t.Fatalf("Failed to wait for CRD created during operator installation: %v", err)
+				t.Fatalf("Failed to match correct CRD spec stetting for CRD created during operator installation: %v", err)
 			}
 
 			return ctx
