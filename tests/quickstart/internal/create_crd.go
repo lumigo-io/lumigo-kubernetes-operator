@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"time"
 
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -11,6 +12,8 @@ import (
 	// "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
+
+	apimachinerywait "k8s.io/apimachinery/pkg/util/wait"
 )
 
 func CreateCRD(namespace string, tracingEnabled *bool, loggingEnabled *bool) func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
@@ -63,12 +66,11 @@ func CreateCRD(namespace string, tracingEnabled *bool, loggingEnabled *bool) fun
 			},
 		}
 
-		err = r.Create(ctx, lumigo)
-		if err != nil {
-			return ctx, err
-		}
+		err = apimachinerywait.PollImmediateWithContext(ctx, 10*time.Second, 2*time.Minute, func(context.Context) (bool, error) {
+			err = r.Create(ctx, lumigo)
+			return err == nil, err
+		})
 
-		return ctx, nil
+		return ctx, err
 	}
-
 }
