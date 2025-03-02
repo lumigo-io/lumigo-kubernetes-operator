@@ -40,6 +40,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -349,7 +350,7 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 	operatorv1alpha1.AddToScheme(s)
 	corev1.AddToScheme(s)
 
-	client, err := client.New(config, client.Options{Scheme: s})
+	client, err := runtimeclient.New(config, runtimeclient.Options{Scheme: s})
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -408,8 +409,19 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 				// as the admission webhook rejects it before the IsAlreadyExists gets a chance to be thrown,
 				// Therefore, we check for the error message returned from the admission webhook
 				if lumigoAlreadyExistsInNamespace {
-					logger.Error(err, "Lumigo resource already exists, skipping namespace from quickstart setup", "namespace", setting.Namespace)
-					break
+					logger.Info("Lumigo resource already exists in namespace, updating values", "namespace", setting.Namespace)
+					if client.Get(ctx, runtimeclient.ObjectKey{Namespace: setting.Namespace, Name: "lumigo"}, lumigo) != nil {
+						logger.Error(err, "could not read existing Lumigo resource", "namespace", setting.Namespace)
+						break
+					} else {
+						newFalse := false
+						newTrue := true
+						// If both the existing CRD are missing an explicit value, we set it to the default value
+						// the operator given to each setting when reading a CRD - which is `true` for tracing and `false` for logging
+						updateIfNil(&lumigo.Spec.Tracing.Enabled, setting.TracingEnabled, &newTrue)
+						updateIfNil(&lumigo.Spec.Logging.Enabled, setting.LoggingEnabled, &newFalse)
+						client.Update(ctx, lumigo)
+					}
 				} else {
 					logger.Error(err, "Failed to create Lumigo CRD during quickstart, controller is probably not ready yet. Retrying...", "namespace", setting.Namespace, "attempt", attempts+1)
 					createErr = err
@@ -429,4 +441,16 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 	}
 
 	return nil
+}
+
+ func updateIfNil(target **bool, source *bool, defaultValue *bool) {
+	if *target == nil {
+		if source == nil {
+			*target = defaultValue
+		} else {
+			*target = source
+		}
+	} else if source != nil {
+		*target = source
+	}
 }

@@ -280,6 +280,32 @@ jobs:
             tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}
             !tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}/*.tgz
 
+  test-quickstart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # We do not need the git history
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Run quickstart (monitored namespaces on installation) tests
+        working-directory: tests/quickstart
+        run: go test -timeout 15m -test.v -args -v 4
+        env:
+          KEEP_OTLP_DATA: true
+      - run: ls -lR tests/quickstart
+        if: always()
+      - name: Store OTLP test data as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-otlp-data-quickstart
+          # Skip container images
+          path: |
+            tests/quickstart/resources/test-runs/${{ github.run_id }}
+            !tests/quickstart/resources/test-runs/${{ github.run_id }}/*.tgz
+
   test-controller-for-security-issues:
     runs-on: ubuntu-latest
     steps:
