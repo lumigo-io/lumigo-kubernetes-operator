@@ -12,7 +12,10 @@ metadata:
     lumigo.auto-trace: 'false' # We do not need the operator to inject itself
   annotations:
     helm.sh/hook: post-install,post-upgrade
+    {{- if not .Values.debug.enabled }}
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded # we skip hook-failed, so the job will be kept for troubleshooting in case of a failure
+    {{- end }}
+
 spec:
   completions: 1
   backoffLimit: 2
@@ -32,7 +35,7 @@ spec:
         command:
           - "/manager"
         args:
-          - --quickstart={{ .Values.monitoredNamespaces | toJson }}
+          - --quickstart={{ if (toString .Values.monitoredNamespaces) | eq "all" }}all{{ else }}{{ .Values.monitoredNamespaces | toJson }}{{ end }}
           - --lumigo-token={{ .Values.lumigoToken.value }}
         securityContext:
           allowPrivilegeEscalation: false

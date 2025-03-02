@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/testr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/tests/quickstart/internal"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,7 +29,7 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 	}
 
 	testAppDeploymentFeature := features.New("TestApp").
-		Assess("Lumigo CRD is modified after an upgrade for a namespace mentioned in the quickstart settings", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+		Assess("Lumigo CRD is modified after an upgrade for a namespace provided in the quickstart settings", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			if err := apimachinerywait.PollImmediateWithContext(ctx, 10*time.Second, 4*time.Minute, func(context.Context) (bool, error) {
 				client := cfg.Client()
 				r, err := resources.New(client.RESTConfig())
@@ -38,14 +39,14 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 				operatorv1alpha1.AddToScheme(r.GetScheme())
 
 				lumigoes := &operatorv1alpha1.LumigoList{}
-				quickstartNamespace := ctx.Value(internal.ContextQuickstartNamespace).(string)
-				if err := client.Resources(quickstartNamespace).List(ctx, lumigoes); err != nil {
-					t.Fatalf("Could not list Lumigo CRDs in namespace '%s': %v", quickstartNamespace, err)
+				quickstartNamespaceWithExistingCrd := ctx.Value(internal.ContextQuickstartNamespaces).([]string)[0]
+				if err := client.Resources(quickstartNamespaceWithExistingCrd).List(ctx, lumigoes); err != nil {
+					t.Fatalf("Could not list Lumigo CRDs in namespace '%s': %v", quickstartNamespaceWithExistingCrd, err)
 					return false, err
 				}
 
 				if len(lumigoes.Items) == 0 {
-					t.Fatalf("No Lumigo CRDs found in the quickstart namespace '%s'", quickstartNamespace)
+					t.Fatalf("No Lumigo CRDs found in the quickstart namespace '%s'", quickstartNamespaceWithExistingCrd)
 					return false, nil
 				}
 
@@ -66,6 +67,49 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 				return true, nil
 			}); err != nil {
 				t.Fatalf("Failed to match correct CRD spec stetting for CRD created during operator installation: %v", err)
+			}
+
+			return ctx
+		}).
+		Assess("Lumigo CRDs are created for all namespaces when monitoredNamespaces=all was set during installation", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			logger := testr.New(t)
+
+			client := cfg.Client()
+			r, err := resources.New(client.RESTConfig())
+			if err != nil {
+				t.Fatalf("Failed to create k8s client: %v", err)
+			}
+			operatorv1alpha1.AddToScheme(r.GetScheme())
+
+			quickstartNamespaces, isOk := ctx.Value(internal.ContextQuickstartNamespaces).([]string)
+			if !isOk {
+				t.Fatalf("Failed to get quickstart namespaces from context")
+			}
+
+			_, err = internal.InstallOrUpgradeLumigoOperator(ctx, client, cfg.KubeconfigFile(), logger, []string{
+				"--set monitoredNamespaces=all",
+			})
+			if err != nil {
+				t.Fatalf("Failed to install or upgrade Lumigo operator: %v", err)
+				return ctx
+			}
+
+			if err := apimachinerywait.PollImmediateWithContext(ctx, 10*time.Second, 4*time.Minute, func(context.Context) (bool, error) {
+				for _, ns := range quickstartNamespaces {
+
+					lumigoes := &operatorv1alpha1.LumigoList{}
+					if err := client.Resources(ns).List(ctx, lumigoes); err != nil {
+						t.Fatalf("Could not list Lumigo CRDs in namespace '%s': %v", ns, err)
+						return false, err
+					}
+
+					if len(lumigoes.Items) == 0 {
+						return false, nil
+					}
+				}
+				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to find CRDs in one or more quickstart namespaces: %v", err)
 			}
 
 			return ctx

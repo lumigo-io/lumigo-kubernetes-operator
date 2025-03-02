@@ -21,7 +21,6 @@ var (
 
 const (
 	DEFAULT_KIND_NODE_IMAGE = "kindest/node:v1.27.1"
-	LUMIGO_SYSTEM_NAMESPACE = "lumigo-system"
 )
 
 func TestMain(m *testing.M) {
@@ -91,7 +90,8 @@ func TestMain(m *testing.M) {
 	telemetryProxyImageArchivePath := filepath.Join(tmpDir, "telemetry-proxy-controller.tgz")
 	_ = telemetryProxyImageArchivePath
 
-	quickstartNamespace := "test-quickstart-ns"
+	quickstartNamespaces := []string{"quickstart-1", "quickstart-2", "quickstart-3"}
+	lumigoNamespace := "lumigo-system"
 
 	ctx := context.WithValue(context.Background(), internal.ContextKeyRunId, runId)
 	ctx = context.WithValue(ctx, internal.ContextKeyKubernetesClusterName, kindClusterName)
@@ -99,12 +99,11 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorControllerImage, controllerImageName)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorTelemetryProxyImage, telemetryProxyImageName)
 	ctx = context.WithValue(ctx, internal.ContextKeyLumigoToken, "t_123456789012345678901")
-	ctx = context.WithValue(ctx, internal.ContextQuickstartNamespace, quickstartNamespace)
-
+	ctx = context.WithValue(ctx, internal.ContextQuickstartNamespaces, quickstartNamespaces)
+	ctx = context.WithValue(ctx, internal.ContextKeyLumigoNamespace, lumigoNamespace)
 	testEnv = env.NewWithConfig(cfg).WithContext(ctx)
 
 	logrWrapper := stdr.New(logger)
-	newFalse := false
 	testEnv.Setup(
 		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(telemetryProxyImageName, filepath.Join(repoRoot, "telemetryproxy"), telemetryProxyImageArchivePath, logger),
@@ -113,14 +112,15 @@ func TestMain(m *testing.M) {
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, telemetryProxyImageArchivePath, logger),
 
 		// Create the namespace on which the quickstart feature will operate
-		envfuncs.CreateNamespace(quickstartNamespace),
+		envfuncs.CreateNamespace(quickstartNamespaces[0]),
+		envfuncs.CreateNamespace(quickstartNamespaces[1]),
+		envfuncs.CreateNamespace(quickstartNamespaces[2]),
 
-		// First installation
-		internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, "http://nothing.real.com", logrWrapper, false),
-		// Create a CRD after the installation
-		internal.CreateCRD(quickstartNamespace, &newFalse, &newFalse),
-		// Upgrade and modify the CRD via the monitoredNamespaces setting (quickstart installation)
-		internal.LumigoOperatorEnvFunc(LUMIGO_SYSTEM_NAMESPACE, "http://nothing.real.com", logrWrapper, true),
+		internal.LumigoOperatorEnvFunc(lumigoNamespace, "http://nothing.real.com", logrWrapper, []string{
+			fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespaces[0]),
+			fmt.Sprintf("--set monitoredNamespaces[0].loggingEnabled=%t", false),
+			fmt.Sprintf("--set monitoredNamespaces[0].tracingEnabled=%t", false),
+		}),
 	)
 
 	testEnv.Finish(

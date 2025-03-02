@@ -123,8 +123,8 @@ func main() {
 		}
 	}
 
+	logger.Info("Got monitoredNamespace settings, entering quickstart mode", "settings", quickstartSettings)
 	if quickstartSettings != "" {
-		logger.Info(quickstartSettings)
 		if lumigoToken == "" {
 			logger.Error(fmt.Errorf("quickstart mode request, but Lumigo token was not provided"), "missing token")
 			os.Exit(1)
@@ -340,23 +340,40 @@ func uninstallHook() error {
 
 func createQuickstartObjects(quickstartSettings string, lumigoToken string) error {
 	var settings []QuickstartSetting
-	err := json.Unmarshal([]byte(quickstartSettings), &settings)
-	if err != nil {
-		return err
-	}
+
+	logger := ctrl.Log.WithName("quickstart")
 
 	config := ctrl.GetConfigOrDie()
 	s := runtime.NewScheme()
 	operatorv1alpha1.AddToScheme(s)
 	corev1.AddToScheme(s)
 
+	ctx := context.Background()
+
 	client, err := runtimeclient.New(config, runtimeclient.Options{Scheme: s})
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	ctx := context.Background()
-	logger := ctrl.Log.WithName("quickstart")
+	if quickstartSettings == "all" {
+		logger.Info("Creating Lumigo CRDs for all namespaces")
+		namespaceList := &corev1.NamespaceList{}
+		if err := client.List(ctx, namespaceList); err != nil {
+			return fmt.Errorf("failed to list namespaces: %w", err)
+		}
+
+		settings = []QuickstartSetting{}
+		for _, namespace := range namespaceList.Items {
+			settings = append(settings, QuickstartSetting{
+				Namespace: namespace.Name,
+			})
+		}
+	} else {
+		err = json.Unmarshal([]byte(quickstartSettings), &settings)
+		if err != nil {
+			return err
+		}
+	}
 
 	quickstartSecretName := "lumigo-credentials"
 	quickstartSecretKey := "token"
@@ -434,7 +451,7 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 		}
 
 		if createErr == nil {
-			logger.Info("Lumigo CRD successfully created in namespace %s", setting.Namespace)
+			logger.Info("Lumigo CRD successfully created", "namespace", setting.Namespace)
 		} else {
 			return fmt.Errorf("failed to create Lumigo CRD in namespace %s after multiple attempts: %w", setting.Namespace, createErr)
 		}
@@ -443,7 +460,7 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 	return nil
 }
 
- func updateIfNil(target **bool, source *bool, defaultValue *bool) {
+func updateIfNil(target **bool, source *bool, defaultValue *bool) {
 	if *target == nil {
 		if source == nil {
 			*target = defaultValue
