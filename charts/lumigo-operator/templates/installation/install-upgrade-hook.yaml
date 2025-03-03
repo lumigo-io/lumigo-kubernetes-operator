@@ -37,6 +37,7 @@ spec:
         args:
           - --quickstart={{ if (toString .Values.monitoredNamespaces) | eq "all" }}all{{ else }}{{ .Values.monitoredNamespaces | toJson }}{{ end }}
           - --lumigo-token={{ .Values.lumigoToken.value }}
+          - --lumigo-namespace={{ .Release.Namespace }}
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

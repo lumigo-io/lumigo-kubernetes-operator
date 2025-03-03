@@ -98,6 +98,11 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 				t.Fatalf("Failed to get quickstart namespaces from context")
 			}
 
+			lumigoNamespace, isOk := ctx.Value(internal.ContextKeyLumigoNamespace).(string)
+			if !isOk {
+				t.Fatalf("Failed to get Lumigo namespace from context")
+			}
+
 			_, err = internal.InstallOrUpgradeLumigoOperator(ctx, client, cfg.KubeconfigFile(), logger, []string{
 				"--set monitoredNamespaces=all",
 			})
@@ -116,6 +121,19 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 					}
 
 					if len(lumigoes.Items) == 0 {
+						return false, nil
+					}
+				}
+
+				for _, ignoredNs := range []string{lumigoNamespace, "kube-system"} {
+					lumigoes := &operatorv1alpha1.LumigoList{}
+					if err := client.Resources(ignoredNs).List(ctx, lumigoes); err != nil {
+						t.Fatalf("Could not list Lumigo CRDs in namespace '%s': %v", ignoredNs, err)
+						return false, err
+					}
+
+					if len(lumigoes.Items) > 0 {
+						t.Fatalf("Found a Lumigo CRD in ignored namespace '%s'", ignoredNs)
 						return false, nil
 					}
 				}
