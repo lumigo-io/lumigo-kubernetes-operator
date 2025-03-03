@@ -31,6 +31,8 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 	testAppDeploymentFeature := features.New("TestApp").
 		Assess("Lumigo CRD is modified after an upgrade for a namespace provided in the quickstart settings", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			if err := apimachinerywait.PollImmediateWithContext(ctx, 10*time.Second, 4*time.Minute, func(context.Context) (bool, error) {
+				logger := testr.New(t)
+
 				client := cfg.Client()
 				r, err := resources.New(client.RESTConfig())
 				if err != nil {
@@ -38,8 +40,18 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 				}
 				operatorv1alpha1.AddToScheme(r.GetScheme())
 
-				lumigoes := &operatorv1alpha1.LumigoList{}
 				quickstartNamespaceWithExistingCrd := ctx.Value(internal.ContextQuickstartNamespaces).([]string)[0]
+				_, err = internal.InstallOrUpgradeLumigoOperator(ctx, client, cfg.KubeconfigFile(), logger, []string{
+					fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespaceWithExistingCrd),
+					fmt.Sprintf("--set monitoredNamespaces[0].loggingEnabled=%t", true),
+					fmt.Sprintf("--set monitoredNamespaces[0].tracingEnabled=%t", true),
+				})
+				if err != nil {
+					t.Fatalf("Failed to install or upgrade Lumigo operator: %v", err)
+					return false, nil
+				}
+
+				lumigoes := &operatorv1alpha1.LumigoList{}
 				if err := client.Resources(quickstartNamespaceWithExistingCrd).List(ctx, lumigoes); err != nil {
 					t.Fatalf("Could not list Lumigo CRDs in namespace '%s': %v", quickstartNamespaceWithExistingCrd, err)
 					return false, err
