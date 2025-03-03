@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -96,6 +97,7 @@ func main() {
 	var uninstall bool
 	var quickstartSettings string
 	var lumigoToken string
+	var lumigoNamespace string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -106,6 +108,7 @@ func main() {
 		"Whether the execution of this manager is actually aimed at initiating the uninstallation procedure.")
 	flag.StringVar(&quickstartSettings, "quickstart", "", "Quickstart settings")
 	flag.StringVar(&lumigoToken, "lumigo-token", "", "Lumigo token for quickstart setup")
+	flag.StringVar(&lumigoNamespace, "lumigo-namespace", "", "Lumigo namespace")
 
 	opts := zap.Options{
 		Development: false,
@@ -123,13 +126,13 @@ func main() {
 		}
 	}
 
+	logger.Info("Got monitoredNamespace settings, entering quickstart mode", "settings", quickstartSettings)
 	if quickstartSettings != "" {
-		logger.Info(quickstartSettings)
 		if lumigoToken == "" {
 			logger.Error(fmt.Errorf("quickstart mode request, but Lumigo token was not provided"), "missing token")
 			os.Exit(1)
 		}
-		if err := createQuickstartObjects(quickstartSettings, lumigoToken); err != nil {
+		if err := createQuickstartObjects(quickstartSettings, lumigoToken, lumigoNamespace); err != nil {
 			logger.Error(err, "Failed to create quickstart objects")
 			os.Exit(1)
 		}
@@ -338,25 +341,34 @@ func uninstallHook() error {
 	return <-deletionCompletedChannel
 }
 
-func createQuickstartObjects(quickstartSettings string, lumigoToken string) error {
+func createQuickstartObjects(quickstartSettings string, lumigoToken string, lumigoNamespace string) error {
 	var settings []QuickstartSetting
-	err := json.Unmarshal([]byte(quickstartSettings), &settings)
-	if err != nil {
-		return err
-	}
+
+	logger := ctrl.Log.WithName("quickstart")
 
 	config := ctrl.GetConfigOrDie()
 	s := runtime.NewScheme()
 	operatorv1alpha1.AddToScheme(s)
 	corev1.AddToScheme(s)
 
+	ctx := context.Background()
+
 	client, err := runtimeclient.New(config, runtimeclient.Options{Scheme: s})
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	ctx := context.Background()
-	logger := ctrl.Log.WithName("quickstart")
+	if quickstartSettings == "all" {
+		settings, err = getAllNamespacesQuickstartSettings(ctx, client, lumigoNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to get all namespaces: %w", err)
+		}
+	} else {
+		err = json.Unmarshal([]byte(quickstartSettings), &settings)
+		if err != nil {
+			return err
+		}
+	}
 
 	quickstartSecretName := "lumigo-credentials"
 	quickstartSecretKey := "token"
@@ -434,7 +446,7 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 		}
 
 		if createErr == nil {
-			logger.Info("Lumigo CRD successfully created in namespace %s", setting.Namespace)
+			logger.Info("Lumigo CRD successfully created", "namespace", setting.Namespace)
 		} else {
 			return fmt.Errorf("failed to create Lumigo CRD in namespace %s after multiple attempts: %w", setting.Namespace, createErr)
 		}
@@ -443,7 +455,7 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 	return nil
 }
 
- func updateIfNil(target **bool, source *bool, defaultValue *bool) {
+func updateIfNil(target **bool, source *bool, defaultValue *bool) {
 	if *target == nil {
 		if source == nil {
 			*target = defaultValue
@@ -453,4 +465,28 @@ func createQuickstartObjects(quickstartSettings string, lumigoToken string) erro
 	} else if source != nil {
 		*target = source
 	}
+}
+
+func getAllNamespacesQuickstartSettings(ctx context.Context, client runtimeclient.Client, lumigoNamespace string) ([]QuickstartSetting, error) {
+	ignoredNamespaces := []string{
+		lumigoNamespace,
+		"kube-system",
+		"kube-public",
+		"kube-node-lease",
+	}
+	namespaceList := &corev1.NamespaceList{}
+	if err := client.List(ctx, namespaceList); err != nil {
+		return nil, fmt.Errorf("failed to list namespaces: %w", err)
+	}
+
+	settings := []QuickstartSetting{}
+	for _, namespace := range namespaceList.Items {
+		if !slices.Contains(ignoredNamespaces, namespace.Name) {
+			settings = append(settings, QuickstartSetting{
+				Namespace: namespace.Name,
+			})
+		}
+	}
+
+	return settings, nil
 }
