@@ -76,7 +76,9 @@ func TestLumigoOperatorTraces(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true, false)
+			newTrue := true
+			newFalse := false
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, &newTrue, &newFalse)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {
@@ -598,7 +600,147 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			}
 			return ctx
 		}).
-		Feature();
+		Assess("LUMIGO_ENABLE_TRACES and LUMIGO_ENABLE_LOGS are not modified when spec.*.enabled is not set", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			client := c.Client()
+
+			preservedEnvNamespace := envconf.RandomName("test-preserved-env", 12)
+			if err := client.Resources().Create(ctx, &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: preservedEnvNamespace,
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			var replicas int32 = 1
+			deploymentLabels := map[string]string{
+				"app": "preserved-env-app",
+			}
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: preservedEnvNamespace,
+					Name:      "preserved-env-app",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: deploymentLabels,
+					},
+					Replicas: &replicas,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: deploymentLabels,
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "server",
+									Image: "busybox",
+									Command: []string{
+										"/bin/sh",
+										"-c",
+										"while true; do sleep 30; done",
+									},
+									Env: []corev1.EnvVar{
+										{
+											Name:  "LUMIGO_ENABLE_TRACES",
+											Value: "this should not change 1",
+										},
+										{
+											Name:  "LUMIGO_ENABLE_LOGS",
+											Value: "this should not change 2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			if err := client.Resources().Create(ctx, deployment); err != nil {
+				t.Fatal(err)
+			}
+
+			lumigoTokenName := "lumigo-credentials"
+			lumigoTokenKey := "token"
+			lumigoToken := ctx.Value(internal.ContextKeyLumigoToken).(string)
+
+			secret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: preservedEnvNamespace,
+					Name:      lumigoTokenName,
+				},
+				StringData: map[string]string{
+					lumigoTokenKey: lumigoToken,
+				},
+			}
+
+			if err := client.Resources().Create(ctx, &secret); err != nil {
+				t.Fatal(err)
+			}
+
+			lumigo := internal.NewLumigo(preservedEnvNamespace, "lumigo", lumigoTokenName, lumigoTokenKey, nil, nil)
+
+			r, err := resources.New(client.RESTConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			operatorv1alpha1.AddToScheme(r.GetScheme())
+			r.Create(ctx, lumigo)
+
+			// Wait for the deployment to be ready and verify env var
+			if err := apimachinerywait.PollImmediateUntilWithContext(
+				ctx,
+				time.Second*5,
+				wrapWithLogging(t, "LUMIGO_ENABLE_TRACES and LUMIGO_ENABLE_LOGS remain unchanged", func(context.Context) (bool, error) {
+					podList := corev1.PodList{}
+					listOptions := resources.ListOption(resources.WithLabelSelector("app=preserved-env-app"))
+					err := client.Resources().WithNamespace(preservedEnvNamespace).List(ctx, &podList, listOptions)
+
+					if err != nil {
+						return false, err
+					}
+
+					if len(podList.Items) == 0 {
+						return false, nil
+					}
+
+					foundTracesEnvVar := false
+					foundLogsEnvVar := false
+					for _, pod := range podList.Items {
+						for _, container := range pod.Spec.Containers {
+							for _, envVar := range container.Env {
+								if envVar.Name == "LUMIGO_ENABLE_TRACES" {
+									foundTracesEnvVar = true
+									if envVar.Value != "this should not change 1" {
+										return false, fmt.Errorf("LUMIGO_ENABLE_TRACES was modified to '%s'", envVar.Value)
+									}
+								}
+								if envVar.Name == "LUMIGO_ENABLE_LOGS" {
+									foundLogsEnvVar = true
+									if envVar.Value != "this should not change 2" {
+										return false, fmt.Errorf("LUMIGO_ENABLE_LOGS was modified to '%s'", envVar.Value)
+									}
+								}
+							}
+						}
+					}
+
+					if !foundTracesEnvVar {
+						return false, fmt.Errorf("LUMIGO_ENABLE_TRACES env-var not found in any container")
+					}
+					if !foundLogsEnvVar {
+						return false, fmt.Errorf("LUMIGO_ENABLE_LOGS env-var not found in any container")
+					}
+
+					return true, nil
+				})); err != nil {
+				t.Fatalf("Failed to verify LUMIGO_ENABLE_TRACES: %v", err)
+			}
+
+			return ctx
+		}).
+		Feature()
 
 	testEnv.Test(t, testAppDeploymentFeature)
 }

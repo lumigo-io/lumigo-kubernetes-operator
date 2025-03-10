@@ -77,7 +77,8 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, true, true)
+			newTrue := true
+			lumigo := internal.NewLumigo(namespaceName, "lumigo", lumigoTokenName, lumigoTokenKey, &newTrue, &newTrue)
 
 			r, err := resources.New(client.RESTConfig())
 			if err != nil {
