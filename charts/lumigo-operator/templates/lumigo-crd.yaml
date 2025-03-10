@@ -82,7 +82,7 @@ spec:
                       Note that this does not affect the injection itself, which is required for logging as well.
                       If unspecified, defaults to `true`.
                     type: boolean
-                    default: true
+                    nullable: true
                   injection:
                     properties:
                       enabled:
@@ -119,6 +119,7 @@ spec:
                       have their logs sent to Lumigo.
                       If unspecified, defaults to `false`
                     type: boolean
+                    nullable: true
                 type: object
             type: object
           status:

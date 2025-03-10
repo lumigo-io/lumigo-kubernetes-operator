@@ -54,6 +54,11 @@ const LumigoContainerNameEnvVarName = "LUMIGO_CONTAINER_NAME"
 const LdPreloadEnvVarName = "LD_PRELOAD"
 const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
 
+const (
+	TRACES_ENABLED_DEFAULT = true
+	LOGS_ENABLED_DEFAULT   = false
+)
+
 var defaultLumigoInitContainerUser int64 = 1234
 var defaultLumigoInitContainerGroup int64 = defaultLumigoInitContainerUser
 
@@ -118,12 +123,11 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 	return &mutatorImpl{
 		log:                       Log,
 		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
-		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
-		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
-		lumigoEnableLogs:          lumigoEnableLogs,
-		lumigoEnableTraces:        lumigoEnableTraces,
-		lumigoToken:               lumigoToken,
-		lumigoInjectorImage:       LumigoInjectorImage,
+		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl, lumigoLogsEndpoint: TelemetryProxyOtlpLogsServiceUrl,
+		lumigoEnableLogs:    lumigoEnableLogs,
+		lumigoEnableTraces:  lumigoEnableTraces,
+		lumigoToken:         lumigoToken,
+		lumigoInjectorImage: LumigoInjectorImage,
 	}, nil
 }
 
@@ -440,7 +444,7 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 			envVars[lumigoLogsEndpointEnvVarIndex] = *lumigoLogsEndpointEnvVar
 		}
 
-		lumigoEnableLogsEnvVarValue := false
+		lumigoEnableLogsEnvVarValue := LOGS_ENABLED_DEFAULT
 		if m.lumigoEnableLogs != nil {
 			lumigoEnableLogsEnvVarValue = *m.lumigoEnableLogs
 		}
@@ -458,7 +462,7 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 			}
 		}
 
-		lumigoEnableTracesEnvVarValue := true
+		lumigoEnableTracesEnvVarValue := TRACES_ENABLED_DEFAULT
 		if m.lumigoEnableTraces != nil {
 			lumigoEnableTracesEnvVarValue = *m.lumigoEnableTraces
 		}

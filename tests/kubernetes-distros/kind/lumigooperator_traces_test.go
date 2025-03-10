@@ -688,6 +688,19 @@ func TestLumigoOperatorTraces(t *testing.T) {
 			operatorv1alpha1.AddToScheme(r.GetScheme())
 			r.Create(ctx, lumigo)
 
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*1, func(context.Context) (bool, error) {
+				currentLumigo := &operatorv1alpha1.Lumigo{}
+				if err := r.Get(ctx, lumigo.Name, lumigo.Namespace, currentLumigo); err != nil {
+					return false, err
+				}
+
+				logger.Info("Lumigo CRD is active", "tracing.enabled", currentLumigo.Spec.Tracing.Enabled, "logging.enabled", currentLumigo.Spec.Logging.Enabled)
+
+				return operatorv1alpha1conditions.IsActive(currentLumigo), err
+			}); err != nil {
+				t.Fatal(err)
+			}
+
 			// Wait for the deployment to be ready and verify env var
 			if err := apimachinerywait.PollImmediateUntilWithContext(
 				ctx,

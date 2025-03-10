@@ -225,7 +225,8 @@ var _ = Context("Lumigo defaulter webhook", func() {
 			Expect(newLumigo.Spec.Tracing.Injection.Enabled).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Tracing.Injection.InjectLumigoIntoExistingResourcesOnCreation).To(&beBoolPointer{expectedValue: true})
 			Expect(newLumigo.Spec.Tracing.Injection.RemoveLumigoFromResourcesOnDeletion).To(&beBoolPointer{expectedValue: true})
-			Expect(newLumigo.Spec.Logging.Enabled).To(&beBoolPointer{expectedValue: false})
+			Expect(newLumigo.Spec.Tracing.Enabled).To(BeNil())
+			Expect(newLumigo.Spec.Logging.Enabled).To(BeNil())
 		})
 
 		It("it rejects instances with blank .LumigoToken.Spec.LumigoToken.SecretRef.Name", func() {

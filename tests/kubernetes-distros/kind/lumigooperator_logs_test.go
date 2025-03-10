@@ -795,7 +795,7 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 		return d.Status.AvailableReplicas == expectedReplicas && d.Status.ReadyReplicas == expectedReplicas
 	}))
 
-	println("Deployment %s/%s is ready", deployment.Namespace, deployment.Name)
+	fmt.Printf("Deployment %s/%s is ready", deployment.Namespace, deployment.Name)
 
 	if err := client.Resources().Delete(ctx, deployment); err != nil {
 		return err
@@ -803,7 +803,7 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 
 	wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
 
-	println("Deployment %s/%s is deleted", deployment.Namespace, deployment.Name)
+	fmt.Printf("Deployment %s/%s is deleted", deployment.Namespace, deployment.Name)
 
 	return nil
 }

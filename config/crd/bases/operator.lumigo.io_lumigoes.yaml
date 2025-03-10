@@ -84,6 +84,7 @@ spec:
                           after the creation of the Lumigo resource be injected. If
                           unspecified, defaults to `true`
                         type: boolean
+                        nullable: true
                       injectLumigoIntoExistingResourcesOnCreation:
                         description: Whether Daemonsets, Deployments, ReplicaSets,
                           StatefulSets, CronJobs and Jobs that already exist when
@@ -112,6 +113,7 @@ spec:
                       have their logs sent to Lumigo.
                       If unspecified, defaults to `false`
                     type: boolean
+                    nullable: true
                 type: object
             type: object
           status:
