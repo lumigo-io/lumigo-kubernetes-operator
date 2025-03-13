@@ -115,6 +115,7 @@ spec:
                     type: boolean
                     nullable: true
                 type: object
+                x-kubernetes-preserve-unknown-fields: true
             type: object
           status:
             description: LumigoStatus defines the observed state of Lumigo
