@@ -54,6 +54,11 @@ const LumigoContainerNameEnvVarName = "LUMIGO_CONTAINER_NAME"
 const LdPreloadEnvVarName = "LD_PRELOAD"
 const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_injector.so"
 
+const (
+	TRACES_ENABLED_DEFAULT = true
+	LOGS_ENABLED_DEFAULT   = false
+)
+
 var defaultLumigoInitContainerUser int64 = 1234
 var defaultLumigoInitContainerGroup int64 = defaultLumigoInitContainerUser
 
@@ -83,8 +88,8 @@ type mutatorImpl struct {
 	lumigoAutotraceLabelValue string
 	lumigoEndpoint            string
 	lumigoLogsEndpoint        string
-	lumigoEnableLogs          bool
-	lumigoEnableTraces        bool
+	lumigoEnableLogs          *bool
+	lumigoEnableTraces        *bool
 	lumigoToken               *operatorv1alpha1.Credentials
 	lumigoInjectorImage       string
 }
@@ -100,14 +105,14 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
 	}
 
-	lumigoEnableLogs := false
+	var lumigoEnableLogs *bool
 	if LumigoSpec != nil && LumigoSpec.Logging.Enabled != nil {
-		lumigoEnableLogs = *LumigoSpec.Logging.Enabled
+		lumigoEnableLogs = LumigoSpec.Logging.Enabled
 	}
 
-	lumigoEnableTraces := true
+	var lumigoEnableTraces *bool
 	if LumigoSpec != nil && LumigoSpec.Tracing.Enabled != nil {
-		lumigoEnableTraces = *LumigoSpec.Tracing.Enabled
+		lumigoEnableTraces = LumigoSpec.Tracing.Enabled
 	}
 
 	lumigoToken := &operatorv1alpha1.Credentials{}
@@ -118,12 +123,11 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 	return &mutatorImpl{
 		log:                       Log,
 		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
-		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
-		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
-		lumigoEnableLogs:          lumigoEnableLogs,
-		lumigoEnableTraces:        lumigoEnableTraces,
-		lumigoToken:               lumigoToken,
-		lumigoInjectorImage:       LumigoInjectorImage,
+		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl, lumigoLogsEndpoint: TelemetryProxyOtlpLogsServiceUrl,
+		lumigoEnableLogs:    lumigoEnableLogs,
+		lumigoEnableTraces:  lumigoEnableTraces,
+		lumigoToken:         lumigoToken,
+		lumigoInjectorImage: LumigoInjectorImage,
 	}, nil
 }
 
@@ -440,26 +444,40 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 			envVars[lumigoLogsEndpointEnvVarIndex] = *lumigoLogsEndpointEnvVar
 		}
 
+		lumigoEnableLogsEnvVarValue := LOGS_ENABLED_DEFAULT
+		if m.lumigoEnableLogs != nil {
+			lumigoEnableLogsEnvVarValue = *m.lumigoEnableLogs
+		}
 		lumigoEnableLogsEnvVar := &corev1.EnvVar{
 			Name:  LumigoEnableLogsEnvVarName,
-			Value: strconv.FormatBool(m.lumigoEnableLogs),
+			Value: strconv.FormatBool(lumigoEnableLogsEnvVarValue),
 		}
 		lumigoEnableLogsEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoEnableLogsEnvVarName })
 		if lumigoEnableLogsEnvVarIndex < 0 {
 			envVars = append(envVars, *lumigoEnableLogsEnvVar)
 		} else {
-			envVars[lumigoEnableLogsEnvVarIndex] = *lumigoEnableLogsEnvVar
+			// Only override the existing env-var if an explicit value is set in the CRD
+			if m.lumigoEnableLogs != nil {
+				envVars[lumigoEnableLogsEnvVarIndex] = *lumigoEnableLogsEnvVar
+			}
 		}
 
+		lumigoEnableTracesEnvVarValue := TRACES_ENABLED_DEFAULT
+		if m.lumigoEnableTraces != nil {
+			lumigoEnableTracesEnvVarValue = *m.lumigoEnableTraces
+		}
 		lumigoEnableTracesEnvVar := &corev1.EnvVar{
 			Name:  LumigoEnableTracesEnvVarName,
-			Value: strconv.FormatBool(m.lumigoEnableTraces),
+			Value: strconv.FormatBool(lumigoEnableTracesEnvVarValue),
 		}
 		lumigoEnableTracesEnvVarIndex := slices.IndexFunc(envVars, func(c corev1.EnvVar) bool { return c.Name == LumigoEnableTracesEnvVarName })
 		if lumigoEnableTracesEnvVarIndex < 0 {
 			envVars = append(envVars, *lumigoEnableTracesEnvVar)
 		} else {
-			envVars[lumigoEnableTracesEnvVarIndex] = *lumigoEnableTracesEnvVar
+			// Only override the existing env-var if an explicit value is set in the CRD
+			if m.lumigoEnableTraces != nil {
+				envVars[lumigoEnableTracesEnvVarIndex] = *lumigoEnableTracesEnvVar
+			}
 		}
 
 		lumigoContainerNameEnvVar := &corev1.EnvVar{
