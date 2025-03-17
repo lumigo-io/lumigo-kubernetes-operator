@@ -4,6 +4,7 @@
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
+{{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
 receivers:
   otlp:
     protocols:
@@ -190,6 +191,30 @@ processors:
           # Exclude API server metrics
           - 'apiserver_.+'
           - 'authentication_token_.+'
+{{ if $essentialMetricsOnly }}
+  filter/essential-metrics-only:
+    metrics:
+      exclude:
+        match_type: regexp
+        - kube_lease_owner
+      include:
+        match_type: regexp
+        metric_names:
+          - node_cpu_seconds_total
+          - node_memory_Active_bytes
+          - kube_.+_labels
+          - kube_pod_owner
+          - kube_replicaset_owner
+          - kube_job_owner
+          - kube_pod_container_status_waiting_reason
+          - kube_pod_container_status_terminated_reason
+          - kube_pod_status_phase
+          - kube_node_status_capacity
+          - kube_pod_container_resource_limits
+          - kube_pod_container_resource_limits
+          - container_memory_working_set_bytes
+          - container_cpu_usage_seconds_total
+{{- end }}
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 {{- range $i, $namespace := $namespaces }}
@@ -288,6 +313,9 @@ service:
       - prometheus
       processors:
       - filter/filter-prom-metrics
+{{ if $essentialMetricsOnly }}
+      - filter/essential-metrics-only
+{{- end }}
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
 {{- if $clusterName }}
