@@ -207,10 +207,14 @@ processors:
           - kube_deployment_status_replicas_available
           - kube_job_owner
           - kube_node_status_capacity
+          - kube_pod_container_info
           - kube_pod_container_resource_limits
           - kube_pod_container_status_restarts_total
+          - kube_pod_container_status_ready
+          - kube_pod_container_status_running
           - kube_pod_container_status_terminated_reason
           - kube_pod_container_status_waiting_reason
+          - kube_pod_status_ready
           - kube_pod_owner
           - kube_pod_status_phase
           - kube_replicaset_owner
