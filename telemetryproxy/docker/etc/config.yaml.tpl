@@ -194,9 +194,6 @@ processors:
 {{ if $essentialMetricsOnly }}
   filter/essential-metrics-only:
     metrics:
-      exclude:
-        match_type: regexp
-        - kube_lease_owner
       include:
         match_type: regexp
         metric_names:
