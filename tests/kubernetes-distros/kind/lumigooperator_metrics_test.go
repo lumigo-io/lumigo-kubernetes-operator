@@ -95,10 +95,15 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				}
 
 				prometheusNodeExporterMetricsFound := false
-				cadvisorMetricsFound := false
-				kubeStateMetricsFound := false
-				labelMetricsFound := false
 				ownerMetricsFound := false
+				labelMetricsFound := false
+
+				// For essentialOnly mode
+				essentialMetricsPrefixes := []string{
+					"node_",
+					"container_",
+					"kube_",
+				}
 
 				for _, metric := range metrics {
 					if metric.Name() == "node_cpu_seconds_total" {
@@ -111,21 +116,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 								return false, nil
 							}
 						}
-					}
-
-					if metric.Name() == "container_fs_usage_bytes" {
-						cadvisorMetricsFound = true
-					}
-
-					if metric.Name() == "kube_pod_status_scheduled" {
-						kubeStateMetricsFound = true
-					}
-
-					if metric.Name() == "kube_deployment_labels" {
-						labelMetricsFound = true
-					}
-
-					if metric.Name() == "kube_pod_owner" {
+					} else if metric.Name() == "kube_pod_owner" {
 						ownerMetricsFound = true
 						for i := 0; i < metric.Gauge().DataPoints().Len(); i++ {
 							attributes := metric.Gauge().DataPoints().At(i).Attributes()
@@ -141,31 +132,35 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 								}
 							}
 						}
+					} else {
+						isEssentialMetric := false
+						for _, prefix := range essentialMetricsPrefixes {
+							if strings.HasPrefix(metric.Name(), prefix) {
+								isEssentialMetric = true
+							}
+						}
+						if !isEssentialMetric {
+							return false, fmt.Errorf("unexpected metric: %v", metric.Name())
+						}
+
+						if strings.HasSuffix(metric.Name(), "_labels") {
+							labelMetricsFound = true
+						}
 					}
 				}
 
 				if !prometheusNodeExporterMetricsFound {
-					t.Logf("could not find Prometheus Node Exporter metrics. Seen metrics: %v", uniqueMetricNames)
-					return false, nil
-				}
-
-				if !cadvisorMetricsFound {
-					t.Logf("could not find cAdvisor metrics. Seen metrics: %v", uniqueMetricNames)
-					return false, nil
-				}
-
-				if !kubeStateMetricsFound {
-					t.Logf("could not find kube-state-metrics. Seen metrics: %v", uniqueMetricNames)
+					t.Logf("could not find Prometheus Node Exporter metrics. Seen metrics: %v\n retrying...", uniqueMetricNames)
 					return false, nil
 				}
 
 				if !labelMetricsFound {
-					t.Logf("could not find label metrics. Seen metrics: %v", uniqueMetricNames)
+					t.Logf("could not find label metrics. Seen metrics: %v\n retrying...", uniqueMetricNames)
 					return false, nil
 				}
 
 				if !ownerMetricsFound {
-					t.Logf("could not find owner metrics. Seen metrics: %v", uniqueMetricNames)
+					t.Logf("could not find owner metrics. Seen metrics: %v\n retrying...", uniqueMetricNames)
 					return false, nil
 				}
 

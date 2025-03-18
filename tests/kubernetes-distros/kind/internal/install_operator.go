@@ -65,6 +65,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].namespacePattern=%s*", testNamespacePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].containerPattern=%s*", busyboxExcludedContainerNamePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace)), // Enable monitoring of a namespace during installation time
+		helm.WithArgs("--set clusterCollection.metrics.essentialOnly=true"),                          // Collect only metrics essential for the k8s page in the platform, to test this feature
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),
