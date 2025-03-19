@@ -98,6 +98,7 @@ lumigoToken:
 clusterCollection:
   metrics:
     enabled: true
+    essentialOnly: false
     frequency: 15s
   logs:
     enabled: false
