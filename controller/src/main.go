@@ -123,6 +123,9 @@ func main() {
 		if err := uninstallHook(); err != nil {
 			setupLog.Error(err, "Uninstallation hook failed")
 			os.Exit(1)
+		} else {
+			setupLog.Info("Uninstallation hook completed successfully")
+			os.Exit(0)
 		}
 	}
 
@@ -306,7 +309,14 @@ func uninstallHook() error {
 			logger.Info(fmt.Sprintf("Unexpected 'update' event for Lumigo resources: %+v", newObj))
 		},
 		DeleteFunc: func(obj interface{}) {
-			deletedLumigo := obj.(unstructured.Unstructured)
+			deletedLumigo, isOk := obj.(*unstructured.Unstructured)
+			if !isOk {
+				logger.Error(fmt.Errorf("error decoding object"),
+					"Expected *unstructured.Unstructured but got",
+					fmt.Sprintf("%T", obj))
+				return
+			}
+
 			for i, l := range lumigoesLeft {
 				if l.Namespace == deletedLumigo.GetNamespace() && l.Name == deletedLumigo.GetName() {
 					lumigoesLeft = append(lumigoesLeft[:i], lumigoesLeft[i+1:]...)
