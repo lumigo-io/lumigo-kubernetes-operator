@@ -11,7 +11,10 @@ metadata:
     lumigo.auto-trace: 'false' # We do not need the operator to inject itself
   annotations:
     helm.sh/hook: pre-delete
+    {{- if not .Values.debug.enabled }}
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded # we skip hook-failed so that we can look up logs if it fails
+    {{- end }}
+
 spec:
   completions: 1
   backoffLimit: 2
