@@ -37,6 +37,7 @@ monitoredNamespaces:
 **Notes**
 1. adding additional namespace(s) can be done by re-running the command above with the only additional namespace(s) added to the `monitoredNamespaces` list (no need to re-include the ones from previous runs).
 2. Opting out from Lumigo monitoring a namespace specified in the `monitoredNamespaces` list is explained in the [#### Remove injection from existing resources](#remove-injection-from-existing-resources) section.
+3. Using `monitoredNamespaces=all` allows the Lumigo Kubernetes operator to monitor **all** the namespaces in the cluster, with traces and logs enabled by default. It is strongly advisable to be used only in non-production environments, as it may result in many workloads being restarted over short time period causing spikes of CPU and memory consumption.
 
 #### Install only
 
@@ -138,6 +139,9 @@ helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 #### Metrics
 
 Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default assuming you either set `lumigoToken.value` in the Helm values, or reference an existing Kubernetes secret.
+By default, only metrics essential to the Lumigo K8s functionality are collected, but you can enable additional metrics by setting the `clusterCollection.metrics.essentialOnly` field to `false` in the Helm values during installation.
+
+```yaml
 
 ### Enabling automatic tracing
 
