@@ -222,6 +222,12 @@ processors:
           - kube_statefulset_status_replicas_ready
           - node_cpu_seconds_total
           - node_memory_Active_bytes
+          - kube_deployment_created
+          - kube_statefulset_created
+          - kube_daemonset_created
+          - kube_cronjob_created
+          - kube_pod_created
+          - kube_pod_info
 {{- end }}
   k8sdataenricherprocessor:
     auth_type: serviceAccount
