@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/types"
 	"golang.org/x/exp/slices"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -37,6 +38,9 @@ import (
 )
 
 const LumigoAutoTraceLabelKey = "lumigo.auto-trace"
+const LumigoAutoTraceTracesEnabledLabelKey = "lumigo.enable-traces"
+const LumigoAutoTraceLogsEnabledLabelKey = "lumigo.enable-logs"
+const LumigoAutoTraceTokenSecretPathKey = "lumigo.token-secret-path"
 const LumigoAutoTraceLabelVersionPrefixValue = "lumigo-operator.v"
 const LumigoAutoTraceLabelSkipNextInjectorValue = "skip-next-injector"
 
@@ -93,7 +97,7 @@ func (m *mutatorImpl) GetAutotraceLabelValue() string {
 	return m.lumigoAutotraceLabelValue
 }
 
-func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (Mutator, error) {
+func NewMutatorFromSpec(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (Mutator, error) {
 	version := LumigoOperatorVersion
 
 	if len(version) > 8 {
@@ -122,6 +126,32 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
 		lumigoEnableLogs:          lumigoEnableLogs,
 		lumigoEnableTraces:        lumigoEnableTraces,
+		lumigoToken:               lumigoToken,
+		lumigoInjectorImage:       LumigoInjectorImage,
+	}, nil
+}
+
+func NewMutatorFromAutoTraceSettings(Log *logr.Logger, autoTraceSettings *types.AutoTraceSettings, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (Mutator, error) {
+	version := LumigoOperatorVersion
+
+	if len(version) > 8 {
+		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
+	}
+
+	lumigoToken := &operatorv1alpha1.Credentials{
+		SecretRef: operatorv1alpha1.KubernetesSecretRef{
+			Name: autoTraceSettings.SecretName,
+			Key:  autoTraceSettings.SecretKey,
+		},
+	}
+
+	return &mutatorImpl{
+		log:                       Log,
+		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
+		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
+		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
+		lumigoEnableLogs:          autoTraceSettings.LogsEnabled,
+		lumigoEnableTraces:        autoTraceSettings.TracesEnabled,
 		lumigoToken:               lumigoToken,
 		lumigoInjectorImage:       LumigoInjectorImage,
 	}, nil
