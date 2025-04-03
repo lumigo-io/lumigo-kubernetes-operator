@@ -119,6 +119,7 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 	}
 
 	if len(lumigos.Items) < 1 {
+		log.Info("No Lumigo instance found in the namespace, attempting injection based on resource labels", "namespace", namespace, "resourceName", fmt.Sprintf("%s/%s", request.Kind, resourceAdapter.GetObjectMeta().Name))
 		// If there's no CRD in that namespace, try to use the auto-trace settings if any
 		if resourceAdapter.GetAutoTraceSettings().IsAutoTraced {
 			mutator, err := mutation.NewMutatorFromAutoTraceSettings(&log, resourceAdapter.GetAutoTraceSettings(), h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl, h.TelemetryProxyOtlpLogsServiceUrl)
@@ -212,9 +213,15 @@ func createAutoTraceSettings(labels map[string]string) *types.AutoTraceSettings 
 	tracesEnabled := strings.ToLower(labels[mutation.LumigoAutoTraceTracesEnabledLabelKey]) != "false"
 	logsEnabled := strings.ToLower(labels[mutation.LumigoAutoTraceLogsEnabledLabelKey]) == "true"
 
-	secretPath := strings.Split(labels[mutation.LumigoAutoTraceTokenSecretPathKey], "/")
-	secretName := secretPath[0]
-	secretKey := secretPath[1]
+	secretName, secretNameSpecified := labels[mutation.LumigoAutoTraceTokenSecretNameKey]
+	if !secretNameSpecified {
+		secretName = "lumigo-credentials"
+	}
+
+	secretKey, secretKeySpecified := labels[mutation.LumigoAutoTraceTokenSecretKeyKey]
+	if !secretKeySpecified {
+		secretKey = "token"
+	}
 
 	return &types.AutoTraceSettings{
 		IsAutoTraced:  isAutoTraced,
