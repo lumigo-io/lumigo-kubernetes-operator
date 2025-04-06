@@ -316,37 +316,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 		It("should inject a deployment having the lumigo.auto-trace label set to true", func() {
 			name := "test-opt-in-deployment"
 
-			deployment := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						mutation.LumigoAutoTraceLabelKey: "true",
-					},
-				},
-				Spec: appsv1.DeploymentSpec{
-					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"deployment": name,
-						},
-					},
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{
-								"deployment": name,
-							},
-						},
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{
-									Name:  "myapp",
-									Image: "busybox",
-								},
-							},
-						},
-					},
-				},
-			}
+			deployment := newDeployment(namespaceName, name, true)
 			Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
 
 			deploymentAfter := &appsv1.Deployment{}
@@ -364,37 +334,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 			name := "test-deployment-label-change"
 
 			// Create deployment with auto-trace label set to false
-			deployment := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						mutation.LumigoAutoTraceLabelKey: "false",
-					},
-				},
-				Spec: appsv1.DeploymentSpec{
-					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"deployment": name,
-						},
-					},
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{
-								"deployment": name,
-							},
-						},
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{
-									Name:  "myapp",
-									Image: "busybox",
-								},
-							},
-						},
-					},
-				},
-			}
+			deployment := newDeployment(namespaceName, name, false)
 			Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
 
 			// Verify the deployment is not instrumented
@@ -744,7 +684,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 		})
 	})
 
-	It("should not inject a minimal deployment with the lumigo.auto-trace label set to false", func() {
+	It("should not inject a deployment with the lumigo.auto-trace label set to false", func() {
 		lumigo := newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
 			SecretRef: operatorv1alpha1.KubernetesSecretRef{
 				Name: "doesnot",
@@ -758,37 +698,7 @@ var _ = Context("Lumigo defaulter webhook", func() {
 
 		name := "test-deployment"
 
-		deployment := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespaceName,
-				Labels: map[string]string{
-					mutation.LumigoAutoTraceLabelKey: "false",
-				},
-			},
-			Spec: appsv1.DeploymentSpec{
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"deployment": name,
-					},
-				},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"deployment": name,
-						},
-					},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Name:  "myapp",
-								Image: "busybox",
-							},
-						},
-					},
-				},
-			},
-		}
+		deployment := newDeployment(namespaceName, name, false)
 		Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
 
 		deploymentAfter := &appsv1.Deployment{}
@@ -834,4 +744,45 @@ func newLumigo(namespace string, name string, lumigoToken operatorv1alpha1.Crede
 			},
 		},
 	}
+}
+
+func newDeployment(namespaceName, name string, autoTraceEnabled bool) *appsv1.Deployment {
+	autoTraceValue := "false"
+	if autoTraceEnabled {
+		autoTraceValue = "true"
+	}
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespaceName,
+			Labels: map[string]string{
+				mutation.LumigoAutoTraceLabelKey: autoTraceValue,
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"deployment": name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"deployment": name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "myapp",
+							Image: "busybox",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return deployment
 }
