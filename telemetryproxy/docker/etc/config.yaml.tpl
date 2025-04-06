@@ -198,8 +198,6 @@ processors:
     metrics:
       exclude:
         match_type: regexp
-        # These metrics are also scraped by the  job, so filter them out here
-        # from the prometheus-node-exporter job
         metric_names:
           - 'process_virtual_memory_max_bytes'
           - 'process_virtual_memory_bytes'
