@@ -43,6 +43,12 @@ import (
 	"github.com/lumigo-io/lumigo-kubernetes-operator/types"
 )
 
+// Default values for the Lumigo secret name and key
+const (
+	DefaultLumigoSecretName = "lumigo-credentials"
+	DefaultLumigoSecretKey  = "token"
+)
+
 var (
 	decoder = scheme.Codecs.UniversalDecoder()
 )
@@ -215,12 +221,12 @@ func createAutoTraceSettings(labels map[string]string) *types.AutoTraceSettings 
 
 	secretName, secretNameSpecified := labels[mutation.LumigoAutoTraceTokenSecretNameKey]
 	if !secretNameSpecified {
-		secretName = "lumigo-credentials"
+		secretName = DefaultLumigoSecretName
 	}
 
 	secretKey, secretKeySpecified := labels[mutation.LumigoAutoTraceTokenSecretKeyKey]
 	if !secretKeySpecified {
-		secretKey = "token"
+		secretKey = DefaultLumigoSecretKey
 	}
 
 	return &types.AutoTraceSettings{
