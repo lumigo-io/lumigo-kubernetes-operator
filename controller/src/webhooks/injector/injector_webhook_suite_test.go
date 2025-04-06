@@ -614,6 +614,70 @@ var _ = Context("Lumigo defaulter webhook", func() {
 			Expect(deploymentAfter.Spec.Template.Spec.InitContainers[0].SecurityContext.RunAsGroup).To(Equal(&group))
 		})
 
+		It("should ignore the settings related to the lumigo.enable-traces and lumigo.enable-logs labels", func() {
+			lumigo := newLumigo(namespaceName, "lumigo1", operatorv1alpha1.Credentials{
+				SecretRef: operatorv1alpha1.KubernetesSecretRef{
+					Name: DefaultLumigoSecretName,
+					Key:  DefaultLumigoSecretKey,
+				},
+			}, true, true)
+			Expect(k8sClient.Create(ctx, lumigo)).Should(Succeed())
+
+			lumigo.Status = statusActive
+			k8sClient.Status().Update(ctx, lumigo)
+
+			name := "test-deployment-label-override"
+
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespaceName,
+					Labels: map[string]string{
+						mutation.LumigoAutoTraceLabelKey:              "true",
+						mutation.LumigoAutoTraceTracesEnabledLabelKey: "false",
+						mutation.LumigoAutoTraceLogsEnabledLabelKey:   "false",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"deployment": name,
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"deployment": name,
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "myapp",
+									Image: "busybox",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+
+			deploymentAfter := &appsv1.Deployment{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: namespaceName,
+				Name:      name,
+			}, deploymentAfter); err != nil {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// The deployment should be instrumented despite the trace/logs labels being set to false
+			Expect(deploymentAfter).To(mutation.BeInstrumentedWithLumigo(lumigoOperatorVersion, lumigoInjectorImage, telemetryProxyOtlpServiceUrl, true))
+
+			// Verify the original labels are preserved
+			Expect(deploymentAfter.ObjectMeta.Labels).To(HaveKeyWithValue(mutation.LumigoAutoTraceTracesEnabledLabelKey, "false"))
+			Expect(deploymentAfter.ObjectMeta.Labels).To(HaveKeyWithValue(mutation.LumigoAutoTraceLogsEnabledLabelKey, "false"))
+		})
 	})
 
 	It("should not inject a minimal deployment with the lumigo.auto-trace label set to false", func() {
