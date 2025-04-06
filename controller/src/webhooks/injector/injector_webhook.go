@@ -160,7 +160,6 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 	return h.processResourceInjection(resourceAdapter, mutator, injectionTrigger, request)
 }
 
-// processResourceInjection handles the injection of Lumigo into a resource
 func (h *LumigoInjectorWebhookHandler) processResourceInjection(resourceAdapter resourceAdapter, mutator mutation.Mutator, injectionTrigger string, request admission.Request) admission.Response {
 
 	objectMeta := resourceAdapter.GetObjectMeta()
