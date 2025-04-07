@@ -124,7 +124,7 @@ func NewRemovalMutator(Log *logr.Logger, LumigoOperatorVersion string) RemovalMu
 	}
 }
 
-func NewMutatorFromSpec(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (InjectingMutator, error) {
+func NewInjectingMutatorFromSpec(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (InjectingMutator, error) {
 	version := LumigoOperatorVersion
 
 	if len(version) > 8 {

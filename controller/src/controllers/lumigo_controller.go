@@ -490,7 +490,7 @@ func (r *LumigoReconciler) updateStatusIfNeeded(ctx context.Context, logger logr
 }
 
 func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, log *logr.Logger) error {
-	mutator, err := mutation.NewMutatorFromSpec(log, &lumigo.Spec, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl, r.TelemetryProxyOtlpLogsServiceUrl)
+	mutator, err := mutation.NewInjectingMutatorFromSpec(log, &lumigo.Spec, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl, r.TelemetryProxyOtlpLogsServiceUrl)
 	if err != nil {
 		return fmt.Errorf("cannot instantiate mutator: %w", err)
 	}
