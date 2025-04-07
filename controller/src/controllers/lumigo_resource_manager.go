@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -228,5 +227,26 @@ func (m *LumigoResourceManager) RemoveLumigoFromResources(ctx context.Context, n
 		m.Log.Info("Cannot remove instrumentation from job: jobs are immutable once created", "namespace", job.Namespace, "name", job.Name)
 	}
 
+	return nil
+}
+
+func (m *LumigoResourceManager) RemoveLumigoFromAllNamespaces(ctx context.Context, trigger string) error {
+	namespaces, err := m.Clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list namespaces: %w", err)
+	}
+
+	m.Log.Info("Starting removal of Lumigo instrumentation from all namespaces", "namespaceCount", len(namespaces.Items))
+
+	for _, namespace := range namespaces.Items {
+		namespaceName := namespace.Name
+		m.Log.Info("Removing Lumigo instrumentation from namespace", "namespace", namespaceName)
+
+		if err := m.RemoveLumigoFromResources(ctx, namespaceName, trigger); err != nil {
+			m.Log.Error(err, "Failed to remove Lumigo instrumentation from namespace", "namespace", namespaceName)
+		}
+	}
+
+	m.Log.Info("Completed removal of Lumigo instrumentation from all namespaces")
 	return nil
 }
