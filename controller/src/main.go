@@ -53,6 +53,7 @@ import (
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/injector"
 
 	//+kubebuilder:scaffold:imports
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -525,9 +526,11 @@ func uninjectStandaloneResources(lumigoOperatorVersion string) error {
 
 	lumigoSystemNamespace, _ := os.LookupEnv("LUMIGO_CONTROLLER_NAMESPACE")
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(logger.Info)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: k8sClient.CoreV1().Events(lumigoSystemNamespace)})
-	eventRecorder := eventBroadcaster.NewRecorder(runtime.NewScheme(), v1.EventSource{Component: "Lumigo Operator uninstall hook"})
+	s := runtime.NewScheme()
+	corev1.AddToScheme(s)
+	appsv1.AddToScheme(s)
+	eventRecorder := eventBroadcaster.NewRecorder(s, v1.EventSource{Component: "Lumigo Operator uninstall hook"})
 
 	resourceManager := controllers.NewLumigoResourceManager(
 		runtimeClient,
