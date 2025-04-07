@@ -570,7 +570,15 @@ func (m *removalMutatorImpl) removeLumigoFromPodSpec(podSpec *corev1.PodSpec) er
 		podSpec.Volumes = newVolumes
 	}
 
-	envVarsToRemove := []string{LumigoTracerTokenEnvVarName, LumigoEndpointEnvVarName, LdPreloadEnvVarName}
+	envVarsToRemove := []string{
+		LumigoTracerTokenEnvVarName,
+		LumigoEndpointEnvVarName,
+		LumigoLogsEndpointEnvVarName,
+		LumigoEnableLogsEnvVarName,
+		LumigoEnableTracesEnvVarName,
+		LumigoContainerNameEnvVarName,
+		LdPreloadEnvVarName,
+	}
 	newContainers := []corev1.Container{}
 	for _, container := range podSpec.Containers {
 		if container.VolumeMounts != nil {
