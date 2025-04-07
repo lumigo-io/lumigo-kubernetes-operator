@@ -160,7 +160,7 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 	return h.processResourceInjection(resourceAdapter, mutator, injectionTrigger, request)
 }
 
-func (h *LumigoInjectorWebhookHandler) processResourceInjection(resourceAdapter resourceAdapter, mutator mutation.Mutator, injectionTrigger string, request admission.Request) admission.Response {
+func (h *LumigoInjectorWebhookHandler) processResourceInjection(resourceAdapter resourceAdapter, mutator mutation.InjectingMutator, injectionTrigger string, request admission.Request) admission.Response {
 
 	objectMeta := resourceAdapter.GetObjectMeta()
 	hadAlreadyInstrumentation := strings.HasPrefix(objectMeta.Labels[mutation.LumigoAutoTraceLabelKey], mutation.LumigoAutoTraceLabelVersionPrefixValue)
@@ -199,7 +199,7 @@ type resourceAdapter interface {
 	GetResource() runtime.Object
 	GetObjectMeta() *metav1.ObjectMeta
 	GetNamespace() string
-	InjectLumigoInto(mutation.Mutator) (bool, error)
+	InjectLumigoInto(mutation.InjectingMutator) (bool, error)
 	GetAutoTraceSettings() *types.AutoTraceSettings
 	Marshal() ([]byte, error)
 }
@@ -249,7 +249,7 @@ func (r *resourceAdapterImpl) GetObjectMeta() *metav1.ObjectMeta {
 	return r.getObjectMeta()
 }
 
-func (r *resourceAdapterImpl) InjectLumigoInto(mutator mutation.Mutator) (bool, error) {
+func (r *resourceAdapterImpl) InjectLumigoInto(mutator mutation.InjectingMutator) (bool, error) {
 	return mutator.InjectLumigoInto(r.resource)
 }
 

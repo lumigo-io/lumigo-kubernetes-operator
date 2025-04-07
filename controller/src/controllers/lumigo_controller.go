@@ -689,11 +689,7 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 
 func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, log *logr.Logger) error {
 	namespace := lumigo.Namespace
-
-	mutator, err := mutation.NewMutatorFromSpec(log, nil, r.LumigoOperatorVersion, r.LumigoInjectorImage, r.TelemetryProxyOtlpServiceUrl, r.TelemetryProxyOtlpLogsServiceUrl)
-	if err != nil {
-		return fmt.Errorf("cannot instantiate mutator: %w", err)
-	}
+	mutator := mutation.NewRemovalMutator(log, r.LumigoOperatorVersion)
 
 	lumigoAutotracedListOptions := metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%[1]s,%[1]s != false", mutation.LumigoAutoTraceLabelKey),
