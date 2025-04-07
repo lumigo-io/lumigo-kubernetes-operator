@@ -40,7 +40,7 @@ type LumigoResourceManager struct {
 	OperatorVersion string
 }
 
-func NewLumigoResourceManager(client client.Client, clientset *kubernetes.Clientset, dynamicClient dynamic.Interface, eventRecorder record.EventRecorder, log *logr.Logger, operatorVersion string) *LumigoResourceManager {
+func NewLumigoResourceManager(client client.Client, clientset *kubernetes.Clientset, eventRecorder record.EventRecorder, operatorVersion string, log *logr.Logger) *LumigoResourceManager {
 	return &LumigoResourceManager{
 		Client:          client,
 		Clientset:       clientset,

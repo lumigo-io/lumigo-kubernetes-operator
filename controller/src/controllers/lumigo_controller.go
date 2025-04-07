@@ -688,7 +688,7 @@ func (r *LumigoReconciler) injectLumigoIntoResources(ctx context.Context, lumigo
 }
 
 func (r *LumigoReconciler) removeLumigoFromResources(ctx context.Context, lumigo *operatorv1alpha1.Lumigo, log *logr.Logger) error {
-	resourceManager := NewLumigoResourceManager(r.Client, r.Clientset, r.DynamicClient, r.EventRecorder, log, r.LumigoOperatorVersion)
+	resourceManager := NewLumigoResourceManager(r.Client, r.Clientset, r.EventRecorder, r.LumigoOperatorVersion, log)
 	eventTrigger := fmt.Sprintf("controller, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name)
 	return resourceManager.RemoveLumigoFromResources(ctx, lumigo.Namespace, eventTrigger)
 }
