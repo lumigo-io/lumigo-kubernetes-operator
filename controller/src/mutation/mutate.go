@@ -41,7 +41,7 @@ const LumigoAutoTraceLabelKey = "lumigo.auto-trace"
 const LumigoAutoTraceTracesEnabledLabelKey = "lumigo.enable-traces"
 const LumigoAutoTraceLogsEnabledLabelKey = "lumigo.enable-logs"
 const LumigoAutoTraceTokenSecretNameKey = "lumigo.token-secret"
-const LumigoAutoTraceTokenSecretKeyKey = "lumigo.token-secret-key"
+const LumigoAutoTraceTokenSecretKeyKey = "lumigo.token-key"
 const LumigoAutoTraceLabelVersionPrefixValue = "lumigo-operator.v"
 const LumigoAutoTraceLabelSkipNextInjectorValue = "skip-next-injector"
 
