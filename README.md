@@ -323,7 +323,7 @@ spec:
   selector:
     matchLabels:
       app: hello-node
-
+```
 In the logs of the Lumigo Kubernetes operator, you will see a message like the following:
 
 ```
