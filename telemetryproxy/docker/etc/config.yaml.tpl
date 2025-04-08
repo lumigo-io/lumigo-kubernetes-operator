@@ -191,6 +191,38 @@ processors:
           # Exclude API server metrics
           - 'apiserver_.+'
           - 'authentication_token_.+'
+          - 'aggregator_discovery_aggregation_count'
+
+  # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics job
+  filter/remove-duplicate-process-metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - 'process_virtual_memory_max_bytes'
+          - 'process_virtual_memory_bytes'
+          - 'process_start_time_seconds'
+          - 'process_resident_memory_bytes'
+          - 'process_open_fds'
+          - 'process_max_fds'
+          - 'process_cpu_seconds_total'
+        resource_attributes:
+          - key: job
+            value: prometheus-node-exporter
+
+  # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics-cadvisor job
+  filter/remove-duplicate-container-metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - 'container_start_time_seconds'
+          - 'container_memory_working_set_bytes'
+          - 'container_cpu_usage_seconds_total'
+        resource_attributes:
+          - key: job
+            value: k8s-infra-metrics-resources
+
 {{ if $essentialMetricsOnly }}
   filter/essential-metrics-only:
     metrics:
@@ -327,6 +359,8 @@ service:
       - prometheus
       processors:
       - filter/filter-prom-metrics
+      - filter/remove-duplicate-process-metrics
+      - filter/remove-duplicate-container-metrics
 {{ if $essentialMetricsOnly }}
       - filter/essential-metrics-only
 {{- end }}
