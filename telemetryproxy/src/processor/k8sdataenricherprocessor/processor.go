@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"go.uber.org/zap"
@@ -79,11 +80,15 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, tr ptrace.Trac
 	return tr, nil
 }
 
+func (kp *kubernetesprocessor) addResourceClusterAttributes(resourceAttributes pcommon.Map) {
+	resourceAttributes.PutStr(K8SProviderIdKey, kp.kube.GetProviderId())
+	resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+}
+
 func (kp *kubernetesprocessor) addResourceAttributes(ctx context.Context, resource pcommon.Resource) {
 	resourceAttributes := resource.Attributes()
 
-	resourceAttributes.PutStr(K8SProviderIdKey, kp.kube.GetProviderId())
-	resourceAttributes.PutStr(K8SClusterUIDKey, string(kp.clusterUid))
+	kp.addResourceClusterAttributes(resourceAttributes)
 
 	pod, found := kp.getPod(ctx, &resource)
 	if !found {
@@ -219,11 +224,121 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 	for i := 0; i < resourceLogs.Len(); i++ {
 		rl := resourceLogs.At(i)
 
-		kp.addResourceAttributes(ctx, rl.Resource());
+		kp.addResourceAttributes(ctx, rl.Resource())
 		kp.processResourceLogs(ctx, &rl)
 	}
 
 	return ld, nil
+}
+
+func (kp *kubernetesprocessor) addOwnerUidAttribute(dataPoints pmetric.NumberDataPointSlice) {
+	for i := 0; i < dataPoints.Len(); i++ {
+		dataPoint := dataPoints.At(i)
+		attributes := dataPoint.Attributes()
+
+		ownerKindAttr, found := attributes.Get("owner_kind")
+		if !found {
+			continue
+		}
+		ownerKind := ownerKindAttr.AsString()
+		ownerNameAttr, found := attributes.Get("owner_name")
+		if !found {
+			continue
+		}
+		ownerNamespaceAttr, found := attributes.Get("namespace")
+		if !found {
+			continue
+		}
+		if ownerKind == "ReplicaSet" {
+			replicaSet, found, err := kp.kube.GetReplicaSet(ownerNameAttr.AsString(), ownerNamespaceAttr.AsString(), "")
+			if err != nil {
+				kp.logger.Error("Failed to get ReplicaSet", zap.Error(err))
+				continue
+			}
+			if found {
+				attributes.PutStr("owner_uid", string(replicaSet.UID))
+			}
+		} else if ownerKind == "Deployment" {
+			deployment, found, err := kp.kube.GetDeployment(ownerNameAttr.AsString(), ownerNamespaceAttr.AsString(), "")
+			if err != nil {
+				kp.logger.Error("Failed to get Deployment", zap.Error(err))
+				continue
+			}
+			if found {
+				attributes.PutStr("owner_uid", string(deployment.UID))
+			}
+		} else if ownerKind == "StatefulSet" {
+			StatefulSet, found, err := kp.kube.GetStatefulSet(ownerNameAttr.AsString(), ownerNamespaceAttr.AsString(), "")
+			if err != nil {
+				kp.logger.Error("Failed to get StatefulSet", zap.Error(err))
+				continue
+			}
+			if found {
+				attributes.PutStr("owner_uid", string(StatefulSet.UID))
+			}
+		} else if ownerKind == "DaemonSet" {
+			DaemonSet, found, err := kp.kube.GetDaemonSet(ownerNameAttr.AsString(), ownerNamespaceAttr.AsString(), "")
+			if err != nil {
+				kp.logger.Error("Failed to get DaemonSet", zap.Error(err))
+				continue
+			}
+			if found {
+				attributes.PutStr("owner_uid", string(DaemonSet.UID))
+			}
+		} else if ownerKind == "Job" {
+			Job, found, err := kp.kube.GetJob(ownerNameAttr.AsString(), ownerNamespaceAttr.AsString(), "")
+			if err != nil {
+				kp.logger.Error("Failed to get Job", zap.Error(err))
+				continue
+			}
+			if found {
+				attributes.PutStr("owner_uid", string(Job.UID))
+			}
+		} else if ownerKind == "CronJob" {
+			CronJob, found, err := kp.kube.GetCronJob(ownerNameAttr.AsString(), ownerNamespaceAttr.AsString(), "")
+			if err != nil {
+				kp.logger.Error("Failed to get CronJob", zap.Error(err))
+				continue
+			}
+			if found {
+				attributes.PutStr("owner_uid", string(CronJob.UID))
+			}
+		}
+	}
+}
+
+func (kp *kubernetesprocessor) addOwnerUidAttributeToOwnerMetrics(resourceMetrics pmetric.ResourceMetrics) {
+	ownerMetrics := map[string]bool{
+		"kube_pod_owner":        true,
+		"kube_replicaset_owner": true,
+		"kube_job_owner":        true,
+	}
+	scopeMetrics := resourceMetrics.ScopeMetrics()
+	for i := 0; i < scopeMetrics.Len(); i++ {
+		scopeMetric := scopeMetrics.At(i)
+
+		// Iterate over actual metrics
+		metricSlice := scopeMetric.Metrics()
+		for j := 0; j < metricSlice.Len(); j++ {
+			metric := metricSlice.At(j)
+			metricName := metric.Name()
+			if ownerMetrics[metricName] {
+				kp.addOwnerUidAttribute(metric.Gauge().DataPoints())
+			}
+		}
+	}
+}
+
+func (kp *kubernetesprocessor) processMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
+	resourceMetrics := metrics.ResourceMetrics()
+
+	for i := 0; i < resourceMetrics.Len(); i++ {
+		rm := resourceMetrics.At(i)
+		kp.addResourceClusterAttributes(rm.Resource().Attributes())
+		kp.addOwnerUidAttributeToOwnerMetrics(rm)
+	}
+
+	return metrics, nil
 }
 
 func (kp *kubernetesprocessor) processResourceLogs(ctx context.Context, resourceLogs *plog.ResourceLogs) {

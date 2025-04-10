@@ -6,9 +6,11 @@ receivers:
         endpoint: "0.0.0.0:${OTLP_PORT}"
 
 exporters:
+  logging:
+    loglevel: debug
 {{- if $config.lumigo_token }}
   otlphttp/lumigo:
-    endpoint: {{ $config.lumigo_endpoint | default "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: {{ $config.lumigo_endpoint }}
     headers:
       Authorization: "LumigoToken {{ $config.lumigo_token }}"
 {{ end }}
@@ -16,7 +18,8 @@ exporters:
     path: ${LOGS_PATH}
   file/traces:
     path: ${TRACES_PATH}
-
+  file/metrics:
+    path: ${METRICS_PATH}
 service:
   pipelines:
     logs:
@@ -35,3 +38,9 @@ service:
 {{- if $config.lumigo_token }}
       - otlphttp/lumigo
 {{ end }}
+    metrics:
+      receivers:
+      - otlp
+      exporters:
+      - file/metrics
+      - logging

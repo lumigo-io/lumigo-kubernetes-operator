@@ -17,7 +17,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.19
+          go-version: 1.22
       - name: Run tests
         run: |
           make test
@@ -116,6 +116,9 @@ jobs:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
         run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build charts/lumigo-operator
+
           helm upgrade --install lumigo charts/lumigo-operator \
             --namespace lumigo-system --create-namespace \
             --set "controllerManager.manager.image.repository=${CONTROLLER_IMG}" \
@@ -269,13 +272,39 @@ jobs:
         if: always()
       - name: Store OTLP test data as artifact
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kind-otlp-data
           # Skip container images
           path: |
             tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}
             !tests/kubernetes-distros/kind/resources/test-runs/${{ github.run_id }}/*.tgz
+
+  test-quickstart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # We do not need the git history
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Run quickstart (monitored namespaces on installation) tests
+        working-directory: tests/quickstart
+        run: go test -timeout 15m -test.v -args -v 4
+        env:
+          KEEP_OTLP_DATA: true
+      - run: ls -lR tests/quickstart
+        if: always()
+      - name: Store OTLP test data as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-otlp-data-quickstart
+          # Skip container images
+          path: |
+            tests/quickstart/resources/test-runs/${{ github.run_id }}
+            !tests/quickstart/resources/test-runs/${{ github.run_id }}/*.tgz
 
   test-controller-for-security-issues:
     runs-on: ubuntu-latest
@@ -410,7 +439,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.19
+          go-version: 1.22
       - name: Install tools
         run: |
           make install-tools
@@ -453,7 +482,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.19
+          go-version: 1.22
       - name: Install tools
         run: |
           make install-tools
@@ -507,7 +536,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.19
+          go-version: 1.22
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -638,6 +667,10 @@ jobs:
           git commit -m "v${{ needs.validate-release-increment.outputs.version }}"
 
           git tag "v${{ needs.validate-release-increment.outputs.version }}" $(git rev-parse HEAD)
+      - name: Get dependencies (pull sub-charts into the main chart)
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build charts/lumigo-operator
       - name: Package Helm chart
         run: |
           helm package charts/lumigo-operator --destination packages/

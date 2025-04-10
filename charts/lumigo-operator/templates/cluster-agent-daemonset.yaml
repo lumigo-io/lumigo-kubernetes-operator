@@ -1,0 +1,115 @@
+{{- if or .Values.clusterCollection.logs.enabled .Values.clusterCollection.metrics.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.fullname" . }}-cluster-agent-config
+data:
+  otel-collector-config.yaml:
+      {{ include "clusterAgent.otelCollectorConfig" . | toYaml | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "helm.fullname" . }}-cluster-agent
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-agent
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: cluster-agent
+    lumigo.auto-trace: 'false' # We don't want the operator to inject itself into this daemonset
+spec:
+  selector:
+    matchLabels:
+      control-plane: cluster-agent
+    {{- include "helm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # This effectively triggers a restart of the Daemonset pods when the config changes, which is otherwise not the case for ConfigMaps in k8s.
+        lumigo.io/config-version: {{ include "clusterAgent.otelCollectorConfig" . | sha256sum | substr 0 10 | quote }}
+      labels:
+      {{- include "helm.selectorLabels" . | nindent 8 }}
+        control-plane: cluster-agent
+        lumigo.auto-trace: 'false' # We don't want the operator to inject itself into pods from this daemonset
+    spec:
+      containers:
+{{- if .Values.clusterCollection.logs.enabled }}
+      - name: otel-collector
+        image: {{ .Values.logFileCollector.image.repository }}:{{ .Values.logFileCollector.image.tag }}
+        env:
+        - name: LUMIGO_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.lumigoToken.secretName }}
+              key: {{ .Values.lumigoToken.secretKey }}
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: KUBERNETES_CLUSTER_NAME
+          value: "{{ .Values.cluster.name }}"
+        volumeMounts:
+        - name: collector-config
+          mountPath: /etc/otel-collector-config
+        - name: varlogpods
+          mountPath: /var/log/pods/
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+        command:
+        - "/otelcol-contrib"
+        - "--config=/etc/otel-collector-config/otel-collector-config.yaml"
+        resources: {{- toYaml .Values.logFileCollector.resources | nindent 10 }}
+{{- end }}
+{{- if .Values.clusterCollection.metrics.enabled }}
+      - name: prometheus-node-exporter
+        image: {{ .Values.prometheusNodeExporter.image.repository }}:{{ .Values.prometheusNodeExporter.image.tag }}
+        ports:
+          - containerPort: {{ .Values.prometheusNodeExporter.service.port }}
+            name: pne
+        volumeMounts:
+          - name: proc
+            mountPath: /host/proc
+            readOnly: true
+          - name: sys
+            mountPath: /host/sys
+            readOnly: true
+          - name: rootfs
+            mountPath: /rootfs
+            readOnly: true
+        args:
+          - "--path.procfs=/host/proc"
+          - "--path.sysfs=/host/sys"
+          - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($|/)"
+  {{- if .Values.debug.enabled }}
+          - "--log.level=debug"
+  {{- end }}
+        resources: {{- toYaml .Values.prometheusNodeExporter.resources | nindent 10 }}
+{{- end }}
+      volumes:
+      - name: collector-config
+        configMap:
+          name: {{ include "helm.fullname" . }}-cluster-agent-config
+{{- if .Values.clusterCollection.logs.enabled }}
+      - name: varlogpods
+        hostPath:
+          path: /var/log/pods/
+          # We use "Directory" type since /var/log/pods must exist, and this validates it.
+          type: Directory
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+          # We use "" since /var/log/pods is a symlink pointing to different paths on different container engines,
+          # we mount all possible actual paths for all container engines, and those that don't exist will be ignored.
+          type: ""
+{{- end }}
+{{- if .Values.clusterCollection.metrics.enabled }}
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: rootfs
+        hostPath:
+          path: /
+{{- end }}
+{{- end }}

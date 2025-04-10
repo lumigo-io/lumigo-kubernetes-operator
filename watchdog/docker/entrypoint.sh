@@ -22,7 +22,7 @@ if [ -n "${memory_limit_bytes}" ] && [ "${memory_limit_bytes}" != "${NO_MEMORY_L
 fi
 
 if [ -n "${memory_limit_mib}" ]; then
-    echo "Setting memory limits on the controller to ${memory_limit_mib} MiB"
+    echo "Setting memory limits on the watchdog to ${memory_limit_mib} MiB"
 else
     echo "No memory limits found on the container; using the ${DEFAULT_MEMORY_LIMIT_MIB} MiB default"
     memory_limit_mib="${DEFAULT_MEMORY_LIMIT_MIB}"

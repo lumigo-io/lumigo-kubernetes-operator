@@ -10,16 +10,52 @@ The Kubernetes operator of Lumigo provides a one-click solution to monitoring Ku
 
 ### Installation
 
-Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](https://helm.sh/):
+Install the Lumigo Kubernetes operator in your Kubernets cluster with [helm](https://helm.sh/), with one of the following methods:
+
+#### Install & monitor namespaces
+
+The following command installs the operator and immediately applies monitoring to the specified namespaces, with traces or logs enabled or disabled as specified (defaulting to `true` for both):
 
 ```sh
-helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator
-helm install lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --set cluster.name=<cluster_name>
+helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator && \
+helm repo update && \
+echo "
+cluster:
+  name: <cluster name>
+lumigoToken:
+  value: <Lumigo token>
+monitoredNamespaces:
+  - namespace: <namespace>
+    loggingEnabled: true
+    tracingEnabled: true
+  - namespace: <namespace>
+    loggingEnabled: false
+    tracingEnabled: true
+" | helm upgrade -i lumigo lumigo/lumigo-operator --namespace lumigo-system --create-namespace --values -
 ```
-**Note:** You have the option to alter the namespace from `lumigo-system` to a name of your choosing, but its important to be aware that doing so might cause slight discrepancies throughout the steps below.
 
-(The `cluster.name` is optional, but highly advised, see the [Naming your cluster](#naming-your-cluster) section.)
+**Notes**
+1. adding additional namespace(s) can be done by re-running the command above with the only additional namespace(s) added to the `monitoredNamespaces` list (no need to re-include the ones from previous runs).
+2. Opting out from Lumigo monitoring a namespace specified in the `monitoredNamespaces` list is explained in the [#### Remove injection from existing resources](#remove-injection-from-existing-resources) section.
+3. Using `monitoredNamespaces=all` allows the Lumigo Kubernetes operator to monitor **all** the namespaces in the cluster, with traces and logs enabled by default. It is strongly advisable to be used only in non-production environments, as it may result in many workloads being restarted over short time period causing spikes of CPU and memory consumption.
 
+#### Install only
+
+The following command installs the operator but requires you to create a secret and a Lumigo CRD per each monitored namespace, as described in the [Enabling automatic tracing](#enabling-automatic-tracing) section:
+
+```sh
+helm repo add lumigo https://lumigo-io.github.io/lumigo-kubernetes-operator && \
+helm upgrade -i lumigo lumigo/lumigo-operator \
+  --namespace lumigo-system \
+  --create-namespace \
+  --set cluster.name=<cluster_name> \
+  --set lumigoToken.value=<token>
+```
+
+**Notes:**
+1. You have the option to alter the namespace from `lumigo-system` to a name of your choosing, but its important to be aware that doing so might cause slight discrepancies throughout the steps below.
+2. The `lumigoToken.value` is optional, but is highly recommended in order properly populate the cluster overview info in the Lumigo platform and have many other K8s-sourced metrics reported automatically. You can use the token from any Lumigo project, and cluster-wide metrics will be forwarded to it once the installation is complete.
+3. The `cluster.name` is optional, but highly advised, see the [Naming your cluster](#naming-your-cluster) section.
 
 You can verify that the Lumigo Kubernetes operator is up and running with:
 
@@ -85,6 +121,27 @@ To upgrade to a newer version of the Lumigo Kubernetes operator, run:
 helm repo update
 helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 ```
+### Tracing, logging and metrics methods
+
+#### Tracing
+
+|            | Scoping                                                                          | Correlation               | Reusable for other features                                          | Mutates pods                                                         |
+|------------|----------------------------------------------------------------------------------|---------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------|
+| [Lumigo CRD](#enabling-automatic-tracing) | Traces from different namespaces can be reported to different projects in Lumigo | Correlates traces to logs | The same CRD can be also used to apply logging for a given namespace | Pods are mutated to add auto-instrumentation for supported libraries |
+| [Resource Labels](#opting-in-for-specific-resources) | More granular control - can target specific resources without affecting the entire namespace | Correlates traces to logs | Separate labels can be used for both logging and tracing | Pods from labeled resources only are mutated to add auto-instrumentation for supported libraries |
+
+#### Logging
+
+|                           | Scoping                                                                        | Correlation               | Reusable for other features                                          | K8s context per log line                                                                                                   | Mutates pods                                                       | Supported runtimes and loggers                                                     |
+|---------------------------|--------------------------------------------------------------------------------|---------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|------------------------------------------------------------------------------------|
+| [Lumigo CRD](#logging-support)                | Logs from all resources in a namespace are reported to the same project in Lumigo | Correlates logs to traces | The same CRD can be also used to apply tracing for a given namespace | Each log line shows the entire resource change from container and pod to the parent resource (Deployment, Daemonset, etc). | Pods are mutated to add auto-instrumentation for supported loggers | Python, Node and Java <br>(with a selection of supported loggers for each runtime) |
+| [Resource Labels](#opting-in-for-specific-resources) | Logs from different resources can be reported to different projects in Lumigo | Correlates logs to traces | Separate labels can be used for both logging and tracing | Each log line shows the entire resource change from container and pod to the parent resource (Deployment, Daemonset, etc). | Pods from labeled resources only are mutated to add auto-instrumentation for supported libraries | Python, Node and Java (with a selection of supported loggers for each runtime)
+| [Container file collection](#fetching-container-logs-via-files) | All logs are reported to a single Lumigo project                                   | X                         | X                                                                    | Each log line shows only the source container, pod and namespace.                                                          | X                                                                  | Full support - all logs from all runtimes and logging libraries are collected      |
+
+#### Metrics
+
+Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default assuming you either set `lumigoToken.value` in the Helm values, or reference an existing Kubernetes secret.
+By default, only metrics essential to the Lumigo K8s functionality are collected, but you can enable additional metrics by setting the `clusterCollection.metrics.essentialOnly` field to `false` in the Helm values during installation.
 
 ### Enabling automatic tracing
 
@@ -137,7 +194,7 @@ kubectl apply -f lumigo.yml -n <YOUR_NAMESPACE>
 ```
 
 > ℹ️ **Important note**
-> 
+>
 > Apply the secret and the custom resource to the namespace you wish to start tracing, not to `lumigo-system`.
 
 
@@ -165,6 +222,31 @@ Status:
     UID:               93d6d809-ac2a-43a9-bc07-f0d4e314efcc
 ```
 
+#### Disabling automatic tracing
+
+The tracing feature can be entirely turned-off in case it's not desired, by setting the `spec.tracing.enabled` field to `false` in the `Lumigo` resource:
+
+```yaml
+apiVersion: operator.lumigo.io/v1alpha1
+kind: Lumigo
+metadata:
+  labels:
+    app.kubernetes.io/name: lumigo
+    app.kubernetes.io/instance: lumigo
+    app.kubernetes.io/part-of: lumigo-operator
+  name: lumigo
+spec:
+  lumigoToken: ...
+  tracing:
+    enabled: false
+  logging:
+    enabled: true # usually set to when `tracing.enabled` is `false`, otherwise injecting Lumigo into the workload will not be useful
+```
+
+this is usually done when only logs from the workloads should be sent to Lumigo, regardless of the tracing content in which the logs was generated.
+* Note that this does not affect the injection of the Lumigo distro into pods - only the fact that the distro will not send traces to Lumigo.
+For more fine-grained control over the injection in general, see the [Opting out for specific resources](#opting-out-for-specific-resources) section.
+
 #### Logging support
 
 The Lumigo Kubernetes operator can automatically forward logs emitted by traced pods to [Lumigo's log-management solution](https://lumigo.io/lp/log-management/), supporting several logging providers (currently `logging` for Python apps, `Winston` and `Bunyan` for Node.js apps).
@@ -185,6 +267,44 @@ spec:
     enabled: true # enables log forwarding for pods with tracing injected
 ```
 
+#### Fetching container logs via files
+
+Workloads that are using runtimes not supported by current Lumigo OTEL distro (e.g. Go, Rust) can still send logs to Lumigo, via logs files from containers that k8s manages on each node in the cluster.
+The Lumigo Kubernetes operator will automatically collect logs from those files and send them to Lumigo, once the following setting is applied when installing the operator:
+
+```sh
+helm upgrade -i lumigo lumigo/lumigo-operator \
+  # ...
+  --set "clusterCollection.logs.enabled=true"
+  --set "lumigoToken.value=<your Lumigo token>"
+```
+
+this will automatically collect logs from the file `/var/log/pods` folder in each node, and forward them to Lumigo (with the exception of the `kube-system` and `lumigo-system` namespaces).
+To further customize the workloads patterns for log collection, the following settings can be provided:
+
+```sh
+echo "
+lumigoToken:
+  value: <your Lumigo token>
+clusterCollection:
+  logs:
+    enabled: true
+    include:
+      - namespacePattern: some-ns
+        podPattern: some-pod-*
+        containerPattern: some-container-*
+    exclude:
+      - containerPattern: some-other-container-*
+" | helm upgrade -i lumigo lumigo/lumigo-operator --values -
+```
+In the example above, logs from all containers prefixed with `some-container-` running in pods prefixed with `some-pod-` (effectively, pods from a specific deployment) under the `some-ns` namespace will be collected, with the exception of logs from containers prefixed with `some-other-container-` from the aforementioned namespace and pods.
+
+Notes about the settings:
+1. `include` and `exclude` are arrays of glob patterns to include or exclude logs, where each pattern being a combination of `namespacePattern`, `podPattern` and `containerPattern` (all are optional).
+2. If a pattern is not provided for one of the components, it will be considered as a wildcard pattern - e.g. including pods while specifying `podPattern` will include all containers of those pods in all namespaces.
+3. Each `exclude` value is checked against the paths matched by `include`, meaning if a path is matched by both `include` and `exclude`, it will be excluded.
+4. By default, all logs from all pods in all namespaces are included, with no exclusions. Exceptions are the `kube-system` and `lumigo-system` namespaces, that will be always added to the default or provided exclusion list.
+
 #### Opting out for specific resources
 
 To prevent the Lumigo Kubernetes operator from injecting tracing to pods managed by some resource in a namespace that contains a `Lumigo` resource, add the `lumigo.auto-trace` label set to `false`:
@@ -196,6 +316,34 @@ metadata:
   labels:
     app: hello-node
     lumigo.auto-trace: "false"  # <-- No injection will take place
+  name: hello-node
+  namespace: my-namespace
+spec:
+  selector:
+    matchLabels:
+      app: hello-node
+```
+In the logs of the Lumigo Kubernetes operator, you will see a message like the following:
+
+```
+1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/inject", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
+```
+
+#### Opting in for specific resources
+
+Instead of monitoring an entire namespace using a Lumigo CR, you can selectively opt in individual resources by adding the `lumigo.auto-trace` label set to `true`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hello-node
+    lumigo.auto-trace: "true"  # <-- Enable tracing just for this resource
+    lumigo.token-secret: "my-lumigo-secret"  # <-- Optional, defaults to "lumigo-credentials"
+    lumigo.token-key: "my-token-key"  # <-- Optional, defaults to "token"
+    lumigo.enable-traces: "true"  # <-- Optional, controls whether traces are sent (defaults to true)
+    lumigo.enable-logs: "false"  # <-- Optional, controls whether logs are sent (defaults to false)
   name: hello-node
   namespace: my-namespace
 spec:
@@ -216,11 +364,24 @@ spec:
         name: agnhost
 ```
 
-In the logs of the Lumigo Kubernetes operator, you will see a message like the following:
+This approach allows you to:
+- Be selective about which resources to monitor without having to create a Lumigo CR
+- Apply tracing to specific resources across different namespaces
+- Have more granular control over your instrumentation strategy
 
-```
-1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/inject", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
-```
+When using resource labels for targeted tracing, you'll need a Kubernetes secret containing your Lumigo token in the same namespace. The following labels provide full control over the instrumentation:
+
+- `lumigo.auto-trace`: When set to `"true"`, enables Lumigo instrumentation for the resource
+- `lumigo.token-secret`: Specifies the name of the secret containing the Lumigo token (defaults to `lumigo-credentials`)
+- `lumigo.token-key`: Specifies the key in the secret where the token is stored (defaults to `token`)
+- `lumigo.enable-traces`: Controls whether traces are sent to Lumigo (defaults to `"true"`)
+- `lumigo.enable-logs`: Controls whether logs are sent to Lumigo (defaults to `"false"`)
+
+**Important notes:**
+1. When a Lumigo CR exists in the namespace, it takes precedence over the `lumigo.auto-trace` label when set to `true`. The label will only be respected when set to `false` to opt out specific resources.
+2. The secret referenced by the labels must exist in the same namespace as the labeled resource.
+3. Events are not supported for injection via resource labels. If you're interested in collecting events for that resource, you can do so by creating a Lumigo CR in the same namespace, which will automatically collect events for all resources in that namespace.
+
 
 ### Settings
 
@@ -247,6 +408,12 @@ spec:
 ```
 
 #### Remove injection from existing resources
+
+To opt-out from Lumigo monitoring a namespace, you can delete the Lumigo resource from that namespace along with its corresponding secret:
+```sh
+kubectl delete lumigo --all --namespace <monitored namespace>
+kubectl delete secret lumigo-credentials --namespace <monitored namespace>
+```
 
 By default, when detecting the deletion of the Lumigo resource in a namespace, the Lumigo controller will remove instrumentation from existing resources of the [supported types](#supported-resource-types).
 The injection will cause new pods to be created for daemonsets, deployments, replicasets, statefulsets and jobs; cronjobs will spawn non-injected pods at the next iteration.

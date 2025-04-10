@@ -2,20 +2,79 @@
 {{- $config := (datasource "config") -}}
 {{- $debug := $config.debug | conv.ToBool -}}
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
+{{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
+{{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
+{{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
 receivers:
   prometheus:
     config:
       scrape_configs:
-        - job_name: 'otel-collector'
-          scrape_interval: 5s
-          static_configs:
-            - targets: ['0.0.0.0:8888']
   otlp:
     protocols:
       http:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
+{{- if $infraMetricsToken }}
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector-self-metrics'
+          scrape_interval: 5s
+          static_configs:
+            - targets: ['0.0.0.0:8888']
+        - job_name: 'k8s-infra-metrics'
+          metrics_path: /metrics
+          scrape_interval: {{ $infraMetricsFrequency }}
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'k8s-infra-metrics-cadvisor'
+          metrics_path: /metrics/cadvisor
+          scrape_interval: {{ $infraMetricsFrequency }}
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'k8s-infra-metrics-resources'
+          metrics_path: /metrics/resource
+          scrape_interval: {{ $infraMetricsFrequency }}
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: node
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'prometheus-node-exporter'
+          kubernetes_sd_configs:
+            - role: node
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_node_address_InternalIP]
+              action: replace
+              target_label: __address__
+              # Scrape a custom port provided by LUMIGO_PROM_NODE_EXPORTER_PORT.
+              # '$$1' escapes '$1', as Gomplate otherwise thinks it's an environment variable.
+              replacement: '$$1:$LUMIGO_PROM_NODE_EXPORTER_PORT'
+            - source_labels: [__meta_kubernetes_node_name]
+              action: replace
+              target_label: node
+          metrics_path: "/metrics"
+          authorization:
+            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        - job_name: 'kube-state-metrics'
+          metrics_path: /metrics
+          scrape_interval: {{ $infraMetricsFrequency }}
+          static_configs:
+            - targets: ['{{ getenv "LUMIGO_KUBE_STATE_METRICS_SERVICE" }}:{{ getenv "LUMIGO_KUBE_STATE_METRICS_PORT" }}']
+{{- end }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
     namespace: {{ $namespace.name }}
@@ -104,6 +163,14 @@ exporters:
     endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
+{{- if $infraMetricsToken }}
+  otlphttp/lumigo_metrics:
+    endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    headers:
+      # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
+      # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
+      Authorization: "LumigoToken {{ $infraMetricsToken }}"
+{{- end }}
 {{- if $debug }}
   logging:
     verbosity: detailed
@@ -118,7 +185,88 @@ exporters:
 {{- end }}
 
 processors:
-  batch:
+  filter/filter-prom-metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          # Exclude Prometheus scrape metrics
+          - 'scrape_.+'
+          - 'up'
+          # Exclude Go runtime metrics
+          - 'go_.+'
+          # Exclude API server metrics
+          - 'apiserver_.+'
+          - 'authentication_token_.+'
+          - 'aggregator_discovery_aggregation_count'
+
+  # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics job
+  filter/remove-duplicate-process-metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - 'process_virtual_memory_max_bytes'
+          - 'process_virtual_memory_bytes'
+          - 'process_start_time_seconds'
+          - 'process_resident_memory_bytes'
+          - 'process_open_fds'
+          - 'process_max_fds'
+          - 'process_cpu_seconds_total'
+        resource_attributes:
+          - key: job
+            value: prometheus-node-exporter
+
+  # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics-cadvisor job
+  filter/remove-duplicate-container-metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - 'container_start_time_seconds'
+          - 'container_memory_working_set_bytes'
+          - 'container_cpu_usage_seconds_total'
+        resource_attributes:
+          - key: job
+            value: k8s-infra-metrics-resources
+{{ if $essentialMetricsOnly }}
+  filter/essential-metrics-only:
+    metrics:
+      include:
+        match_type: regexp
+        metric_names:
+          - container_cpu_usage_seconds_total
+          - container_memory_working_set_bytes
+          - kube_.+_labels
+          - kube_cronjob_status_active
+          - kube_daemonset_status_current_number_scheduled
+          - kube_daemonset_status_desired_number_scheduled
+          - kube_deployment_spec_replicas
+          - kube_deployment_status_replicas_available
+          - kube_job_owner
+          - kube_node_status_capacity
+          - kube_pod_container_info
+          - kube_pod_container_resource_limits
+          - kube_pod_container_status_restarts_total
+          - kube_pod_container_status_ready
+          - kube_pod_container_status_running
+          - kube_pod_container_status_terminated_reason
+          - kube_pod_container_status_waiting_reason
+          - kube_pod_status_ready
+          - kube_pod_owner
+          - kube_pod_status_phase
+          - kube_replicaset_owner
+          - kube_statefulset_replicas
+          - kube_statefulset_status_replicas_ready
+          - node_cpu_seconds_total
+          - node_memory_Active_bytes
+          - kube_deployment_created
+          - kube_statefulset_created
+          - kube_daemonset_created
+          - kube_cronjob_created
+          - kube_pod_created
+          - kube_pod_info
+{{- end }}
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 {{- range $i, $namespace := $namespaces }}
@@ -136,7 +284,7 @@ processors:
         match_type: regexp
         resource_attributes:
         # We add k8s.namespace.name in the 'transform/add_ns_attributes_ns_<$namespace.name>' processor
-{{- $namespaceNames := slice }}
+{{- $namespaceNames := coll.Slice }}
 {{- range $i, $namespace := $namespaces }}
 {{- $namespaceNames = $namespaceNames | append $namespace.name }}
 {{- end }}
@@ -148,10 +296,10 @@ processors:
     - context: resource
       statements:
       - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
-#   metric_statements:
-#   - context: resource
-#     statements:
-#     - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
+    metric_statements:
+    - context: resource
+      statements:
+      - set(attributes["k8s.cluster.name"], "{{ $clusterName }}")
     log_statements:
     - context: resource
       statements:
@@ -182,17 +330,18 @@ processors:
     send_batch_size: 100
     timeout: 1s
 {{- end }}
+  batch/metrics:
   transform/inject_operator_details_into_resource:
     trace_statements:
     - context: resource
       statements:
       - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
       - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
-#   metric_statements:
-#   - context: resource
-#     statements:
-#     - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
-#     - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
+    metric_statements:
+    - context: resource
+      statements:
+      - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
+      - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
     log_statements:
     - context: resource
       statements:
@@ -214,10 +363,35 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
+{{- if $infraMetricsToken }}
+    metrics:
+      receivers:
+      - prometheus
+      processors:
+      - filter/filter-prom-metrics
+      - filter/remove-duplicate-process-metrics
+      - filter/remove-duplicate-container-metrics
+{{ if $essentialMetricsOnly }}
+      - filter/essential-metrics-only
+{{- end }}
+      - k8sdataenricherprocessor
+      - transform/inject_operator_details_into_resource
+{{- if $clusterName }}
+      - transform/add_cluster_name
+{{- end }}
+      - batch/metrics
+      exporters:
+      - otlphttp/lumigo_metrics
+{{- if $debug }}
+      - logging
+{{- end }}
+{{- end }}
     traces:
       # We cannot add a Batch processor to this pipeline as it would break the
       # `headers_setter/lumigo` extension.
       # See https://github.com/open-telemetry/opentelemetry-collector/issues/4544
+      # This might have been fixed in https://github.com/open-telemetry/opentelemetry-collector/pull/7578,
+      # but requires thorough testing.
       receivers:
       - otlp
       processors:

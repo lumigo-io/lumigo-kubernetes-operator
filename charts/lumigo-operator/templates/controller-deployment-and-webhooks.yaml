@@ -1,8 +1,8 @@
 {{/*
 Since Helm does not support creating new global values, templating the values.yaml, or even sharing variables between templates in the same chart,
-we are forkec to put in the same file all resources that are related with self-signed certificate.
+we are forced to put in the same file all resources that are related with self-signed certificate.
  */}}
-{{- $altNames := list ( printf "%s.%s" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-webhooks-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) -}}
+{{- $altNames := list ( printf "%s.%s" (include "helm.fullname" .) .Release.Name ) ( printf "%s-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) ( printf "%s-webhooks-service.%s.svc" (include "helm.fullname" .) .Release.Namespace ) -}}
 {{- $ca := genCA "lumigo-webhooks-ca" 365 -}}
 {{- $cert := genSignedCert ( include "helm.name" . ) nil $altNames 365 $ca -}}
 {{- $certFingerprint := $cert.Cert | b64enc | substr 10 25 | quote }}
@@ -19,6 +19,17 @@ data:
   tls.crt: {{ $cert.Cert | b64enc }}
   tls.key: {{ $cert.Key | b64enc }}
   ca.crt: {{ $ca.Cert | b64enc }}
+---
+{{- if and .Values.clusterCollection.metrics.enabled .Values.lumigoToken.value }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.lumigoToken.secretName }}
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+data:
+  "{{ .Values.lumigoToken.secretKey }}": {{ .Values.lumigoToken.value | b64enc }}
+{{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
@@ -233,6 +244,28 @@ spec:
           value: "{{ .Values.endpoint.otlp.url }}"
         - name: LUMIGO_LOGS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: LUMIGO_METRICS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.metrics_url }}"
+{{- if .Values.clusterCollection.metrics.enabled }}
+        - name: LUMIGO_INFRA_METRICS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.lumigoToken.secretName }}
+              key: {{ .Values.lumigoToken.secretKey }}
+              optional: true
+        - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
+          value: "{{ .Values.clusterCollection.metrics.frequency }}"
+        - name: LUMIGO_CLUSTER_AGENT_SERVICE
+          value: "{{ include "helm.fullname" . }}-cluster-agent-service.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_PROM_NODE_EXPORTER_PORT
+          value: "{{ .Values.prometheusNodeExporter.service.nodePort }}"
+        - name: LUMIGO_KUBE_STATE_METRICS_SERVICE
+          value: "{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_KUBE_STATE_METRICS_PORT
+          value: "{{ index .Values "kube-state-metrics" "service" "port" }}"
+        - name: LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY
+          value: "{{ .Values.clusterCollection.metrics.essentialOnly }}"
+{{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD

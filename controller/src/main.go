@@ -18,9 +18,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -28,8 +32,10 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,6 +43,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -44,7 +51,13 @@ import (
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/defaulter"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/injector"
+
 	//+kubebuilder:scaffold:imports
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -59,11 +72,37 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+type QuickstartSetting struct {
+	Namespace      string `json:"namespace"`
+	TracingEnabled *bool  `json:"tracingEnabled,omitempty"`
+	LoggingEnabled *bool  `json:"loggingEnabled,omitempty"`
+}
+
+func (qs *QuickstartSetting) GetTracesEnabledOrDefault() *bool {
+	if qs.TracingEnabled == nil {
+		newTrue := true
+		return &newTrue
+	}
+	return qs.TracingEnabled
+}
+
+func (qs *QuickstartSetting) GetLogsEnabledOrDefault() *bool {
+	if qs.LoggingEnabled == nil {
+		newTrue := true
+		return &newTrue
+	}
+	return qs.LoggingEnabled
+}
+
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var uninstall bool
+	var quickstartSettings string
+	var lumigoToken string
+	var lumigoNamespace string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -71,8 +110,12 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&uninstall, "uninstall", false,
 		"Whether the execution of this manager is actually aimed at initiating the uninstallation procedure.")
+	flag.StringVar(&quickstartSettings, "quickstart", "", "Quickstart settings")
+	flag.StringVar(&lumigoToken, "lumigo-token", "", "Lumigo token for quickstart setup")
+	flag.StringVar(&lumigoNamespace, "lumigo-namespace", "", "Lumigo namespace")
+
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -80,19 +123,47 @@ func main() {
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 
-	if !uninstall {
-		setupLog.Info("starting manager")
-		if err := startManager(metricsAddr, probeAddr, enableLeaderElection); err != nil {
-			logger.Error(err, "Manager failed")
+	lumigoOperatorVersion, isSet := os.LookupEnv("LUMIGO_OPERATOR_VERSION")
+	if !isSet {
+		lumigoOperatorVersion = "dev"
+	}
+
+	if uninstall {
+		if err := removeLumigoFromMonitoredNamespaces(); err != nil {
+			setupLog.Error(err, "Uninstallation hook failed when removing Lumigo from monitored namespaces")
 			os.Exit(1)
 		}
-	} else if err := uninstallHook(); err != nil {
-		setupLog.Error(err, "Unistallation hook failed")
+
+		if err := uninjectStandaloneResources(lumigoOperatorVersion); err != nil {
+			setupLog.Error(err, "Uninstallation hook failed when un-injecting standalone resources")
+			os.Exit(1)
+		}
+
+		setupLog.Info("Uninstallation hook completed successfully")
+		os.Exit(0)
+	}
+
+	logger.Info("Got monitoredNamespace settings, entering quickstart mode", "settings", quickstartSettings)
+	if quickstartSettings != "" {
+		if lumigoToken == "" {
+			logger.Error(fmt.Errorf("quickstart mode request, but Lumigo token was not provided"), "missing token")
+			os.Exit(1)
+		}
+		if err := createQuickstartObjects(quickstartSettings, lumigoToken, lumigoNamespace); err != nil {
+			logger.Error(err, "Failed to create quickstart objects")
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	setupLog.Info("starting manager")
+	if err := startManager(metricsAddr, probeAddr, enableLeaderElection, lumigoOperatorVersion); err != nil {
+		logger.Error(err, "Manager failed")
 		os.Exit(1)
 	}
 }
 
-func startManager(metricsAddr string, probeAddr string, enableLeaderElection bool) error {
+func startManager(metricsAddr string, probeAddr string, enableLeaderElection bool, lumigoOperatorVersion string) error {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -117,11 +188,6 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	}
 
 	logger := ctrl.Log.WithName("controllers").WithName("Lumigo")
-
-	lumigoOperatorVersion, isSet := os.LookupEnv("LUMIGO_OPERATOR_VERSION")
-	if !isSet {
-		lumigoOperatorVersion = "dev"
-	}
 
 	lumigoEndpoint, isSet := os.LookupEnv("TELEMETRY_PROXY_OTLP_SERVICE")
 	if !isSet {
@@ -201,7 +267,7 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	return nil
 }
 
-func uninstallHook() error {
+func removeLumigoFromMonitoredNamespaces() error {
 	logger := ctrl.Log.WithName("uninstaller").WithName("Lumigo")
 
 	config := ctrl.GetConfigOrDie()
@@ -252,7 +318,14 @@ func uninstallHook() error {
 			logger.Info(fmt.Sprintf("Unexpected 'update' event for Lumigo resources: %+v", newObj))
 		},
 		DeleteFunc: func(obj interface{}) {
-			deletedLumigo := obj.(unstructured.Unstructured)
+			deletedLumigo, isOk := obj.(*unstructured.Unstructured)
+			if !isOk {
+				logger.Error(fmt.Errorf("error decoding object"),
+					"Expected *unstructured.Unstructured but got",
+					fmt.Sprintf("%T", obj))
+				return
+			}
+
 			for i, l := range lumigoesLeft {
 				if l.Namespace == deletedLumigo.GetNamespace() && l.Name == deletedLumigo.GetName() {
 					lumigoesLeft = append(lumigoesLeft[:i], lumigoesLeft[i+1:]...)
@@ -285,4 +358,189 @@ func uninstallHook() error {
 	}
 
 	return <-deletionCompletedChannel
+}
+
+func createQuickstartObjects(quickstartSettings string, lumigoToken string, lumigoNamespace string) error {
+	var settings []QuickstartSetting
+
+	logger := ctrl.Log.WithName("quickstart")
+
+	config := ctrl.GetConfigOrDie()
+	s := runtime.NewScheme()
+	operatorv1alpha1.AddToScheme(s)
+	corev1.AddToScheme(s)
+
+	ctx := context.Background()
+
+	client, err := runtimeclient.New(config, runtimeclient.Options{Scheme: s})
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	if quickstartSettings == "all" {
+		settings, err = getAllNamespacesQuickstartSettings(ctx, client, lumigoNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to get all namespaces: %w", err)
+		}
+	} else {
+		err = json.Unmarshal([]byte(quickstartSettings), &settings)
+		if err != nil {
+			return err
+		}
+	}
+
+	quickstartSecretName := "lumigo-credentials"
+	quickstartSecretKey := "token"
+
+	for _, setting := range settings {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      quickstartSecretName,
+				Namespace: setting.Namespace,
+			},
+			StringData: map[string]string{
+				quickstartSecretKey: lumigoToken,
+			},
+		}
+		if err := client.Create(ctx, secret); err != nil {
+			if k8serrors.IsAlreadyExists(err) {
+				logger.Info("Lumigo secret already exists, skipping creation during quickstart", "namespace", setting.Namespace, "secret", quickstartSecretName)
+			} else {
+				logger.Error(err, "Failed to create Lumigo secret during quickstart", "namespace", setting.Namespace, "secret", quickstartSecretName)
+				continue
+			}
+		}
+
+		var createErr error
+		lumigo := &operatorv1alpha1.Lumigo{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "lumigo",
+				Namespace: setting.Namespace,
+			},
+			Spec: operatorv1alpha1.LumigoSpec{
+				LumigoToken: operatorv1alpha1.Credentials{
+					SecretRef: operatorv1alpha1.KubernetesSecretRef{
+						Name: quickstartSecretName,
+						Key:  quickstartSecretKey,
+					},
+				},
+				Tracing: operatorv1alpha1.TracingSpec{
+					Enabled: setting.GetTracesEnabledOrDefault(),
+				},
+				Logging: operatorv1alpha1.LoggingSpec{
+					Enabled: setting.GetLogsEnabledOrDefault(),
+				},
+			},
+		}
+
+		for attempts := 0; attempts < 20; attempts++ {
+			if err := client.Create(ctx, lumigo); err != nil {
+				lumigoAlreadyExistsInNamespace := strings.Contains(err.Error(), "There is already an instance of operator.lumigo.io/v1alpha1.Lumigo")
+				// checking that Lumigo CRD already exists in the namespace cannot be done via k8serrors.IsAlreadyExists(err),
+				// as the admission webhook rejects it before the IsAlreadyExists gets a chance to be thrown,
+				// Therefore, we check for the error message returned from the admission webhook
+				if lumigoAlreadyExistsInNamespace {
+					logger.Info("Lumigo resource already exists in namespace, updating values", "namespace", setting.Namespace)
+					if client.Get(ctx, runtimeclient.ObjectKey{Namespace: setting.Namespace, Name: "lumigo"}, lumigo) != nil {
+						logger.Error(err, "could not read existing Lumigo resource", "namespace", setting.Namespace)
+						break
+					} else {
+						newFalse := false
+						newTrue := true
+						// If both the existing CRD are missing an explicit value, we set it to the default value
+						// the operator given to each setting when reading a CRD - which is `true` for tracing and `false` for logging
+						updateIfNil(&lumigo.Spec.Tracing.Enabled, setting.TracingEnabled, &newTrue)
+						updateIfNil(&lumigo.Spec.Logging.Enabled, setting.LoggingEnabled, &newFalse)
+						client.Update(ctx, lumigo)
+					}
+				} else {
+					logger.Error(err, "Failed to create Lumigo CRD during quickstart, controller is probably not ready yet. Retrying...", "namespace", setting.Namespace, "attempt", attempts+1)
+					createErr = err
+					time.Sleep(5 * time.Second)
+					continue
+				}
+			}
+			createErr = nil
+			break
+		}
+
+		if createErr == nil {
+			logger.Info("Lumigo CRD successfully created", "namespace", setting.Namespace)
+		} else {
+			return fmt.Errorf("failed to create Lumigo CRD in namespace %s after multiple attempts: %w", setting.Namespace, createErr)
+		}
+	}
+
+	return nil
+}
+
+func updateIfNil(target **bool, source *bool, defaultValue *bool) {
+	if *target == nil {
+		if source == nil {
+			*target = defaultValue
+		} else {
+			*target = source
+		}
+	} else if source != nil {
+		*target = source
+	}
+}
+
+func getAllNamespacesQuickstartSettings(ctx context.Context, client runtimeclient.Client, lumigoNamespace string) ([]QuickstartSetting, error) {
+	ignoredNamespaces := []string{
+		lumigoNamespace,
+		"kube-system",
+		"kube-public",
+		"kube-node-lease",
+	}
+	namespaceList := &corev1.NamespaceList{}
+	if err := client.List(ctx, namespaceList); err != nil {
+		return nil, fmt.Errorf("failed to list namespaces: %w", err)
+	}
+
+	settings := []QuickstartSetting{}
+	for _, namespace := range namespaceList.Items {
+		if !slices.Contains(ignoredNamespaces, namespace.Name) {
+			settings = append(settings, QuickstartSetting{
+				Namespace: namespace.Name,
+			})
+		}
+	}
+
+	return settings, nil
+}
+
+func uninjectStandaloneResources(lumigoOperatorVersion string) error {
+	logger := ctrl.Log.WithName("uninstaller").WithName("Lumigo")
+	config := ctrl.GetConfigOrDie()
+
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	runtimeClient, err := runtimeclient.New(config, runtimeclient.Options{})
+	if err != nil {
+		return fmt.Errorf("failed to create runtime client: %w", err)
+	}
+
+	lumigoSystemNamespace, _ := os.LookupEnv("LUMIGO_CONTROLLER_NAMESPACE")
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: k8sClient.CoreV1().Events(lumigoSystemNamespace)})
+	s := runtime.NewScheme()
+	corev1.AddToScheme(s)
+	appsv1.AddToScheme(s)
+	eventRecorder := eventBroadcaster.NewRecorder(s, v1.EventSource{Component: "Lumigo Operator uninstall hook"})
+
+	resourceManager := controllers.NewLumigoResourceManager(
+		runtimeClient,
+		k8sClient,
+		eventRecorder,
+		lumigoOperatorVersion,
+		&logger,
+	)
+
+	ctx := context.Background()
+	eventTrigger := "controller, uninstall hook for standalone resources"
+	return resourceManager.RemoveLumigoFromAllNamespaces(ctx, eventTrigger)
 }

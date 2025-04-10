@@ -40,6 +40,13 @@ import (
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/controllers/conditions"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/mutation"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/types"
+)
+
+// Default values for the Lumigo secret name and key
+const (
+	DefaultLumigoSecretName = "lumigo-credentials"
+	DefaultLumigoSecretKey  = "token"
 )
 
 var (
@@ -91,17 +98,17 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed("Mutating webhooks have nothing to do on deletions")
 	}
 
-	resourceAdaper, err := newResourceAdatper(request.Kind, request.Object.Raw)
+	resourceAdapter, err := newResourceAdapter(request.Kind, request.Object.Raw)
 	if err != nil {
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("error while parsing the resource: %w", err))
 	}
 
-	if resourceAdaper == nil {
+	if resourceAdapter == nil {
 		// Resource not supported
 		return admission.Allowed(fmt.Sprintf("The Lumigo Injector webhook does not mutate resources of type %s", request.Kind))
 	}
 
-	namespace := resourceAdaper.GetNamespace()
+	namespace := resourceAdapter.GetNamespace()
 
 	// Check if we have a Lumigo instance in the object's namespace
 	lumigos := &operatorv1alpha1.LumigoList{}
@@ -118,7 +125,18 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 	}
 
 	if len(lumigos.Items) < 1 {
-		return admission.Allowed(fmt.Sprintf("No Lumigo configuration for the '%s' namespace; resource will not be mutated", namespace))
+		log.Info("No Lumigo instance found in the namespace, attempting injection based on resource labels", "namespace", namespace, "resourceName", fmt.Sprintf("%s/%s", request.Kind, resourceAdapter.GetObjectMeta().Name))
+		// If there's no CRD in that namespace, try to use the auto-trace settings if any
+		if resourceAdapter.GetAutoTraceSettings().IsAutoTraced {
+			mutator, err := mutation.NewMutatorFromAutoTraceSettings(&log, resourceAdapter.GetAutoTraceSettings(), h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl, h.TelemetryProxyOtlpLogsServiceUrl)
+			if err != nil {
+				return admission.Allowed(fmt.Errorf("cannot instantiate mutator: %w", err).Error())
+			}
+			injectionTrigger := fmt.Sprintf("%s/%s", resourceAdapter.GetNamespace(), resourceAdapter.GetObjectMeta().Name)
+			return h.processResourceInjection(resourceAdapter, mutator, injectionTrigger, request)
+		} else {
+			return admission.Allowed(fmt.Sprintf("No Lumigo configuration for the '%s' namespace; resource will not be mutated", namespace))
+		}
 	}
 
 	lumigo := lumigos.Items[0]
@@ -133,36 +151,44 @@ func (h *LumigoInjectorWebhookHandler) Handle(ctx context.Context, request admis
 		return admission.Allowed(fmt.Sprintf("The Lumigo object in the '%s' namespace is not active; resource will not be mutated", namespace))
 	}
 
-	mutator, err := mutation.NewMutator(&log, &lumigo.Spec, h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl, h.TelemetryProxyOtlpLogsServiceUrl)
+	mutator, err := mutation.NewInjectingMutatorFromSpec(&log, &lumigo.Spec, h.LumigoOperatorVersion, h.LumigoInjectorImage, h.TelemetryProxyOtlpServiceUrl, h.TelemetryProxyOtlpLogsServiceUrl)
 	if err != nil {
 		return admission.Allowed(fmt.Errorf("cannot instantiate mutator: %w", err).Error())
 	}
 
-	objectMeta := resourceAdaper.GetObjectMeta()
+	injectionTrigger := fmt.Sprintf("%s/%s", lumigo.Namespace, lumigo.Name)
+	return h.processResourceInjection(resourceAdapter, mutator, injectionTrigger, request)
+}
+
+func (h *LumigoInjectorWebhookHandler) processResourceInjection(resourceAdapter resourceAdapter, mutator mutation.InjectingMutator, injectionTrigger string, request admission.Request) admission.Response {
+
+	objectMeta := resourceAdapter.GetObjectMeta()
 	hadAlreadyInstrumentation := strings.HasPrefix(objectMeta.Labels[mutation.LumigoAutoTraceLabelKey], mutation.LumigoAutoTraceLabelVersionPrefixValue)
 	injectionOccurred := false
+	var err error
+
 	if objectMeta.Labels[mutation.LumigoAutoTraceLabelKey] == mutation.LumigoAutoTraceLabelSkipNextInjectorValue {
 		h.Log.Info(fmt.Sprintf("Skipping injection: '%s' label set to '%s'", mutation.LumigoAutoTraceLabelKey, mutation.LumigoAutoTraceLabelSkipNextInjectorValue))
 		delete(objectMeta.Labels, mutation.LumigoAutoTraceLabelKey)
-	} else if injectionOccurred, err = resourceAdaper.InjectLumigoInto(mutator); err != nil {
+	} else if injectionOccurred, err = resourceAdapter.InjectLumigoInto(mutator); err != nil {
 		if !hadAlreadyInstrumentation {
-			operatorv1alpha1.RecordCannotAddInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name), err)
+			operatorv1alpha1.RecordCannotAddInstrumentationEvent(h.EventRecorder, resourceAdapter.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s'", injectionTrigger), err)
 		} else {
-			operatorv1alpha1.RecordCannotUpdateInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name), err)
+			operatorv1alpha1.RecordCannotUpdateInstrumentationEvent(h.EventRecorder, resourceAdapter.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s' Lumigo resource", injectionTrigger), err)
 		}
 		return admission.Allowed(fmt.Errorf("cannot inject Lumigo tracing in the pod spec %w", err).Error())
 	}
 
-	marshalled, err := resourceAdaper.Marshal()
+	marshalled, err := resourceAdapter.Marshal()
 	if err != nil {
 		return admission.Allowed(fmt.Errorf("cannot marshal object %w", err).Error())
 	}
 
 	if injectionOccurred {
 		if !hadAlreadyInstrumentation {
-			operatorv1alpha1.RecordAddedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
+			operatorv1alpha1.RecordAddedInstrumentationEvent(h.EventRecorder, resourceAdapter.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s' Lumigo resource", injectionTrigger))
 		} else {
-			operatorv1alpha1.RecordUpdatedInstrumentationEvent(h.EventRecorder, resourceAdaper.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s/%s' Lumigo resource", lumigo.Namespace, lumigo.Name))
+			operatorv1alpha1.RecordUpdatedInstrumentationEvent(h.EventRecorder, resourceAdapter.GetResource(), fmt.Sprintf("injector webhook, acting on behalf of the '%s' Lumigo resource", injectionTrigger))
 		}
 	}
 
@@ -173,15 +199,42 @@ type resourceAdapter interface {
 	GetResource() runtime.Object
 	GetObjectMeta() *metav1.ObjectMeta
 	GetNamespace() string
-	InjectLumigoInto(mutation.Mutator) (bool, error)
+	InjectLumigoInto(mutation.InjectingMutator) (bool, error)
+	GetAutoTraceSettings() *types.AutoTraceSettings
 	Marshal() ([]byte, error)
 }
 
 // Inline implementation of resourceAdapter inspired by https://stackoverflow.com/a/43420100/6188451
 type resourceAdapterImpl struct {
-	resource      runtime.Object
-	getNamespace  func() string
-	getObjectMeta func() *metav1.ObjectMeta
+	resource             runtime.Object
+	getNamespace         func() string
+	getObjectMeta        func() *metav1.ObjectMeta
+	getAutoTraceSettings func() *types.AutoTraceSettings
+}
+
+// Helper function to create autoTraceSettings from labels
+func createAutoTraceSettings(labels map[string]string) *types.AutoTraceSettings {
+	isAutoTraced := strings.ToLower(labels[mutation.LumigoAutoTraceLabelKey]) == "true"
+	tracesEnabled := strings.ToLower(labels[mutation.LumigoAutoTraceTracesEnabledLabelKey]) != "false"
+	logsEnabled := strings.ToLower(labels[mutation.LumigoAutoTraceLogsEnabledLabelKey]) == "true"
+
+	secretName, secretNameSpecified := labels[mutation.LumigoAutoTraceTokenSecretNameKey]
+	if !secretNameSpecified {
+		secretName = DefaultLumigoSecretName
+	}
+
+	secretKey, secretKeySpecified := labels[mutation.LumigoAutoTraceTokenSecretKeyKey]
+	if !secretKeySpecified {
+		secretKey = DefaultLumigoSecretKey
+	}
+
+	return &types.AutoTraceSettings{
+		IsAutoTraced:  isAutoTraced,
+		TracesEnabled: tracesEnabled,
+		LogsEnabled:   logsEnabled,
+		SecretName:    secretName,
+		SecretKey:     secretKey,
+	}
 }
 
 func (r *resourceAdapterImpl) GetResource() runtime.Object {
@@ -196,15 +249,19 @@ func (r *resourceAdapterImpl) GetObjectMeta() *metav1.ObjectMeta {
 	return r.getObjectMeta()
 }
 
-func (r *resourceAdapterImpl) InjectLumigoInto(mutator mutation.Mutator) (bool, error) {
+func (r *resourceAdapterImpl) InjectLumigoInto(mutator mutation.InjectingMutator) (bool, error) {
 	return mutator.InjectLumigoInto(r.resource)
+}
+
+func (r *resourceAdapterImpl) GetAutoTraceSettings() *types.AutoTraceSettings {
+	return r.getAutoTraceSettings()
 }
 
 func (r *resourceAdapterImpl) Marshal() ([]byte, error) {
 	return json.Marshal(r.resource)
 }
 
-func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapter, error) {
+func newResourceAdapter(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapter, error) {
 	sGVK := fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)
 	switch sGVK {
 	case "apps/v1.Daemonset":
@@ -222,6 +279,9 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				},
 				getObjectMeta: func() *metav1.ObjectMeta {
 					return &resource.ObjectMeta
+				},
+				getAutoTraceSettings: func() *types.AutoTraceSettings {
+					return createAutoTraceSettings(resource.Labels)
 				},
 			}, nil
 		}
@@ -241,6 +301,9 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getObjectMeta: func() *metav1.ObjectMeta {
 					return &resource.ObjectMeta
 				},
+				getAutoTraceSettings: func() *types.AutoTraceSettings {
+					return createAutoTraceSettings(resource.Labels)
+				},
 			}, nil
 		}
 	case "apps/v1.ReplicaSet":
@@ -258,6 +321,9 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				},
 				getObjectMeta: func() *metav1.ObjectMeta {
 					return &resource.ObjectMeta
+				},
+				getAutoTraceSettings: func() *types.AutoTraceSettings {
+					return createAutoTraceSettings(resource.Labels)
 				},
 			}, nil
 		}
@@ -277,6 +343,9 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getObjectMeta: func() *metav1.ObjectMeta {
 					return &resource.ObjectMeta
 				},
+				getAutoTraceSettings: func() *types.AutoTraceSettings {
+					return createAutoTraceSettings(resource.Labels)
+				},
 			}, nil
 		}
 	case "batch/v1.CronJob":
@@ -294,6 +363,9 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				},
 				getObjectMeta: func() *metav1.ObjectMeta {
 					return &resource.ObjectMeta
+				},
+				getAutoTraceSettings: func() *types.AutoTraceSettings {
+					return createAutoTraceSettings(resource.Labels)
 				},
 			}, nil
 		}
@@ -313,6 +385,9 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 				getObjectMeta: func() *metav1.ObjectMeta {
 					return &resource.ObjectMeta
 				},
+				getAutoTraceSettings: func() *types.AutoTraceSettings {
+					return createAutoTraceSettings(resource.Labels)
+				},
 			}, nil
 		}
 	default:
@@ -320,5 +395,4 @@ func newResourceAdatper(gvk metav1.GroupVersionKind, raw []byte) (resourceAdapte
 			return nil, nil
 		}
 	}
-
 }

@@ -6,4 +6,4 @@ COPY ./app.py /code/app.py
 
 LABEL distro-version='DEV'
 
-CMD ["python", "app.py", "something to say to the logs"]
+CMD ["python", "app.py", "something to say to the logs", "json"]

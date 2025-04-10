@@ -48,11 +48,38 @@ controllerManager:
     resources:
       limits:
         cpu: 500m
-        memory: 256Mi
+        memory: 512Mi
       requests:
         cpu: 10m
-        memory: 128Mi
+        memory: 256Mi
   replicas: 1
+logFileCollector:
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: 0.112.0
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 10m
+      memory: 128Mi
+kubeStateMetrics:
+  install: true
+prometheusNodeExporter:
+  image:
+    repository: prom/node-exporter
+    tag: v1.8.2
+  service:
+    port: 9100
+    nodePort: 30090
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
 injectorWebhook:
   lumigoInjector:
     image:
@@ -76,3 +103,21 @@ endpoint:
   otlp:
     url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
     logs_url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+    metrics_url: https://ga-otlp.lumigo-tracer-edge.golumigo.com
+lumigoToken:
+  secretName: lumigo-credentials
+  secretKey: token
+  value:
+clusterCollection:
+  metrics:
+    enabled: true
+    essentialOnly: true
+    frequency: 15s
+  logs:
+    enabled: false
+# controls the port in the KSM sub-chart
+kube-state-metrics:
+  service:
+    port: 8086
+  extraArgs:
+    - --metric-labels-allowlist=namespaces=[namespace],daemonsets=[daemonset,namespace],deployments=[deployment,namespace],replicasets=[replicaset,namespace],statefulsets=[statefulset,namespace],jobs=[job,namespace],cronjobs=[cronjob,namespace],pods=[pod,namespace],nodes=[node]

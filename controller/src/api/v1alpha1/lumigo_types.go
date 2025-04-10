@@ -75,6 +75,7 @@ type KubernetesSecretRef struct {
 // TracingSpec specified how distributed tracing (for example: tracer injection)
 // should be set up by the operator
 type TracingSpec struct {
+	Enabled *bool `json:"enabled"` // Using a pointer to support cases where the value is not set (and it counts as enabled)
 	Injection InjectionSpec `json:"injection"`
 }
 
