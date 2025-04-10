@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
+	"github.com/lumigo-io/lumigo-kubernetes-operator/types"
 	"golang.org/x/exp/slices"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -37,6 +38,10 @@ import (
 )
 
 const LumigoAutoTraceLabelKey = "lumigo.auto-trace"
+const LumigoAutoTraceTracesEnabledLabelKey = "lumigo.enable-traces"
+const LumigoAutoTraceLogsEnabledLabelKey = "lumigo.enable-logs"
+const LumigoAutoTraceTokenSecretNameKey = "lumigo.token-secret"
+const LumigoAutoTraceTokenSecretKeyKey = "lumigo.token-key"
 const LumigoAutoTraceLabelVersionPrefixValue = "lumigo-operator.v"
 const LumigoAutoTraceLabelSkipNextInjectorValue = "skip-next-injector"
 
@@ -57,7 +62,7 @@ const LdPreloadEnvVarValue = LumigoInjectorVolumeMountPoint + "/injector/lumigo_
 var defaultLumigoInitContainerUser int64 = 1234
 var defaultLumigoInitContainerGroup int64 = defaultLumigoInitContainerUser
 
-type Mutator interface {
+type InjectingMutator interface {
 	GetAutotraceLabelValue() string
 	InjectLumigoInto(resource interface{}) (bool, error)
 	InjectLumigoIntoAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) (bool, error)
@@ -66,6 +71,9 @@ type Mutator interface {
 	InjectLumigoIntoAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) (bool, error)
 	InjectLumigoIntoBatchV1CronJob(deployment *batchv1.CronJob) (bool, error)
 	InjectLumigoIntoBatchV1Job(deployment *batchv1.Job) (bool, error)
+}
+
+type RemovalMutator interface {
 	RemoveLumigoFrom(resource interface{}) (bool, error)
 	RemoveLumigoFromAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) (bool, error)
 	RemoveLumigoFromAppsV1Deployment(deployment *appsv1.Deployment) (bool, error)
@@ -78,26 +86,54 @@ type Mutator interface {
 var f = false
 var t = true
 
-type mutatorImpl struct {
+type baseMutatorConfig struct {
 	log                       *logr.Logger
 	lumigoAutotraceLabelValue string
-	lumigoEndpoint            string
-	lumigoLogsEndpoint        string
-	lumigoEnableLogs          bool
-	lumigoEnableTraces        bool
-	lumigoToken               *operatorv1alpha1.Credentials
-	lumigoInjectorImage       string
 }
 
-func (m *mutatorImpl) GetAutotraceLabelValue() string {
+type injectingMutatorImpl struct {
+	baseMutatorConfig
+	lumigoEndpoint      string
+	lumigoLogsEndpoint  string
+	lumigoEnableLogs    bool
+	lumigoEnableTraces  bool
+	lumigoToken         *operatorv1alpha1.Credentials
+	lumigoInjectorImage string
+}
+
+type removalMutatorImpl struct {
+	baseMutatorConfig
+}
+
+func (m *injectingMutatorImpl) GetAutotraceLabelValue() string {
 	return m.lumigoAutotraceLabelValue
 }
 
-func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (Mutator, error) {
+func NewRemovalMutator(Log *logr.Logger, LumigoOperatorVersion string) RemovalMutator {
 	version := LumigoOperatorVersion
 
 	if len(version) > 8 {
 		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
+	}
+
+	return &removalMutatorImpl{
+		baseMutatorConfig: baseMutatorConfig{
+			log:                       Log,
+			lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
+		},
+	}
+}
+
+func NewInjectingMutatorFromSpec(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (InjectingMutator, error) {
+	version := LumigoOperatorVersion
+
+	if len(version) > 8 {
+		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
+	}
+
+	baseConfig := baseMutatorConfig{
+		log:                       Log,
+		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
 	}
 
 	lumigoEnableLogs := false
@@ -115,19 +151,52 @@ func NewMutator(Log *logr.Logger, LumigoSpec *operatorv1alpha1.LumigoSpec, Lumig
 		lumigoToken = &LumigoSpec.LumigoToken
 	}
 
-	return &mutatorImpl{
-		log:                       Log,
-		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
-		lumigoEndpoint:            TelemetryProxyOtlpServiceUrl,
-		lumigoLogsEndpoint:        TelemetryProxyOtlpLogsServiceUrl,
-		lumigoEnableLogs:          lumigoEnableLogs,
-		lumigoEnableTraces:        lumigoEnableTraces,
-		lumigoToken:               lumigoToken,
-		lumigoInjectorImage:       LumigoInjectorImage,
-	}, nil
+	injectingMutator := &injectingMutatorImpl{
+		baseMutatorConfig:   baseConfig,
+		lumigoEndpoint:      TelemetryProxyOtlpServiceUrl,
+		lumigoLogsEndpoint:  TelemetryProxyOtlpLogsServiceUrl,
+		lumigoEnableLogs:    lumigoEnableLogs,
+		lumigoEnableTraces:  lumigoEnableTraces,
+		lumigoToken:         lumigoToken,
+		lumigoInjectorImage: LumigoInjectorImage,
+	}
+
+	return injectingMutator, nil
 }
 
-func (m *mutatorImpl) InjectLumigoInto(resource interface{}) (bool, error) {
+func NewMutatorFromAutoTraceSettings(Log *logr.Logger, autoTraceSettings *types.AutoTraceSettings, LumigoOperatorVersion string, LumigoInjectorImage string, TelemetryProxyOtlpServiceUrl string, TelemetryProxyOtlpLogsServiceUrl string) (InjectingMutator, error) {
+	version := LumigoOperatorVersion
+
+	if len(version) > 8 {
+		version = version[0:7] // Label values have a limit of 63 characters, we stay well below that
+	}
+
+	baseConfig := baseMutatorConfig{
+		log:                       Log,
+		lumigoAutotraceLabelValue: LumigoAutoTraceLabelVersionPrefixValue + version,
+	}
+
+	lumigoToken := &operatorv1alpha1.Credentials{
+		SecretRef: operatorv1alpha1.KubernetesSecretRef{
+			Name: autoTraceSettings.SecretName,
+			Key:  autoTraceSettings.SecretKey,
+		},
+	}
+
+	injectingMutator := &injectingMutatorImpl{
+		baseMutatorConfig:   baseConfig,
+		lumigoEndpoint:      TelemetryProxyOtlpServiceUrl,
+		lumigoLogsEndpoint:  TelemetryProxyOtlpLogsServiceUrl,
+		lumigoEnableLogs:    autoTraceSettings.LogsEnabled,
+		lumigoEnableTraces:  autoTraceSettings.TracesEnabled,
+		lumigoToken:         lumigoToken,
+		lumigoInjectorImage: LumigoInjectorImage,
+	}
+
+	return injectingMutator, nil
+}
+
+func (m *injectingMutatorImpl) InjectLumigoInto(resource interface{}) (bool, error) {
 	switch a := resource.(type) {
 	case *appsv1.DaemonSet:
 		return m.InjectLumigoIntoAppsV1DaemonSet(a)
@@ -146,7 +215,7 @@ func (m *mutatorImpl) InjectLumigoInto(resource interface{}) (bool, error) {
 	}
 }
 
-func (m *mutatorImpl) RemoveLumigoFrom(resource interface{}) (bool, error) {
+func (m *removalMutatorImpl) RemoveLumigoFrom(resource interface{}) (bool, error) {
 	switch a := resource.(type) {
 	case *appsv1.DaemonSet:
 		return m.RemoveLumigoFromAppsV1DaemonSet(a)
@@ -163,26 +232,25 @@ func (m *mutatorImpl) RemoveLumigoFrom(resource interface{}) (bool, error) {
 	default:
 		return false, fmt.Errorf("unexpected resource type to mutate: %+v", a)
 	}
-
 }
 
-func (m *mutatorImpl) InjectLumigoIntoAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) (bool, error) {
+func (m *injectingMutatorImpl) InjectLumigoIntoAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) (bool, error) {
 	return m.injectLumigoInto(&daemonSet.ObjectMeta, &daemonSet.Spec.Template)
 }
 
-func (m *mutatorImpl) RemoveLumigoFromAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) (bool, error) {
+func (m *removalMutatorImpl) RemoveLumigoFromAppsV1DaemonSet(daemonSet *appsv1.DaemonSet) (bool, error) {
 	return m.removeLumigoFrom(&daemonSet.ObjectMeta, &daemonSet.Spec.Template)
 }
 
-func (m *mutatorImpl) InjectLumigoIntoAppsV1Deployment(deployment *appsv1.Deployment) (bool, error) {
+func (m *injectingMutatorImpl) InjectLumigoIntoAppsV1Deployment(deployment *appsv1.Deployment) (bool, error) {
 	return m.injectLumigoInto(&deployment.ObjectMeta, &deployment.Spec.Template)
 }
 
-func (m *mutatorImpl) RemoveLumigoFromAppsV1Deployment(deployment *appsv1.Deployment) (bool, error) {
+func (m *removalMutatorImpl) RemoveLumigoFromAppsV1Deployment(deployment *appsv1.Deployment) (bool, error) {
 	return m.removeLumigoFrom(&deployment.ObjectMeta, &deployment.Spec.Template)
 }
 
-func (m *mutatorImpl) InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
+func (m *injectingMutatorImpl) InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
 	if hasDeploymentOwner, err := hasDeploymentOwnerReference(replicaSet.OwnerReferences); err != nil {
 		return false, err
 	} else if hasDeploymentOwner {
@@ -192,7 +260,7 @@ func (m *mutatorImpl) InjectLumigoIntoAppsV1ReplicaSet(replicaSet *appsv1.Replic
 	return m.injectLumigoInto(&replicaSet.ObjectMeta, &replicaSet.Spec.Template)
 }
 
-func (m *mutatorImpl) RemoveLumigoFromAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
+func (m *removalMutatorImpl) RemoveLumigoFromAppsV1ReplicaSet(replicaSet *appsv1.ReplicaSet) (bool, error) {
 	if hasDeploymentOwner, err := hasDeploymentOwnerReference(replicaSet.OwnerReferences); err != nil {
 		return false, err
 	} else if hasDeploymentOwner {
@@ -202,31 +270,31 @@ func (m *mutatorImpl) RemoveLumigoFromAppsV1ReplicaSet(replicaSet *appsv1.Replic
 	return m.removeLumigoFrom(&replicaSet.ObjectMeta, &replicaSet.Spec.Template)
 }
 
-func (m *mutatorImpl) InjectLumigoIntoAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) (bool, error) {
+func (m *injectingMutatorImpl) InjectLumigoIntoAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) (bool, error) {
 	return m.injectLumigoInto(&statefulSet.ObjectMeta, &statefulSet.Spec.Template)
 }
 
-func (m *mutatorImpl) RemoveLumigoFromAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) (bool, error) {
+func (m *removalMutatorImpl) RemoveLumigoFromAppsV1StatefulSet(statefulSet *appsv1.StatefulSet) (bool, error) {
 	return m.removeLumigoFrom(&statefulSet.ObjectMeta, &statefulSet.Spec.Template)
 }
 
-func (m *mutatorImpl) InjectLumigoIntoBatchV1CronJob(batchJob *batchv1.CronJob) (bool, error) {
+func (m *injectingMutatorImpl) InjectLumigoIntoBatchV1CronJob(batchJob *batchv1.CronJob) (bool, error) {
 	return m.injectLumigoInto(&batchJob.ObjectMeta, &batchJob.Spec.JobTemplate.Spec.Template)
 }
 
-func (m *mutatorImpl) RemoveLumigoFromBatchV1CronJob(batchJob *batchv1.CronJob) (bool, error) {
+func (m *removalMutatorImpl) RemoveLumigoFromBatchV1CronJob(batchJob *batchv1.CronJob) (bool, error) {
 	return m.removeLumigoFrom(&batchJob.ObjectMeta, &batchJob.Spec.JobTemplate.Spec.Template)
 }
 
-func (m *mutatorImpl) InjectLumigoIntoBatchV1Job(job *batchv1.Job) (bool, error) {
+func (m *injectingMutatorImpl) InjectLumigoIntoBatchV1Job(job *batchv1.Job) (bool, error) {
 	return m.injectLumigoInto(&job.ObjectMeta, &job.Spec.Template)
 }
 
-func (m *mutatorImpl) RemoveLumigoFromBatchV1Job(job *batchv1.Job) (bool, error) {
+func (m *removalMutatorImpl) RemoveLumigoFromBatchV1Job(job *batchv1.Job) (bool, error) {
 	return m.removeLumigoFrom(&job.ObjectMeta, &job.Spec.Template)
 }
 
-func (m *mutatorImpl) injectLumigoInto(topLevelObjectMeta *metav1.ObjectMeta, podTemplateSpec *corev1.PodTemplateSpec) (bool, error) {
+func (m *injectingMutatorImpl) injectLumigoInto(topLevelObjectMeta *metav1.ObjectMeta, podTemplateSpec *corev1.PodTemplateSpec) (bool, error) {
 	if err := m.validateShouldInjectLumigoInto(topLevelObjectMeta); err != nil {
 		return false, err
 	}
@@ -257,7 +325,7 @@ func addAutoTraceLabel(objectMeta *metav1.ObjectMeta, value string) {
 	}
 }
 
-func (m *mutatorImpl) removeLumigoFrom(topLevelObjectMeta *metav1.ObjectMeta, podTemplateSpec *corev1.PodTemplateSpec) (bool, error) {
+func (m *removalMutatorImpl) removeLumigoFrom(topLevelObjectMeta *metav1.ObjectMeta, podTemplateSpec *corev1.PodTemplateSpec) (bool, error) {
 	originalSpec := podTemplateSpec.Spec.DeepCopy()
 
 	if err := m.removeLumigoFromPodSpec(&podTemplateSpec.Spec); err != nil {
@@ -280,7 +348,7 @@ func removeAutoTraceLabel(objectMeta *metav1.ObjectMeta) {
 	}
 }
 
-func (m *mutatorImpl) validateShouldInjectLumigoInto(resourceMeta *metav1.ObjectMeta) error {
+func (m *injectingMutatorImpl) validateShouldInjectLumigoInto(resourceMeta *metav1.ObjectMeta) error {
 	autoTraceLabelValue := resourceMeta.Labels[LumigoAutoTraceLabelKey]
 	if strings.ToLower(autoTraceLabelValue) == "false" {
 		// Opt-out for this resource, skip injection
@@ -290,7 +358,7 @@ func (m *mutatorImpl) validateShouldInjectLumigoInto(resourceMeta *metav1.Object
 	return nil
 }
 
-func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
+func (m *injectingMutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 	lumigoInjectorVolume := &corev1.Volume{
 		Name: LumigoInjectorVolumeName,
 		VolumeSource: corev1.VolumeSource{
@@ -481,7 +549,7 @@ func (m *mutatorImpl) injectLumigoIntoPodSpec(podSpec *corev1.PodSpec) error {
 	return nil
 }
 
-func (m *mutatorImpl) removeLumigoFromPodSpec(podSpec *corev1.PodSpec) error {
+func (m *removalMutatorImpl) removeLumigoFromPodSpec(podSpec *corev1.PodSpec) error {
 	if podSpec.InitContainers != nil {
 		newInitContainers := []corev1.Container{}
 		for _, initContainer := range podSpec.InitContainers {
@@ -502,7 +570,15 @@ func (m *mutatorImpl) removeLumigoFromPodSpec(podSpec *corev1.PodSpec) error {
 		podSpec.Volumes = newVolumes
 	}
 
-	envVarsToRemove := []string{LumigoTracerTokenEnvVarName, LumigoEndpointEnvVarName, LdPreloadEnvVarName}
+	envVarsToRemove := []string{
+		LumigoTracerTokenEnvVarName,
+		LumigoEndpointEnvVarName,
+		LumigoLogsEndpointEnvVarName,
+		LumigoEnableLogsEnvVarName,
+		LumigoEnableTracesEnvVarName,
+		LumigoContainerNameEnvVarName,
+		LdPreloadEnvVarName,
+	}
 	newContainers := []corev1.Container{}
 	for _, container := range podSpec.Containers {
 		if container.VolumeMounts != nil {

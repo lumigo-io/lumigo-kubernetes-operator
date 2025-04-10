@@ -128,20 +128,20 @@ helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 |            | Scoping                                                                          | Correlation               | Reusable for other features                                          | Mutates pods                                                         |
 |------------|----------------------------------------------------------------------------------|---------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------|
 | [Lumigo CRD](#enabling-automatic-tracing) | Traces from different namespaces can be reported to different projects in Lumigo | Correlates traces to logs | The same CRD can be also used to apply logging for a given namespace | Pods are mutated to add auto-instrumentation for supported libraries |
+| [Resource Labels](#opting-in-for-specific-resources) | More granular control - can target specific resources without affecting the entire namespace | Correlates traces to logs | Separate labels can be used for both logging and tracing | Pods from labeled resources only are mutated to add auto-instrumentation for supported libraries |
 
 #### Logging
 
 |                           | Scoping                                                                        | Correlation               | Reusable for other features                                          | K8s context per log line                                                                                                   | Mutates pods                                                       | Supported runtimes and loggers                                                     |
 |---------------------------|--------------------------------------------------------------------------------|---------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|------------------------------------------------------------------------------------|
-| [Lumigo CRD](#logging-support)                | Logs from different namespaces can be reported to different projects in Lumigo | Correlates logs to traces | The same CRD can be also used to apply logging for a given namespace | Each log line shows the entire resource change from container and pod to the parent resource (Deployment, Daemonset, etc). | Pods are mutated to add auto-instrumentation for supported loggers | Python, Node and Java <br>(with a selection of supported loggers for each runtime) |
+| [Lumigo CRD](#logging-support)                | Logs from all resources in a namespace are reported to the same project in Lumigo | Correlates logs to traces | The same CRD can be also used to apply tracing for a given namespace | Each log line shows the entire resource change from container and pod to the parent resource (Deployment, Daemonset, etc). | Pods are mutated to add auto-instrumentation for supported loggers | Python, Node and Java <br>(with a selection of supported loggers for each runtime) |
+| [Resource Labels](#opting-in-for-specific-resources) | Logs from different resources can be reported to different projects in Lumigo | Correlates logs to traces | Separate labels can be used for both logging and tracing | Each log line shows the entire resource change from container and pod to the parent resource (Deployment, Daemonset, etc). | Pods from labeled resources only are mutated to add auto-instrumentation for supported libraries | Python, Node and Java (with a selection of supported loggers for each runtime)
 | [Container file collection](#fetching-container-logs-via-files) | All logs are reported to a single Lumigo project                                   | X                         | X                                                                    | Each log line shows only the source container, pod and namespace.                                                          | X                                                                  | Full support - all logs from all runtimes and logging libraries are collected      |
 
 #### Metrics
 
 Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default assuming you either set `lumigoToken.value` in the Helm values, or reference an existing Kubernetes secret.
 By default, only metrics essential to the Lumigo K8s functionality are collected, but you can enable additional metrics by setting the `clusterCollection.metrics.essentialOnly` field to `false` in the Helm values during installation.
-
-```yaml
 
 ### Enabling automatic tracing
 
@@ -322,6 +322,34 @@ spec:
   selector:
     matchLabels:
       app: hello-node
+```
+In the logs of the Lumigo Kubernetes operator, you will see a message like the following:
+
+```
+1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/inject", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
+```
+
+#### Opting in for specific resources
+
+Instead of monitoring an entire namespace using a Lumigo CR, you can selectively opt in individual resources by adding the `lumigo.auto-trace` label set to `true`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hello-node
+    lumigo.auto-trace: "true"  # <-- Enable tracing just for this resource
+    lumigo.token-secret: "my-lumigo-secret"  # <-- Optional, defaults to "lumigo-credentials"
+    lumigo.token-key: "my-token-key"  # <-- Optional, defaults to "token"
+    lumigo.enable-traces: "true"  # <-- Optional, controls whether traces are sent (defaults to true)
+    lumigo.enable-logs: "false"  # <-- Optional, controls whether logs are sent (defaults to false)
+  name: hello-node
+  namespace: my-namespace
+spec:
+  selector:
+    matchLabels:
+      app: hello-node
   template:
     metadata:
       labels:
@@ -336,11 +364,24 @@ spec:
         name: agnhost
 ```
 
-In the logs of the Lumigo Kubernetes operator, you will see a message like the following:
+This approach allows you to:
+- Be selective about which resources to monitor without having to create a Lumigo CR
+- Apply tracing to specific resources across different namespaces
+- Have more granular control over your instrumentation strategy
 
-```
-1.67534267851615e+09    DEBUG   controller-runtime.webhook.webhooks   wrote response   {"webhook": "/v1alpha1/inject", "code": 200, "reason": "the resource has the 'lumigo.auto-trace' label set to 'false'; resource will not be mutated", "UID": "6d341941-c47b-4245-8814-1913cee6719f", "allowed": true}
-```
+When using resource labels for targeted tracing, you'll need a Kubernetes secret containing your Lumigo token in the same namespace. The following labels provide full control over the instrumentation:
+
+- `lumigo.auto-trace`: When set to `"true"`, enables Lumigo instrumentation for the resource
+- `lumigo.token-secret`: Specifies the name of the secret containing the Lumigo token (defaults to `lumigo-credentials`)
+- `lumigo.token-key`: Specifies the key in the secret where the token is stored (defaults to `token`)
+- `lumigo.enable-traces`: Controls whether traces are sent to Lumigo (defaults to `"true"`)
+- `lumigo.enable-logs`: Controls whether logs are sent to Lumigo (defaults to `"false"`)
+
+**Important notes:**
+1. When a Lumigo CR exists in the namespace, it takes precedence over the `lumigo.auto-trace` label when set to `true`. The label will only be respected when set to `false` to opt out specific resources.
+2. The secret referenced by the labels must exist in the same namespace as the labeled resource.
+3. Events are not supported for injection via resource labels. If you're interested in collecting events for that resource, you can do so by creating a Lumigo CR in the same namespace, which will automatically collect events for all resources in that namespace.
+
 
 ### Settings
 

@@ -32,8 +32,10 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,7 +53,9 @@ import (
 	"github.com/lumigo-io/lumigo-kubernetes-operator/webhooks/injector"
 
 	//+kubebuilder:scaffold:imports
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -119,14 +123,24 @@ func main() {
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 
+	lumigoOperatorVersion, isSet := os.LookupEnv("LUMIGO_OPERATOR_VERSION")
+	if !isSet {
+		lumigoOperatorVersion = "dev"
+	}
+
 	if uninstall {
-		if err := uninstallHook(); err != nil {
-			setupLog.Error(err, "Uninstallation hook failed")
+		if err := removeLumigoFromMonitoredNamespaces(); err != nil {
+			setupLog.Error(err, "Uninstallation hook failed when removing Lumigo from monitored namespaces")
 			os.Exit(1)
-		} else {
-			setupLog.Info("Uninstallation hook completed successfully")
-			os.Exit(0)
 		}
+
+		if err := uninjectStandaloneResources(lumigoOperatorVersion); err != nil {
+			setupLog.Error(err, "Uninstallation hook failed when un-injecting standalone resources")
+			os.Exit(1)
+		}
+
+		setupLog.Info("Uninstallation hook completed successfully")
+		os.Exit(0)
 	}
 
 	logger.Info("Got monitoredNamespace settings, entering quickstart mode", "settings", quickstartSettings)
@@ -143,13 +157,13 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := startManager(metricsAddr, probeAddr, enableLeaderElection); err != nil {
+	if err := startManager(metricsAddr, probeAddr, enableLeaderElection, lumigoOperatorVersion); err != nil {
 		logger.Error(err, "Manager failed")
 		os.Exit(1)
 	}
 }
 
-func startManager(metricsAddr string, probeAddr string, enableLeaderElection bool) error {
+func startManager(metricsAddr string, probeAddr string, enableLeaderElection bool, lumigoOperatorVersion string) error {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -174,11 +188,6 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	}
 
 	logger := ctrl.Log.WithName("controllers").WithName("Lumigo")
-
-	lumigoOperatorVersion, isSet := os.LookupEnv("LUMIGO_OPERATOR_VERSION")
-	if !isSet {
-		lumigoOperatorVersion = "dev"
-	}
 
 	lumigoEndpoint, isSet := os.LookupEnv("TELEMETRY_PROXY_OTLP_SERVICE")
 	if !isSet {
@@ -258,7 +267,7 @@ func startManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	return nil
 }
 
-func uninstallHook() error {
+func removeLumigoFromMonitoredNamespaces() error {
 	logger := ctrl.Log.WithName("uninstaller").WithName("Lumigo")
 
 	config := ctrl.GetConfigOrDie()
@@ -499,4 +508,39 @@ func getAllNamespacesQuickstartSettings(ctx context.Context, client runtimeclien
 	}
 
 	return settings, nil
+}
+
+func uninjectStandaloneResources(lumigoOperatorVersion string) error {
+	logger := ctrl.Log.WithName("uninstaller").WithName("Lumigo")
+	config := ctrl.GetConfigOrDie()
+
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	runtimeClient, err := runtimeclient.New(config, runtimeclient.Options{})
+	if err != nil {
+		return fmt.Errorf("failed to create runtime client: %w", err)
+	}
+
+	lumigoSystemNamespace, _ := os.LookupEnv("LUMIGO_CONTROLLER_NAMESPACE")
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: k8sClient.CoreV1().Events(lumigoSystemNamespace)})
+	s := runtime.NewScheme()
+	corev1.AddToScheme(s)
+	appsv1.AddToScheme(s)
+	eventRecorder := eventBroadcaster.NewRecorder(s, v1.EventSource{Component: "Lumigo Operator uninstall hook"})
+
+	resourceManager := controllers.NewLumigoResourceManager(
+		runtimeClient,
+		k8sClient,
+		eventRecorder,
+		lumigoOperatorVersion,
+		&logger,
+	)
+
+	ctx := context.Background()
+	eventTrigger := "controller, uninstall hook for standalone resources"
+	return resourceManager.RemoveLumigoFromAllNamespaces(ctx, eventTrigger)
 }
