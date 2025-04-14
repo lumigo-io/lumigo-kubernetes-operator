@@ -196,32 +196,22 @@ processors:
   # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics job
   filter/remove-duplicate-process-metrics:
     metrics:
-      exclude:
-        match_type: regexp
-        metric_names:
-          - 'process_virtual_memory_max_bytes'
-          - 'process_virtual_memory_bytes'
-          - 'process_start_time_seconds'
-          - 'process_resident_memory_bytes'
-          - 'process_open_fds'
-          - 'process_max_fds'
-          - 'process_cpu_seconds_total'
-        resource_attributes:
-          - key: job
-            value: prometheus-node-exporter
+      metric:
+        - name == "process_virtual_memory_max_bytes" and resource.attributes["job"] == "prometheus-node-exporter"
+        - name == "process_virtual_memory_bytes" and resource.attributes["job"] == "prometheus-node-exporter"
+        - name == "process_start_time_seconds" and resource.attributes["job"] == "prometheus-node-exporter"
+        - name == "process_resident_memory_bytes" and resource.attributes["job"] == "prometheus-node-exporter"
+        - name == "process_open_fds" and resource.attributes["job"] == "prometheus-node-exporter"
+        - name == "process_max_fds" and resource.attributes["job"] == "prometheus-node-exporter"
+        - name == "process_cpu_seconds_total" and resource.attributes["job"] == "prometheus-node-exporter"
 
   # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics-cadvisor job
   filter/remove-duplicate-container-metrics:
     metrics:
-      exclude:
-        match_type: regexp
-        metric_names:
-          - 'container_start_time_seconds'
-          - 'container_memory_working_set_bytes'
-          - 'container_cpu_usage_seconds_total'
-        resource_attributes:
-          - key: job
-            value: k8s-infra-metrics-resources
+      metric:
+        - name == "container_cpu_usage_seconds_total" and resource.attributes["job"] == "k8s-infra-metrics-resources"
+        - name == "container_start_time_seconds" and resource.attributes["job"] == "k8s-infra-metrics-resources"
+        - name == "container_memory_working_set_bytes" and resource.attributes["job"] == "k8s-infra-metrics-resources"
 
 {{ if $essentialMetricsOnly }}
   filter/essential-metrics-only:
