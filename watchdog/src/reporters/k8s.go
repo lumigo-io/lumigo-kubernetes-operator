@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -90,7 +91,7 @@ func (r *KubeReporter) sendBatch() {
 	log.Printf("Sending batch of %d events", len(r.eventBatch))
 
 	url := r.endpoint + "events"
-	token := r.config.LUMITO_TOKEN
+	token := r.config.LUMIGO_TOKEN
 
 	eventBatchJSON, err := json.Marshal(r.eventBatch)
 	if err != nil {
@@ -105,7 +106,7 @@ func (r *KubeReporter) sendBatch() {
 	}
 	encodedToken := base64.StdEncoding.EncodeToString([]byte(token))
 
-	req.Header.Set("Authorization", "Bearer "+encodedToken)
+	req.Header.Set("Authorization", fmt.Sprintf("LumigoToken %s", encodedToken))
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}

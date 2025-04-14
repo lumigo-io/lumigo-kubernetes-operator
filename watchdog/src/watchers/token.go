@@ -61,7 +61,7 @@ func (w *TokenWatcher) Watch() {
 	for range ticker.C {
 		w.checkNamespaces()
 		// stop the watcher if the token was set
-		if w.config.LUMITO_TOKEN != "" {
+		if w.config.LUMIGO_TOKEN != "" {
 			return
 		}
 	}

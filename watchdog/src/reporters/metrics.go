@@ -3,6 +3,7 @@ package reporters
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -22,9 +23,8 @@ func NewMetricsReporter(config *config.Config) *MetricsReporter {
 }
 
 func (r *MetricsReporter) Report(metrics string) {
-
 	url := r.endpoint + "metrics"
-	token := r.config.LUMITO_TOKEN
+	token := r.config.LUMIGO_TOKEN
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(metrics)))
 	if err != nil {
@@ -32,7 +32,7 @@ func (r *MetricsReporter) Report(metrics string) {
 		return
 	}
 	encodedToken := base64.StdEncoding.EncodeToString([]byte(token))
-	req.Header.Set("Authorization", "Bearer "+encodedToken)
+	req.Header.Set("Authorization", fmt.Sprintf("LumigoToken %s", encodedToken))
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}

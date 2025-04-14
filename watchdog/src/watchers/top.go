@@ -57,7 +57,7 @@ func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
 
 func (w *TopWatcher) Watch() {
 	for {
-		if w.config.LUMITO_TOKEN != "" {
+		if w.config.LUMIGO_TOKEN != "" {
 			var buffer bytes.Buffer
 
 			podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
@@ -99,12 +99,12 @@ func (w *TopWatcher) GetK8SVersion() string {
 }
 
 func (w *TopWatcher) GetK8SCloudProvider() string {
-	cloudProvider, err := w.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
+	nodeList, err := w.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		return "unknown"
 	}
 
-	provider := cloudProvider.Items[0].Spec.ProviderID
+	provider := nodeList.Items[0].Spec.ProviderID
 	if provider == "" {
 		return "unknown"
 	}

@@ -10,7 +10,7 @@ type Config struct {
 	KUBE_INTERVAL            int
 	NAMESPACE                string
 	LUMIGO_ENDPOINT          string
-	LUMITO_TOKEN             string
+	LUMIGO_TOKEN             string
 	TELEMETRY_PROXY_ENDPOINT string
 	TELEMETRY_INTERVAL       int
 	TOP_INTERVAL             int
@@ -18,13 +18,13 @@ type Config struct {
 
 func LoadConfig() *Config {
 	return &Config{
-		MAX_BATCH_SIZE:           getEnvInt("MAX_BATCH_SIZE", 5),
-		KUBE_INTERVAL:            getEnvInt("MAX_INTERVAL", 10),
-		NAMESPACE:                getEnvString("NAMESPACE", "lumigo-system"),
+		MAX_BATCH_SIZE:           getEnvInt("LUMIGO_WATCHDOG_MAX_BATCH_SIZE", 5),
+		KUBE_INTERVAL:            getEnvInt("LUMIGO_WATCHDOG_MAX_INTERVAL", 10),
+		NAMESPACE:                getEnvString("LUMIGO_WATCHDOG_NAMESPACE", "lumigo-system"),
 		LUMIGO_ENDPOINT:          getEnvString("LUMIGO_ENDPOINT", "http://localhost:8000"),
-		TELEMETRY_PROXY_ENDPOINT: getEnvString("TELEMETRY_PROXY_ENDPOINT", "http://localhost:8888/metrics"),
-		TELEMETRY_INTERVAL:       getEnvInt("TELEMETRY_INTERVAL", 10),
-		TOP_INTERVAL:             getEnvInt("TOP_INTERVAL", 10),
+		TELEMETRY_PROXY_ENDPOINT: getEnvString("LUMIGO_WATCHDOG_TELEMETRY_PROXY_ENDPOINT", "http://localhost:8888/metrics"),
+		TELEMETRY_INTERVAL:       getEnvInt("LUMIGO_WATCHDOG_TELEMETRY_INTERVAL", 10),
+		TOP_INTERVAL:             getEnvInt("LUMIGO_WATCHDOG_TOP_INTERVAL", 10),
 	}
 }
 
@@ -36,7 +36,7 @@ func getEnvString(key string, defaultValue string) string {
 }
 
 func (c *Config) SetToken(token string) {
-	c.LUMITO_TOKEN = token
+	c.LUMIGO_TOKEN = token
 }
 
 func getEnvInt(key string, defaultValue int) int {

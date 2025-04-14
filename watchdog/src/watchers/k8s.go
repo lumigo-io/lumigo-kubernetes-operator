@@ -59,7 +59,7 @@ func (w *KubeWatcher) Watch() {
 
 	log.Printf("Watching for namespace changes in %s...\n", w.namespace)
 	for event := range ch {
-		if w.config.LUMITO_TOKEN != "" {
+		if w.config.LUMIGO_TOKEN != "" {
 			e := event.Object.(*coreV1.Event)
 			w.reporter.AddEvent(*e) // Pass event directly to reporters package
 		} else {

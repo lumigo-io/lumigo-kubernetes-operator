@@ -28,7 +28,7 @@ func NewTelemetryWatcher(config *config.Config) *TelemetryWatcher {
 
 func (w *TelemetryWatcher) Watch() {
 	for {
-		if w.config.LUMITO_TOKEN != "" {
+		if w.config.LUMIGO_TOKEN != "" {
 			w.GetTelemetryMetrics()
 		} else {
 			log.Printf("No token found, skipping telemetry metrics collection")

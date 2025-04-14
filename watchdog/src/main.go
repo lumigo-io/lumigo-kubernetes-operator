@@ -17,5 +17,4 @@ func main() {
 	go TokenWatch.Watch()
 
 	select {} // Block forever
-
 }
