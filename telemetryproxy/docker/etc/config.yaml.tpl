@@ -196,32 +196,22 @@ processors:
   # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics job
   filter/remove-duplicate-process-metrics:
     metrics:
-      exclude:
-        match_type: regexp
-        metric_names:
-          - 'process_virtual_memory_max_bytes'
-          - 'process_virtual_memory_bytes'
-          - 'process_start_time_seconds'
-          - 'process_resident_memory_bytes'
-          - 'process_open_fds'
-          - 'process_max_fds'
-          - 'process_cpu_seconds_total'
-        resource_attributes:
-          - key: job
-            value: prometheus-node-exporter
+      metric:
+        - 'name == "process_virtual_memory_max_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics"'
+        - 'name == "process_virtual_memory_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics"'
+        - 'name == "process_start_time_seconds" and resource.attributes["service.name"] != "k8s-infra-metrics"'
+        - 'name == "process_resident_memory_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics"'
+        - 'name == "process_open_fds" and resource.attributes["service.name"] != "k8s-infra-metrics"'
+        - 'name == "process_max_fds" and resource.attributes["service.name"] != "k8s-infra-metrics"'
+        - 'name == "process_cpu_seconds_total" and resource.attributes["service.name"] != "k8s-infra-metrics"'
 
   # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics-cadvisor job
   filter/remove-duplicate-container-metrics:
     metrics:
-      exclude:
-        match_type: regexp
-        metric_names:
-          - 'container_start_time_seconds'
-          - 'container_memory_working_set_bytes'
-          - 'container_cpu_usage_seconds_total'
-        resource_attributes:
-          - key: job
-            value: k8s-infra-metrics-resources
+      metric:
+        - 'name == "container_cpu_usage_seconds_total" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
+        - 'name == "container_start_time_seconds" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
+        - 'name == "container_memory_working_set_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
 
 {{ if $essentialMetricsOnly }}
   filter/essential-metrics-only:
@@ -359,11 +349,11 @@ service:
       - prometheus
       processors:
       - filter/filter-prom-metrics
-      - filter/remove-duplicate-process-metrics
-      - filter/remove-duplicate-container-metrics
 {{ if $essentialMetricsOnly }}
       - filter/essential-metrics-only
 {{- end }}
+      - filter/remove-duplicate-process-metrics
+      - filter/remove-duplicate-container-metrics
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
 {{- if $clusterName }}

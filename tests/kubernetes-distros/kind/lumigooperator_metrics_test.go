@@ -97,6 +97,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				prometheusNodeExporterMetricsFound := false
 				ownerMetricsFound := false
 				labelMetricsFound := false
+				containerMetricsWithCorrectJobFound := false
 
 				// For essentialOnly mode
 				essentialMetricsPrefixes := []string{
@@ -132,6 +133,12 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 								}
 							}
 						}
+					} else if metric.Name() == "container_cpu_usage_seconds_total" {
+						containerMetricsWithCorrectJobFound = true
+						exportedFromExpectedJobOnly, err := checkMetricIsExportedFromExpectedJobOnly(t, metric, "k8s-infra-metrics-cadvisor")
+						if !exportedFromExpectedJobOnly || err != nil {
+							return false, err
+						}
 					} else {
 						isEssentialMetric := false
 						for _, prefix := range essentialMetricsPrefixes {
@@ -161,6 +168,11 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 
 				if !ownerMetricsFound {
 					t.Logf("could not find owner metrics. Seen metrics: %v\n retrying...", uniqueMetricNames)
+					return false, nil
+				}
+
+				if !containerMetricsWithCorrectJobFound {
+					t.Logf("could not find container metrics with correct job attribute. Seen metrics: %v\n retrying...", uniqueMetricNames)
 					return false, nil
 				}
 
@@ -206,4 +218,31 @@ func isValidUUID(uuid string) bool {
 	regex := `^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[1-5][a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$`
 	r := regexp.MustCompile(regex)
 	return r.MatchString(uuid)
+}
+
+func checkMetricIsExportedFromExpectedJobOnly(t *testing.T, metric pmetric.Metric, expectedJobValue string) (bool, error) {
+	var dataPoints pmetric.NumberDataPointSlice
+
+	switch metric.Type() {
+	case pmetric.MetricTypeGauge:
+		dataPoints = metric.Gauge().DataPoints()
+	case pmetric.MetricTypeSum:
+		dataPoints = metric.Sum().DataPoints()
+	default:
+		// Skip other metric types (like histogram)
+		return true, nil
+	}
+
+	// Check all data points for unexpected job values
+	for i := 0; i < dataPoints.Len(); i++ {
+		attributes := dataPoints.At(i).Attributes()
+		jobAttr, found := attributes.Get("job")
+		if found && jobAttr.AsString() != expectedJobValue {
+			return false, fmt.Errorf("found %s exported from job='%s', expected only job='%s'",
+				metric.Name(), jobAttr.AsString(), expectedJobValue)
+		}
+	}
+
+	// If we only found the expected job values, it's valid
+	return true, nil
 }
