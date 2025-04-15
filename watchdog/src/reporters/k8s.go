@@ -42,8 +42,8 @@ func NewKubeReporter(config *config.Config) *KubeReporter {
 	return &KubeReporter{
 		eventBatch:   []Event{},
 		batchMaxSize: config.MAX_BATCH_SIZE,
-		timer:        time.NewTicker(time.Duration(config.KUBE_INTERVAL) * time.Second),
-		endpoint:     config.LUMIGO_ENDPOINT + "/api/v1/",
+		timer:        time.NewTicker(time.Duration(config.KUBE_WATCHER_INTERVAL) * time.Second),
+		endpoint:     config.LUMIGO_METRICS_ENDPOINT + "/api/v1/",
 		config:       config,
 	}
 }

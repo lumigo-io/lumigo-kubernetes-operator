@@ -42,7 +42,7 @@ func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
 
 	return &KubeWatcher{
 		clientset: clientset,
-		namespace: config.NAMESPACE,
+		namespace: config.LUMIGO_OPERATOR_NAMESPACE,
 		reporter:  reporter,
 		config:    config,
 	}, nil

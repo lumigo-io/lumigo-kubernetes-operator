@@ -17,7 +17,7 @@ type MetricsReporter struct {
 
 func NewMetricsReporter(config *config.Config) *MetricsReporter {
 	return &MetricsReporter{
-		endpoint: config.LUMIGO_ENDPOINT + "/api/v1/",
+		endpoint: config.LUMIGO_METRICS_ENDPOINT,
 		config:   config,
 	}
 }
