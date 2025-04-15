@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -14,6 +15,7 @@ type Config struct {
 	TELEMETRY_PROXY_ENDPOINT  string
 	TELEMETRY_INTERVAL        int
 	TOP_WATCHER_INTERVAL      int
+	DEBUG                     bool
 }
 
 func LoadConfig() *Config {
@@ -26,6 +28,7 @@ func LoadConfig() *Config {
 		TELEMETRY_INTERVAL:        getEnvInt("LUMIGO_WATCHDOG_TELEMETRY_INTERVAL", 10),
 		TOP_WATCHER_INTERVAL:      getEnvInt("LUMIGO_WATCHDOG_TOP_INTERVAL", 10),
 		LUMIGO_TOKEN:              getEnvString("LUMIGO_INFRA_METRICS_TOKEN", ""),
+		DEBUG:                     getEnvBool("LUMIGO_DEBUG", false),
 	}
 }
 
@@ -42,6 +45,13 @@ func getEnvInt(key string, defaultValue int) int {
 		if err == nil {
 			return parsedValue
 		}
+	}
+	return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	if value, exists := os.LookupEnv(key); exists {
+		return strings.ToLower(value) == "true"
 	}
 	return defaultValue
 }

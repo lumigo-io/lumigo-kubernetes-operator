@@ -52,6 +52,10 @@ spec:
           value: "{{ .Values.watchdog.endpoint }}"
         - name: LUMIGO_OPERATOR_NAMESPACE
           value: "{{ .Release.Namespace }}"
+        - name: LUMIGO_METRICS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.metrics_url }}"
+        - name: LUMIGO_DEBUG
+          value: "{{ .Values.debug.enabled | default false }}"
 {{- if .Values.lumigoToken }}
         - name: LUMIGO_INFRA_METRICS_TOKEN
           valueFrom:

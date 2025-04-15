@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -61,7 +62,6 @@ func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
 		return nil, err
 	}
 
-	// Create a new watcher
 	w := &TopWatcher{
 		clientset:     clientset,
 		metricsClient: metricsClient,
@@ -71,14 +71,41 @@ func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
 		config:        config,
 	}
 
-	// Initialize OpenTelemetry if token exists
-	if config.LUMIGO_TOKEN != "" {
-		if err := w.initOpenTelemetry(); err != nil {
-			log.Printf("Failed to initialize OpenTelemetry: %v", err)
-		}
+	if w.config.LUMIGO_TOKEN == "" {
+		log.Println("Error: Lumigo token is missing. Please provide a valid token through the lumigoToken.value Helm setting.")
+		log.Println("Metrics collection will be skipped. For more information, visit https://github.com/lumigo-io/lumigo-kubernetes-operator")
+		return w, nil
+	}
+
+	if err := w.initOpenTelemetry(); err != nil {
+		log.Printf("Failed to initialize OpenTelemetry: %v", err)
 	}
 
 	return w, nil
+}
+
+func (w *TopWatcher) sanitizeEndpointURL(endpoint string) string {
+	// Remove https:// prefix if it exists, as the exporter will add it
+	if len(endpoint) >= 8 && endpoint[:8] == "https://" {
+		endpoint = endpoint[8:]
+	}
+
+	// Remove trailing slash if present
+	if len(endpoint) > 0 && endpoint[len(endpoint)-1] == '/' {
+		endpoint = endpoint[:len(endpoint)-1]
+	}
+
+	// Remove "/v1/metrics" suffix if present
+	const metricsPath = "/v1/metrics"
+	if len(endpoint) > len(metricsPath) && endpoint[len(endpoint)-len(metricsPath):] == metricsPath {
+		endpoint = endpoint[:len(endpoint)-len(metricsPath)]
+	}
+
+	if w.config.DEBUG {
+		log.Printf("Original endpoint: %s, Sanitized endpoint: %s", w.config.LUMIGO_METRICS_ENDPOINT, endpoint)
+	}
+
+	return endpoint
 }
 
 func (w *TopWatcher) initOpenTelemetry() error {
@@ -86,8 +113,10 @@ func (w *TopWatcher) initOpenTelemetry() error {
 	version := w.getK8SVersion()
 	cloudProvider := w.getK8SCloudProvider()
 
+	endpoint := w.sanitizeEndpointURL(w.config.LUMIGO_METRICS_ENDPOINT)
+
 	exporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(w.config.LUMIGO_METRICS_ENDPOINT),
+		otlpmetrichttp.WithEndpoint(endpoint),
 		otlpmetrichttp.WithHeaders(map[string]string{
 			"Authorization": fmt.Sprintf("LumigoToken %s", w.config.LUMIGO_TOKEN),
 		}),
@@ -104,11 +133,21 @@ func (w *TopWatcher) initOpenTelemetry() error {
 		attribute.String("k8s.cloud.provider", cloudProvider),
 	)
 
-	w.meterProvider = sdkmetric.NewMeterProvider(
+	meterProviderOptions := []sdkmetric.Option{
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(w.interval*time.Second))),
-	)
+	}
 
+	if w.config.DEBUG {
+		stdoutExporter, err := stdoutmetric.New()
+		if err != nil {
+			return fmt.Errorf("failed to create stdout exporter: %w", err)
+		}
+		meterProviderOptions = append(meterProviderOptions,
+			sdkmetric.WithReader(sdkmetric.NewPeriodicReader(stdoutExporter, sdkmetric.WithInterval(w.interval*time.Second))))
+	}
+
+	w.meterProvider = sdkmetric.NewMeterProvider(meterProviderOptions...)
 	otel.SetMeterProvider(w.meterProvider)
 	w.meter = w.meterProvider.Meter("lumigo-io/lumigo-kubernetes-operator/watchdog")
 
@@ -144,22 +183,29 @@ func (w *TopWatcher) initOpenTelemetry() error {
 }
 
 func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observer) error {
+	// This assumes that K8s metrics server (https://github.com/kubernetes-sigs/metrics-server) is installed
+	// and running in the cluster. If not, you need to install it first.
+	// Even though metrics-server is not advised for this use case, we are using it for this purpose
+	// as scraping the kubelet directly (using /metrics/resource) is already done by the telemetry proxy, but
+	// it will not be collected if it's down or misconfigured, and that's where the watchdog comes in.
 	podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("error getting pod metrics: %w", err)
+		log.Printf("Warning: Unable to collect metrics: %v", err)
+		log.Println("This likely means the Metrics Server is not installed in your cluster.")
+		log.Println("To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server")
+		return nil
 	}
 
-	// Collect metrics for each container
 	for _, podMetrics := range podMetricsList.Items {
 		for _, container := range podMetrics.Containers {
-			cpuUsage := float64(container.Usage.Cpu().MilliValue())
-			memUsage := container.Usage.Memory().Value()
-
 			attrs := []attribute.KeyValue{
 				attribute.String("namespace", w.namespace),
 				attribute.String("pod", podMetrics.Name),
 				attribute.String("container", container.Name),
 			}
+
+			cpuUsage := float64(container.Usage.Cpu().MilliValue())
+			memUsage := container.Usage.Memory().Value()
 
 			observer.ObserveFloat64(w.cpuGauge, cpuUsage, metric.WithAttributes(attrs...))
 			observer.ObserveInt64(w.memoryGauge, memUsage, metric.WithAttributes(attrs...))
