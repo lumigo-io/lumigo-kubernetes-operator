@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/config"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/reporters"
@@ -64,6 +65,7 @@ func (w *KubeWatcher) Watch() {
 			w.reporter.AddEvent(*e) // Pass event directly to reporters package
 		} else {
 			log.Printf("No token found, skipping event collection")
+			time.Sleep(5 * time.Second)
 		}
 	}
 }

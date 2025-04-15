@@ -25,6 +25,7 @@ func LoadConfig() *Config {
 		TELEMETRY_PROXY_ENDPOINT: getEnvString("LUMIGO_WATCHDOG_TELEMETRY_PROXY_ENDPOINT", "http://localhost:8888/metrics"),
 		TELEMETRY_INTERVAL:       getEnvInt("LUMIGO_WATCHDOG_TELEMETRY_INTERVAL", 10),
 		TOP_INTERVAL:             getEnvInt("LUMIGO_WATCHDOG_TOP_INTERVAL", 10),
+		LUMIGO_TOKEN:             getEnvString("LUMIGO_INFRA_METRICS_TOKEN", ""),
 	}
 }
 
@@ -33,10 +34,6 @@ func getEnvString(key string, defaultValue string) string {
 		return value
 	}
 	return defaultValue
-}
-
-func (c *Config) SetToken(token string) {
-	c.LUMIGO_TOKEN = token
 }
 
 func getEnvInt(key string, defaultValue int) int {

@@ -265,6 +265,8 @@ spec:
           value: "{{ index .Values "kube-state-metrics" "service" "port" }}"
         - name: LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY
           value: "{{ .Values.clusterCollection.metrics.essentialOnly }}"
+        - name: "LUMIGO_WATCHDOG_ENABLED"
+          value: "{{ .Values.watchdog.enabled }}"
 {{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"

@@ -5,10 +5,8 @@
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
+{{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 receivers:
-  prometheus:
-    config:
-      scrape_configs:
   otlp:
     protocols:
       http:
@@ -19,10 +17,12 @@ receivers:
   prometheus:
     config:
       scrape_configs:
-        - job_name: 'otel-collector-self-metrics'
+{{- if $watchdogEnabled }}
+        - job_name: 'k8s-operator-self-metrics'
           scrape_interval: 5s
           static_configs:
             - targets: ['0.0.0.0:8888']
+{{- end }}
         - job_name: 'k8s-infra-metrics'
           metrics_path: /metrics
           scrape_interval: {{ $infraMetricsFrequency }}
