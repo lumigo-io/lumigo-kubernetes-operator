@@ -2,6 +2,29 @@ apiVersion: v1
 entries:
   lumigo-operator:
   - apiVersion: v2
+    appVersion: "47"
+    created: "2025-04-15T06:39:19.773793351Z"
+    dependencies:
+    - condition: '{{ and .Values.clusterCollection.metrics.enabled .Values.kubeStateMetrics.install
+        }}'
+      name: kube-state-metrics
+      repository: https://prometheus-community.github.io/helm-charts
+      version: 5.27.0
+    description: Chart to deploy the Lumigo Kubernetes Operator
+    digest: 39eadcabbfefa100be0cd3f68377c4f82ecc9de925a65265990a37905f64bdba
+    home: https://github.com/lumigo-io/lumigo-kubernetes-operator/
+    icon: https://raw.githubusercontent.com/lumigo-io/lumigo-kubernetes-operator/main/images/lumigo.png
+    keywords:
+    - observability
+    - monitoring
+    - distributed tracing
+    - opentelemetry
+    name: lumigo-operator
+    type: application
+    urls:
+    - https://github.com/lumigo-io/lumigo-kubernetes-operator/releases/download/v47/lumigo-operator-47.tgz
+    version: "47"
+  - apiVersion: v2
     appVersion: "46"
     created: "2025-04-10T11:38:30.144989791Z"
     dependencies:
@@ -775,4 +798,4 @@ entries:
     urls:
     - https://github.com/lumigo-io/lumigo-kubernetes-operator/releases/download/v1/lumigo-operator-1.tgz
     version: 1.0.0
-generated: "2025-04-10T11:38:30.142748035Z"
+generated: "2025-04-15T06:39:19.77168062Z"
