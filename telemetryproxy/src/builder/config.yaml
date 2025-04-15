@@ -18,11 +18,11 @@ extensions:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.103.0"
 
 receivers:
-  - gomod: "go.opentelemetry.io/collector/receiver/otlpreceiver v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.90.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.90.0"
+  - gomod: "go.opentelemetry.io/collector/receiver/otlpreceiver v0.103.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lumigooperatorheartbeatreceiver v0.103.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.103.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.103.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.103.0"
 
 processors:
   - gomod: "go.opentelemetry.io/collector/processor/batchprocessor v0.103.0"
