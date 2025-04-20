@@ -1,5 +1,5 @@
 # Build the telemetry-proxy from sources
-FROM golang:1.22-alpine AS telemetry-proxy-builder
+FROM golang:1.23-alpine AS telemetry-proxy-builder
 
 ARG version='dev'
 ENV VERSION=${version}

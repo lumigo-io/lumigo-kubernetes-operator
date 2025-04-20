@@ -20,7 +20,7 @@ data:
   tls.key: {{ $cert.Key | b64enc }}
   ca.crt: {{ $ca.Cert | b64enc }}
 ---
-{{- if and .Values.clusterCollection.metrics.enabled .Values.lumigoToken.value }}
+{{- if .Values.lumigoToken.value }}
 apiVersion: v1
 kind: Secret
 metadata:

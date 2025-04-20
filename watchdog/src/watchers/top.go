@@ -3,7 +3,7 @@ package watchers
 import (
 	"context"
 	"fmt"
-	"log"
+	stdlog "log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/config"
-	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/reporters"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -35,7 +34,6 @@ type TopWatcher struct {
 	clientset     *kubernetes.Clientset
 	metricsClient *metricsv.Clientset
 	namespace     string
-	reporter      *reporters.MetricsReporter
 	interval      time.Duration
 	config        *config.Config
 	meterProvider *sdkmetric.MeterProvider
@@ -65,20 +63,19 @@ func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
 	w := &TopWatcher{
 		clientset:     clientset,
 		metricsClient: metricsClient,
-		reporter:      reporters.NewMetricsReporter(config),
 		namespace:     config.LUMIGO_OPERATOR_NAMESPACE,
 		interval:      time.Duration(config.TOP_WATCHER_INTERVAL),
 		config:        config,
 	}
 
 	if w.config.LUMIGO_TOKEN == "" {
-		log.Println("Error: Lumigo token is missing. Please provide a valid token through the lumigoToken.value Helm setting.")
-		log.Println("Metrics collection will be skipped. For more information, visit https://github.com/lumigo-io/lumigo-kubernetes-operator")
+		stdlog.Println("Error: Lumigo token is missing. Please provide a valid token through the lumigoToken.value Helm setting.")
+		stdlog.Println("Metrics collection will be skipped. For more information, visit https://github.com/lumigo-io/lumigo-kubernetes-operator")
 		return w, nil
 	}
 
 	if err := w.initOpenTelemetry(); err != nil {
-		log.Printf("Failed to initialize OpenTelemetry: %v", err)
+		stdlog.Printf("Failed to initialize OpenTelemetry: %v", err)
 	}
 
 	return w, nil
@@ -102,7 +99,7 @@ func (w *TopWatcher) sanitizeEndpointURL(endpoint string) string {
 	}
 
 	if w.config.DEBUG {
-		log.Printf("Original endpoint: %s, Sanitized endpoint: %s", w.config.LUMIGO_METRICS_ENDPOINT, endpoint)
+		stdlog.Printf("Original endpoint: %s, Sanitized endpoint: %s", w.config.LUMIGO_METRICS_ENDPOINT, endpoint)
 	}
 
 	return endpoint
@@ -152,7 +149,7 @@ func (w *TopWatcher) initOpenTelemetry() error {
 	w.meter = w.meterProvider.Meter("lumigo-io/lumigo-kubernetes-operator/watchdog")
 
 	w.cpuGauge, err = w.meter.Float64ObservableGauge(
-		"kube_pod_container_resource_usage_cpu",
+		"lumigo_operator_pod_container_resource_usage_cpu",
 		metric.WithDescription("CPU usage in millicores"),
 		metric.WithUnit("m"),
 	)
@@ -161,7 +158,7 @@ func (w *TopWatcher) initOpenTelemetry() error {
 	}
 
 	w.memoryGauge, err = w.meter.Int64ObservableGauge(
-		"kube_pod_container_resource_usage_memory",
+		"lumigo_operator_pod_container_resource_usage_memory",
 		metric.WithDescription("Memory usage in bytes"),
 		metric.WithUnit("By"),
 	)
@@ -189,10 +186,10 @@ func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observe
 	// as scraping the kubelet directly (using /metrics/resource) is already done by the telemetry proxy, but
 	// it will not be collected if it's down or misconfigured, and that's where the watchdog comes in.
 	podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
-	if err != nil {
-		log.Printf("Warning: Unable to collect metrics: %v", err)
-		log.Println("This likely means the Metrics Server is not installed in your cluster.")
-		log.Println("To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server")
+	if err != nil && w.config.DEBUG {
+		stdlog.Printf("Warning: Unable to collect metrics: %v", err)
+		stdlog.Println("This likely means the Metrics Server is not installed in your cluster.")
+		stdlog.Println("To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server")
 		return nil
 	}
 
@@ -217,7 +214,7 @@ func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observe
 
 func (w *TopWatcher) Watch() {
 	if w.config.LUMIGO_TOKEN == "" {
-		log.Println("No token found, skipping metrics collection")
+		stdlog.Println("No token found, skipping metrics collection")
 		return
 	}
 
@@ -236,10 +233,10 @@ func (w *TopWatcher) Watch() {
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		log.Println("Shutting down watchdog metrics collection")
+		stdlog.Println("Shutting down watchdog metrics collection")
 
 		if err := w.meterProvider.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down meter provider: %v", err)
+			stdlog.Printf("Error shutting down meter provider: %v", err)
 		}
 	}()
 
@@ -270,4 +267,13 @@ func (w *TopWatcher) getK8SCloudProvider() string {
 	}
 
 	return provider
+}
+
+func (w *TopWatcher) Shutdown(ctx context.Context) error {
+	if err := w.meterProvider.Shutdown(ctx); err != nil {
+		stdlog.Printf("Error shutting down meter provider: %v", err)
+		return err
+	}
+
+	return nil
 }

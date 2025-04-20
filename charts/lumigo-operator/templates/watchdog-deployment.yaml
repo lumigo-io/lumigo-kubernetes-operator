@@ -54,6 +54,8 @@ spec:
           value: "{{ .Release.Namespace }}"
         - name: LUMIGO_METRICS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.metrics_url }}"
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.logs_url }}"
         - name: LUMIGO_DEBUG
           value: "{{ .Values.debug.enabled | default false }}"
 {{- if .Values.lumigoToken }}
