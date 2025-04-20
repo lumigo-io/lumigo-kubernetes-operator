@@ -24,8 +24,8 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-// KubeWatcher watches for kubernetes events and exports them as otel logs
-type KubeWatcher struct {
+// KubeEventsWatcher watches for kubernetes events and exports them as otel logs
+type KubeEventsWatcher struct {
 	kubeclient kubernetes.Interface
 	otelLogger log.Logger
 	namespace  string
@@ -50,7 +50,7 @@ func sanitizeEndpointURL(endpoint string, debug bool) string {
 	return endpoint
 }
 
-func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
+func NewKubeWatcher(config *config.Config) (*KubeEventsWatcher, error) {
 	k8sConfig, err := clientcmd.BuildConfigFromFlags("", filepath.Join(homedir.HomeDir(), ".kube", "config"))
 	if err != nil {
 		k8sConfig, err = rest.InClusterConfig()
@@ -64,7 +64,7 @@ func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
 		return nil, err
 	}
 
-	w := &KubeWatcher{
+	w := &KubeEventsWatcher{
 		kubeclient: clientset,
 		namespace:  config.LUMIGO_OPERATOR_NAMESPACE,
 		config:     config,
@@ -79,7 +79,7 @@ func NewKubeWatcher(config *config.Config) (*KubeWatcher, error) {
 	return w, nil
 }
 
-func (w *KubeWatcher) initOpenTelemetry() error {
+func (w *KubeEventsWatcher) initOpenTelemetry() error {
 	ctx := context.Background()
 	endpoint := sanitizeEndpointURL(w.config.LUMIGO_LOGS_ENDPOINT, w.config.DEBUG)
 
@@ -96,9 +96,12 @@ func (w *KubeWatcher) initOpenTelemetry() error {
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName("lumigo-kubernetes-operator-watchdog"),
-		semconv.ServiceVersion(w.config.LUMIGO_OPERATOR_VERSION),
-		semconv.OtelScopeName("lumigo-operator.k8s-events"), // So the Lumigo backend will process it as a Lumigo operator event rather than a generic log
+		attribute.String("lumigo.k8s_operator.version", w.config.LUMIGO_OPERATOR_VERSION),
 		attribute.String("k8s.namespace.name", w.namespace),
+
+		// This is mandatory for the Lumigo backend to process the logs as K8s events,
+		// but we don't have it available in this part of the operator - for now we'll keep it empty.
+		attribute.String("k8s.namespace.uid", ""),
 	)
 
 	loggerProviderOptions := []sdklog.LoggerProviderOption{
@@ -123,7 +126,7 @@ func (w *KubeWatcher) initOpenTelemetry() error {
 	return nil
 }
 
-func (w *KubeWatcher) Watch() {
+func (w *KubeEventsWatcher) Watch() {
 	ctx := context.TODO()
 	watcher, err := w.kubeclient.CoreV1().Events(w.namespace).Watch(ctx, v1.ListOptions{})
 	if err != nil {
@@ -165,12 +168,16 @@ func getEventTimestamp(event *coreV1.Event) time.Time {
 	return event.ObjectMeta.CreationTimestamp.Time
 }
 
-func (w *KubeWatcher) k8sEventToLogRecord(ev *coreV1.Event) log.Record {
+func (w *KubeEventsWatcher) k8sEventToLogRecord(ev *coreV1.Event) log.Record {
 	rec := log.Record{}
 	rec.SetTimestamp(getEventTimestamp(ev))
 	rec.SetSeverityText(ev.Type)
 
 	eventData := log.MapValue(
+		log.KeyValue{Key: "metadata", Value: log.MapValue(log.KeyValue{Key: "uid", Value: log.StringValue(string(ev.UID))})},
+		log.KeyValue{Key: "lastTimestamp", Value: log.StringValue(ev.LastTimestamp.Format("2006-01-02T15:04:05Z"))},
+		log.KeyValue{Key: "eventTime", Value: log.StringValue(ev.FirstTimestamp.Format("2006-01-02T15:04:05.000000Z"))},
+		log.KeyValue{Key: "creationTimestamp", Value: log.StringValue(ev.CreationTimestamp.Format("2006-01-02T15:04:05Z"))},
 		log.KeyValue{Key: "type", Value: log.StringValue(ev.Type)},
 		log.KeyValue{Key: "involvedObject", Value: log.MapValue(
 			log.KeyValue{Key: "kind", Value: log.StringValue(ev.InvolvedObject.Kind)},
@@ -188,7 +195,6 @@ func (w *KubeWatcher) k8sEventToLogRecord(ev *coreV1.Event) log.Record {
 			log.KeyValue{Key: "host", Value: log.StringValue(ev.Source.Host)},
 		)},
 	)
-
 	rec.SetBody(eventData)
 
 	rec.SetEventName(ev.ObjectMeta.Name)

@@ -187,9 +187,9 @@ func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observe
 	// it will not be collected if it's down or misconfigured, and that's where the watchdog comes in.
 	podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
 	if err != nil && w.config.DEBUG {
-		stdlog.Printf("Warning: Unable to collect metrics: %v", err)
-		stdlog.Println("This likely means the Metrics Server is not installed in your cluster.")
-		stdlog.Println("To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server")
+		// stdlog.Printf("Warning: Unable to collect metrics: %v", err)
+		// stdlog.Println("This likely means the Metrics Server is not installed in your cluster.")
+		// stdlog.Println("To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server")
 		return nil
 	}
 
