@@ -5,6 +5,7 @@
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
+{{- $essentialMetricsNames := (datasource "essential_metrics").metrics -}}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 receivers:
   otlp:
@@ -226,37 +227,9 @@ processors:
       include:
         match_type: regexp
         metric_names:
-          - container_cpu_usage_seconds_total
-          - container_memory_working_set_bytes
-          - kube_.+_labels
-          - kube_cronjob_status_active
-          - kube_daemonset_status_current_number_scheduled
-          - kube_daemonset_status_desired_number_scheduled
-          - kube_deployment_spec_replicas
-          - kube_deployment_status_replicas_available
-          - kube_job_owner
-          - kube_node_status_capacity
-          - kube_pod_container_info
-          - kube_pod_container_resource_limits
-          - kube_pod_container_status_restarts_total
-          - kube_pod_container_status_ready
-          - kube_pod_container_status_running
-          - kube_pod_container_status_terminated_reason
-          - kube_pod_container_status_waiting_reason
-          - kube_pod_status_ready
-          - kube_pod_owner
-          - kube_pod_status_phase
-          - kube_replicaset_owner
-          - kube_statefulset_replicas
-          - kube_statefulset_status_replicas_ready
-          - node_cpu_seconds_total
-          - node_memory_Active_bytes
-          - kube_deployment_created
-          - kube_statefulset_created
-          - kube_daemonset_created
-          - kube_cronjob_created
-          - kube_pod_created
-          - kube_pod_info
+{{- range $essentialMetricsNames }}
+          - {{ . }}
+{{- end }}
 {{- end }}
   k8sdataenricherprocessor:
     auth_type: serviceAccount
