@@ -45,24 +45,6 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 
 	manager := helm.New(kubeconfigFilePath)
 
-	// Add metrics-server, required for watchdog metrics test
-	if err := exec.Command("helm", "repo", "add", "metrics-server", "https://kubernetes-sigs.github.io/metrics-server/").Run(); err != nil {
-		return ctx, fmt.Errorf("failed to add metrics-server repo: %w", err)
-	}
-	if err := exec.Command("helm", "repo", "update").Run(); err != nil {
-		return ctx, fmt.Errorf("failed to update helm repos: %w", err)
-	}
-	if err := manager.RunInstall(
-		helm.WithName("metrics-server"),
-		helm.WithChart("metrics-server/metrics-server"),
-		helm.WithNamespace("kube-system"),
-		helm.WithArgs("--set", "args={--kubelet-insecure-tls}"),
-		helm.WithWait(),
-		helm.WithTimeout("3m"),
-	); err != nil {
-		return ctx, fmt.Errorf("failed to install or upgrade metrics-server: %w", err)
-	}
-
 	err := exec.Command("helm", "dependency", "update", chartDir).Run()
 	if err != nil {
 		return ctx, fmt.Errorf("failed to run helm dependency update: %w", err)

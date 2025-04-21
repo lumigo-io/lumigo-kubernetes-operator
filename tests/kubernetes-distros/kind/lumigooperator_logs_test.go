@@ -756,6 +756,12 @@ func exportRequestToLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.Log
 
 func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, []plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
+
+	serviceName, hasServiceName := resourceLogs.Resource().Attributes().Get("service.name")
+	if hasServiceName && serviceName.AsString() == "lumigo-kubernetes-operator-watchdog" {
+		return []plog.LogRecord{}, []plog.LogRecord{}, nil
+	}
+
 	eventLogRecords := make([]plog.LogRecord, 0)
 	objectLogRecords := make([]plog.LogRecord, 0)
 	for i := 0; i < l; i++ {

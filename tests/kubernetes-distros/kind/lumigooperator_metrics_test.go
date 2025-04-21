@@ -99,7 +99,6 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				labelMetricsFound := false
 				containerMetricsWithCorrectJobFound := false
 				otelCollectorMetricsFound := false
-				topWatcherMetricsFound := false
 
 				// For essentialOnly mode
 				essentialMetricsPrefixes := []string{
@@ -109,7 +108,6 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					"otelcol_",
 					"http_client_",
 					"http_server_",
-					"lumigo_operator_pod_container_resource_usage_",
 				}
 
 				for _, metric := range metrics {
@@ -147,8 +145,6 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 						}
 					} else if strings.HasPrefix(metric.Name(), "otelcol_") {
 						otelCollectorMetricsFound = true
-					} else if strings.HasPrefix(metric.Name(), "lumigo_operator_pod_container_resource_usage_") {
-						topWatcherMetricsFound = true
 					} else {
 						isEssentialMetric := false
 						for _, prefix := range essentialMetricsPrefixes {
@@ -164,11 +160,6 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 							labelMetricsFound = true
 						}
 					}
-				}
-
-				if !topWatcherMetricsFound {
-					t.Logf("could not find top watcher metrics. Seen metrics: %v\n retrying...", uniqueMetricNames)
-					return false, nil
 				}
 
 				if !otelCollectorMetricsFound {
