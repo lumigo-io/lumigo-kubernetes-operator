@@ -7,6 +7,8 @@
 {{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
 {{- $essentialMetricsNames := (datasource "essential_metrics").metrics -}}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
+{{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
+{{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
 receivers:
   otlp:
     protocols:
@@ -14,7 +16,7 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
-{{- if $infraMetricsToken }}
+{{- if $metricsScrapingEnabled }}
   prometheus:
     config:
       scrape_configs:
@@ -24,6 +26,7 @@ receivers:
           static_configs:
             - targets: ['0.0.0.0:8888']
 {{- end }}
+{{- if $infraMetricsEnabled }}
         - job_name: 'k8s-infra-metrics'
           metrics_path: /metrics
           scrape_interval: {{ $infraMetricsFrequency }}
@@ -75,6 +78,7 @@ receivers:
           scrape_interval: {{ $infraMetricsFrequency }}
           static_configs:
             - targets: ['{{ getenv "LUMIGO_KUBE_STATE_METRICS_SERVICE" }}:{{ getenv "LUMIGO_KUBE_STATE_METRICS_PORT" }}']
+{{- end }}
 {{- end }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
@@ -327,7 +331,7 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
-{{- if $infraMetricsToken }}
+{{- if $metricsScrapingEnabled }}
     metrics:
       receivers:
       - prometheus

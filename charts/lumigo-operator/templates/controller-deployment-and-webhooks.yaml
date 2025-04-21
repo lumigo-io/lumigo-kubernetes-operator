@@ -254,6 +254,8 @@ spec:
               key: {{ .Values.lumigoToken.secretKey }}
               optional: true
 {{- end }}
+        - name: LUMIGO_INFRA_METRICS_ENABLED
+          value: "{{ .Values.clusterCollection.metrics.enabled }}"
 {{- if .Values.clusterCollection.metrics.enabled }}
         - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
           value: "{{ .Values.clusterCollection.metrics.frequency }}"
