@@ -3,20 +3,16 @@ package watchers
 import (
 	"context"
 	"fmt"
-	stdlog "log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/config"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	// Add OpenTelemetry SDK imports
@@ -26,8 +22,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
 type TopWatcher struct {
@@ -40,68 +34,47 @@ type TopWatcher struct {
 	meter         metric.Meter
 	cpuGauge      metric.Float64ObservableGauge
 	memoryGauge   metric.Int64ObservableGauge
+	watchdogCtx   *watchdogContext
+	logger        logr.Logger
 }
 
-func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
-	k8sConfig, err := clientcmd.BuildConfigFromFlags("", filepath.Join(homedir.HomeDir(), ".kube", "config"))
-	if err != nil {
-		k8sConfig, err = rest.InClusterConfig()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	clientset, err := kubernetes.NewForConfig(k8sConfig)
-	if err != nil {
-		return nil, err
-	}
-	metricsClient, err := metricsv.NewForConfig(k8sConfig)
+func NewTopWatcher(ctx context.Context, config *config.Config, watchdogCtx *watchdogContext) (*TopWatcher, error) {
+	metricsClient, err := metricsv.NewForConfig(watchdogCtx.K8sConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	w := &TopWatcher{
-		clientset:     clientset,
+		clientset:     watchdogCtx.Clientset,
 		metricsClient: metricsClient,
 		namespace:     config.LUMIGO_OPERATOR_NAMESPACE,
 		interval:      time.Duration(config.TOP_WATCHER_INTERVAL),
 		config:        config,
+		watchdogCtx:   watchdogCtx,
+		logger:        watchdogCtx.Logger.WithName("TopWatcher"),
 	}
 
 	if w.config.LUMIGO_TOKEN == "" {
-		stdlog.Println("Error: Lumigo token is missing. Please provide a valid token through the lumigoToken.value Helm setting.")
-		stdlog.Println("Metrics collection will be skipped. For more information, visit https://github.com/lumigo-io/lumigo-kubernetes-operator")
+		w.logger.Error(fmt.Errorf("lumigo token is missing"), "Please provide a valid token through the lumigoToken.value Helm setting.\nMetrics collection will be skipped. For more information, visit https://github.com/lumigo-io/lumigo-kubernetes-operator")
 		return w, nil
 	}
 
-	if err := w.initOpenTelemetry(); err != nil {
-		stdlog.Printf("Failed to initialize OpenTelemetry: %v", err)
+	if err := w.initOpenTelemetry(ctx); err != nil {
+		w.logger.Error(err, "Failed to initialize OpenTelemetry")
 	}
 
 	return w, nil
 }
 
-func (w *TopWatcher) initOpenTelemetry() error {
-	ctx := context.Background()
-	version := w.getK8SVersion()
-	cloudProvider := w.getK8SCloudProvider()
-
+func (w *TopWatcher) initOpenTelemetry(ctx context.Context) error {
 	opts := MetricsExporterConfigOptions(w.config.LUMIGO_METRICS_ENDPOINT, w.config.LUMIGO_TOKEN)
 	exporter, err := otlpmetrichttp.New(ctx, *opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create OTLP exporter: %w", err)
 	}
 
-	res := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceName("lumigo-kubernetes-operator-watchdog"),
-		semconv.ServiceVersion("1.0.0"),
-		attribute.String("k8s.cluster.version", version),
-		attribute.String("k8s.cloud.provider", cloudProvider),
-	)
-
 	meterProviderOptions := []sdkmetric.Option{
-		sdkmetric.WithResource(res),
+		sdkmetric.WithResource(w.watchdogCtx.OtelResource),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(w.interval*time.Second))),
 	}
 
@@ -157,9 +130,10 @@ func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observe
 	// it will not be collected if it's down or misconfigured, and that's where the watchdog comes in.
 	podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
 	if err != nil && w.config.DEBUG {
-		stdlog.Printf("Warning: Unable to collect metrics: %v", err)
-		stdlog.Println("This likely means the Metrics Server is not installed in your cluster.")
-		stdlog.Println("To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server")
+		w.logger.Error(err, "Unable to collect metrics. "+
+			"This likely means the Metrics Server is not installed in your cluster "+
+			"To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server",
+		)
 		return nil
 	}
 
@@ -182,15 +156,11 @@ func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observe
 	return nil
 }
 
-func (w *TopWatcher) Watch() {
+func (w *TopWatcher) Watch(ctx context.Context) {
 	if w.config.LUMIGO_TOKEN == "" {
-		stdlog.Println("No token found, skipping metrics collection")
+		w.logger.Error(fmt.Errorf("no token provided"), "Skipping metrics collection")
 		return
 	}
-
-	// Create a context that can be cancelled
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Create a signal channel to handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -203,47 +173,18 @@ func (w *TopWatcher) Watch() {
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		stdlog.Println("Shutting down watchdog metrics collection")
+		w.logger.Info("Shutting down watchdog metrics collection")
 
-		if err := w.meterProvider.Shutdown(context.Background()); err != nil {
-			stdlog.Printf("Error shutting down meter provider: %v", err)
-		}
+		w.Shutdown(ctx)
 	}()
 
 	// Block until we receive a signal
 	<-sigChan
-	cancel()
 	wg.Wait()
 }
 
-func (w *TopWatcher) getK8SVersion() string {
-	version, err := w.clientset.ServerVersion()
-	if err != nil {
-		return "unknown"
-	}
-
-	return version.String()
-}
-
-func (w *TopWatcher) getK8SCloudProvider() string {
-	nodeList, err := w.clientset.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
-	if err != nil {
-		return "unknown"
-	}
-
-	provider := nodeList.Items[0].Spec.ProviderID
-	if provider == "" {
-		return "unknown"
-	}
-
-	return provider
-}
-
-func (w *TopWatcher) Shutdown(ctx context.Context) error {
+func (w *TopWatcher) Shutdown(ctx context.Context) {
 	if err := w.meterProvider.Shutdown(ctx); err != nil {
-		stdlog.Printf("Error shutting down meter provider: %v", err)
-		return err
+		w.logger.Error(err, "Error shutting down meter provider")
 	}
-
-	return nil
 }

@@ -18,6 +18,7 @@ type Config struct {
 	TELEMETRY_INTERVAL        int
 	TOP_WATCHER_INTERVAL      int
 	DEBUG                     bool
+	ClusterName               string
 }
 
 func LoadConfig() *Config {
@@ -29,6 +30,7 @@ func LoadConfig() *Config {
 		TOP_WATCHER_INTERVAL:      getEnvInt("LUMIGO_WATCHDOG_TOP_INTERVAL", 10),
 		LUMIGO_TOKEN:              getEnvString("LUMIGO_INFRA_METRICS_TOKEN", ""),
 		DEBUG:                     getEnvBool("LUMIGO_DEBUG", false),
+		ClusterName:               getEnvString("KUBERNETES_CLUSTER_NAME", ""),
 	}
 }
 

@@ -70,7 +70,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 							return false, fmt.Errorf("Cannot find cluster UID in resource metrics")
 						}
 						if !isValidUUID(clusterUid.AsString()) {
-							return false, fmt.Errorf("Invalid cluster UID: %v", clusterUid)
+							return false, fmt.Errorf("Invalid cluster UID: %s", clusterUid.AsString())
 						}
 					}
 

@@ -8,16 +8,25 @@ import (
 
 	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/config"
 	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/watchers"
+	"golang.org/x/net/context"
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	config := config.LoadConfig()
-	kubeWatcher, err := watchers.NewKubeWatcher(config)
+	watchdogContext, err := watchers.NewWatchdogK8sContext(ctx, config)
+
+	if err != nil {
+		stdlog.Fatalf("Failed to create K8s context: %v", err)
+	}
+
+	kubeWatcher, err := watchers.NewKubeWatcher(ctx, config, watchdogContext)
 	if err != nil {
 		stdlog.Fatalf("Failed to create KubeWatcher: %v", err)
 	}
 
-	topWatcher, err := watchers.NewTopWatcher(config)
+	topWatcher, err := watchers.NewTopWatcher(ctx, config, watchdogContext)
 	if err != nil {
 		stdlog.Fatalf("Failed to create TopWatcher: %v", err)
 	}
@@ -26,11 +35,11 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start watchers
-	go kubeWatcher.Watch()
-	go topWatcher.Watch()
+	go kubeWatcher.Watch(ctx)
+	go topWatcher.Watch(ctx)
 
 	// Wait for termination signal
 	<-sigChan
+	cancel()
 	stdlog.Println("Watchdog received termination signal, shutting down")
 }

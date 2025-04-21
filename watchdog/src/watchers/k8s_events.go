@@ -4,24 +4,17 @@ import (
 	"context"
 	"fmt"
 	stdlog "log"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/lumigo-io/lumigo-kubernetes-operator/watchdog/config"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
 	log "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 )
 
 // KubeEventsWatcher watches for kubernetes events and exports them as otel logs
@@ -30,30 +23,19 @@ type KubeEventsWatcher struct {
 	otelLogger log.Logger
 	namespace  string
 	config     *config.Config
+	k8sContext *watchdogContext
 }
 
-func NewKubeWatcher(config *config.Config) (*KubeEventsWatcher, error) {
-	k8sConfig, err := clientcmd.BuildConfigFromFlags("", filepath.Join(homedir.HomeDir(), ".kube", "config"))
-	if err != nil {
-		k8sConfig, err = rest.InClusterConfig()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	clientset, err := kubernetes.NewForConfig(k8sConfig)
-	if err != nil {
-		return nil, err
-	}
-
+func NewKubeWatcher(ctx context.Context, config *config.Config, watchdogCtx *watchdogContext) (*KubeEventsWatcher, error) {
 	w := &KubeEventsWatcher{
-		kubeclient: clientset,
+		kubeclient: watchdogCtx.Clientset,
 		namespace:  config.LUMIGO_OPERATOR_NAMESPACE,
 		config:     config,
+		k8sContext: watchdogCtx,
 	}
 
 	if config.LUMIGO_TOKEN != "" {
-		if err := w.initOpenTelemetry(); err != nil {
+		if err := w.initOpenTelemetry(ctx); err != nil {
 			stdlog.Printf("Failed to initialize OpenTelemetry: %v", err)
 		}
 	}
@@ -61,28 +43,15 @@ func NewKubeWatcher(config *config.Config) (*KubeEventsWatcher, error) {
 	return w, nil
 }
 
-func (w *KubeEventsWatcher) initOpenTelemetry() error {
-	ctx := context.Background()
-
+func (w *KubeEventsWatcher) initOpenTelemetry(ctx context.Context) error {
 	opts := LogsExporterConfigOptions(w.config.LUMIGO_LOGS_ENDPOINT, w.config.LUMIGO_TOKEN)
 	exporter, err := otlploghttp.New(ctx, *opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create OTLP logs exporter: %w", err)
 	}
 
-	res := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceName("lumigo-kubernetes-operator-watchdog"),
-		attribute.String("lumigo.k8s_operator.version", w.config.LUMIGO_OPERATOR_VERSION),
-		attribute.String("k8s.namespace.name", w.namespace),
-
-		// This is mandatory for the Lumigo backend to process the logs as K8s events,
-		// but we don't have it available in this part of the operator - for now we'll keep it empty.
-		attribute.String("k8s.namespace.uid", ""),
-	)
-
 	loggerProviderOptions := []sdklog.LoggerProviderOption{
-		sdklog.WithResource(res),
+		sdklog.WithResource(w.k8sContext.OtelResource),
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
 	}
 
@@ -103,12 +72,11 @@ func (w *KubeEventsWatcher) initOpenTelemetry() error {
 	return nil
 }
 
-func (w *KubeEventsWatcher) Watch() {
-	ctx := context.TODO()
+func (w *KubeEventsWatcher) Watch(ctx context.Context) {
 	watcher, err := w.kubeclient.CoreV1().Events(w.namespace).Watch(ctx, v1.ListOptions{})
 	if err != nil {
 		stdlog.Printf("Error starting watch: %s\n", err.Error())
-		go w.Watch() // Start watch again in a new goroutine in case of error
+		go w.Watch(ctx) // Start watch again in a new goroutine in case of error
 		return
 	}
 

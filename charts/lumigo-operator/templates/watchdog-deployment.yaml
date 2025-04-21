@@ -54,6 +54,10 @@ spec:
           value: "{{ .Values.endpoint.otlp.logs_url }}"
         - name: LUMIGO_DEBUG
           value: "{{ .Values.debug.enabled | default false }}"
+{{- if .Values.cluster.name }}
+        - name: KUBERNETES_CLUSTER_NAME
+          value: "{{ .Values.cluster.name }}"
+{{- end }}
 {{- if .Values.lumigoToken }}
         - name: LUMIGO_INFRA_METRICS_TOKEN
           valueFrom:
