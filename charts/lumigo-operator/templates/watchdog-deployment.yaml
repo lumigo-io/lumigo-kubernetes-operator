@@ -44,12 +44,8 @@ spec:
         image: {{ .Values.watchdog.image.repository }}:{{ .Values.watchdog.image.tag }}
         command: ["/watchdog"]
         env:
-        - name: TELEMETRY_PROXY_METRICS_ENDPOINT
-          value: "http://{{ include "helm.fullname" . }}-telemetry-proxy-service.{{ .Release.Namespace }}.svc.cluster.local:8888/metrics"
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
-        - name: LUMIGO_ENDPOINT
-          value: "{{ .Values.watchdog.endpoint }}"
         - name: LUMIGO_OPERATOR_NAMESPACE
           value: "{{ .Release.Namespace }}"
         - name: LUMIGO_METRICS_ENDPOINT

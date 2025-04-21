@@ -18,8 +18,8 @@ receivers:
     config:
       scrape_configs:
 {{- if $watchdogEnabled }}
-        - job_name: 'k8s-operator-self-metrics'
-          scrape_interval: 5s
+        - job_name: 'lumigo-operator-self-metrics'
+          scrape_interval: {{ $infraMetricsFrequency }}
           static_configs:
             - targets: ['0.0.0.0:8888']
 {{- end }}
