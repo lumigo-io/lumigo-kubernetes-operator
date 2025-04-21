@@ -12,6 +12,7 @@ var (
 	ContextKeyLumigoToken                            = ContextKey("lumigo/token")
 	ContextKeyOperatorControllerImage                = ContextKey("lumigo/operator/images/controller")
 	ContextKeyOperatorTelemetryProxyImage            = ContextKey("lumigo/operator/images/proxy")
+	ContextKeyOperatorWatchdogImage                  = ContextKey("lumigo/operator/images/watchdog")
 	ContextKeySendDataToLumigo                       = ContextKey("lumigo/upstream/send_data")
 	ContextTestAppJsClientImageName                  = ContextKey("test-apps/js/client/image/name")
 	ContextTestAppJsServerImageName                  = ContextKey("test-apps/js/server/image/name")

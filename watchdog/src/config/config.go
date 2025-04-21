@@ -24,8 +24,8 @@ func LoadConfig() *Config {
 	return &Config{
 		LUMIGO_OPERATOR_NAMESPACE: getEnvString("LUMIGO_OPERATOR_NAMESPACE", "lumigo-system"),
 		LUMIGO_OPERATOR_VERSION:   getEnvString("LUMIGO_OPERATOR_VERSION", "latest"),
-		LUMIGO_METRICS_ENDPOINT:   getEnvString("LUMIGO_METRICS_ENDPOINT", "http://localhost:8000"),
-		LUMIGO_LOGS_ENDPOINT:      getEnvString("LUMIGO_LOGS_ENDPOINT", "http://localhost:8000"),
+		LUMIGO_METRICS_ENDPOINT:   getEnvString("LUMIGO_METRICS_ENDPOINT", "<not set>"),
+		LUMIGO_LOGS_ENDPOINT:      getEnvString("LUMIGO_LOGS_ENDPOINT", "<not set>"),
 		TOP_WATCHER_INTERVAL:      getEnvInt("LUMIGO_WATCHDOG_TOP_INTERVAL", 10),
 		LUMIGO_TOKEN:              getEnvString("LUMIGO_INFRA_METRICS_TOKEN", ""),
 		DEBUG:                     getEnvBool("LUMIGO_DEBUG", false),

@@ -32,24 +32,6 @@ type KubeEventsWatcher struct {
 	config     *config.Config
 }
 
-func sanitizeEndpointURL(endpoint string, debug bool) string {
-	// Remove https:// prefix if it exists, as the exporter will add it
-	if len(endpoint) >= 8 && endpoint[:8] == "https://" {
-		endpoint = endpoint[8:]
-	}
-
-	// Remove trailing slash if present
-	if len(endpoint) > 0 && endpoint[len(endpoint)-1] == '/' {
-		endpoint = endpoint[:len(endpoint)-1]
-	}
-
-	if debug {
-		stdlog.Printf("Sanitized endpoint: %s", endpoint)
-	}
-
-	return endpoint
-}
-
 func NewKubeWatcher(config *config.Config) (*KubeEventsWatcher, error) {
 	k8sConfig, err := clientcmd.BuildConfigFromFlags("", filepath.Join(homedir.HomeDir(), ".kube", "config"))
 	if err != nil {
@@ -81,14 +63,9 @@ func NewKubeWatcher(config *config.Config) (*KubeEventsWatcher, error) {
 
 func (w *KubeEventsWatcher) initOpenTelemetry() error {
 	ctx := context.Background()
-	endpoint := sanitizeEndpointURL(w.config.LUMIGO_LOGS_ENDPOINT, w.config.DEBUG)
 
-	exporter, err := otlploghttp.New(ctx,
-		otlploghttp.WithEndpoint(endpoint),
-		otlploghttp.WithHeaders(map[string]string{
-			"Authorization": fmt.Sprintf("LumigoToken %s", w.config.LUMIGO_TOKEN),
-		}),
-	)
+	opts := LogsExporterConfigOptions(w.config.LUMIGO_LOGS_ENDPOINT, w.config.LUMIGO_TOKEN)
+	exporter, err := otlploghttp.New(ctx, *opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create OTLP logs exporter: %w", err)
 	}

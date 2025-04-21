@@ -656,6 +656,47 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 
 			return ctx
 		}).
+		Assess("Watchdog events are exported as logs", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
+			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+
+			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
+				logsBytes, err := os.ReadFile(logsPath)
+				if err != nil {
+					return false, err
+				}
+
+				if len(logsBytes) < 1 {
+					return false, err
+				}
+
+				watchdogLogs := make([]plog.LogRecord, 0)
+
+				exportRequests := strings.Split(string(logsBytes), "\n")
+				for _, exportRequestJson := range exportRequests {
+					exportRequest := plogotlp.NewExportRequest()
+					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					if wdLogs, err := exportRequestLogRecords(exportRequest, filterWatchdogLogRecords); err != nil {
+						t.Fatalf("Cannot extract logs from export request: %v", err)
+					} else {
+						watchdogLogs = append(watchdogLogs, wdLogs...)
+					}
+				}
+
+				if len(watchdogLogs) < 1 {
+					t.Fatalf("No watchdog logs found in '%s'.", logsPath)
+					return false, nil
+				}
+
+				t.Logf("Found watchdog logs: %d", len(watchdogLogs))
+				return true, nil
+			}); err != nil {
+				t.Fatalf("Failed to wait for watchdog logs: %v", err)
+			}
+
+			return ctx
+		}).
 		Feature()
 
 	testEnv.Test(t, testAppDeploymentFeature)
@@ -808,24 +849,28 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 }
 
 func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", "*")
+	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", "*", "*")
 }
 
 func filterHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat", "*")
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.namespace_heartbeat", "*", "*")
 }
 
 func filterPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector", "*")
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.log_file_collector", "*", "*")
 }
 
 func filterNamespaceAppLogRecords(namespaceName string) LogRecordFilter {
 	return func(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-		return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", namespaceName)
+		return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", namespaceName, "*")
 	}
 }
 
-func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string, filteredNamespaceName string) ([]plog.LogRecord, error) {
+func filterWatchdogLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
+	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.k8s-events", "*", "lumigo-kubernetes-operator-watchdog")
+}
+
+func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string, filteredNamespaceName string, filteredServiceName string) ([]plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
 	filteredScopeLogRecords := make([]plog.LogRecord, 0)
 
@@ -833,12 +878,14 @@ func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScop
 		scopeLogs := resourceLogs.ScopeLogs().At(i)
 		scopeName := scopeLogs.Scope().Name()
 		namespaceName, hasNamespaceName := resourceLogs.Resource().Attributes().Get("k8s.namespace.name")
+		serviceName, hasServiceName := resourceLogs.Resource().Attributes().Get("service.name")
 		logRecords := scopeLogsToLogRecords(scopeLogs)
 
 		scopeMatches := filteredScopeName == "*" || (scopeName == filteredScopeName)
 		namespaceMatches := filteredNamespaceName == "*" || (hasNamespaceName && (namespaceName.AsString() == filteredNamespaceName))
+		serviceMatches := filteredServiceName == "*" || (hasServiceName && (serviceName.AsString() == filteredServiceName))
 
-		if scopeMatches && namespaceMatches {
+		if scopeMatches && namespaceMatches && serviceMatches {
 			filteredScopeLogRecords = append(filteredScopeLogRecords, logRecords...)
 		}
 	}

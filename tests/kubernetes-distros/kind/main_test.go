@@ -185,6 +185,9 @@ func TestMain(m *testing.M) {
 	telemetryProxyImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_PROXY_IMG_NAME, runId)
 	telemetryProxyImageArchivePath := filepath.Join(tmpDir, "telemetry-proxy-controller.tgz")
 
+	watchdogImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_WATCHDOG_IMG_NAME, runId)
+	watchdogImageArchivePath := filepath.Join(tmpDir, "operator-watchdog.tgz")
+
 	testJsClientImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_JS_CLIENT_IMG_NAME, runId)
 	testJsClientImageArchivePath := filepath.Join(tmpDir, "test-js-client.tgz")
 
@@ -206,6 +209,7 @@ func TestMain(m *testing.M) {
 	ctx = context.WithValue(ctx, internal.ContextKeyLumigoToken, lumigoToken)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorControllerImage, controllerImageName)
 	ctx = context.WithValue(ctx, internal.ContextKeyOperatorTelemetryProxyImage, telemetryProxyImageName)
+	ctx = context.WithValue(ctx, internal.ContextKeyOperatorWatchdogImage, watchdogImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsClientImageName, testJsClientImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppJsServerImageName, testJsServerImageName)
 	ctx = context.WithValue(ctx, internal.ContextTestAppPythonImageName, testPythonImageName)
@@ -223,6 +227,7 @@ func TestMain(m *testing.M) {
 	testEnv.Setup(
 		internal.BuildDockerImageAndExportArchive(controllerImageName, filepath.Join(repoRoot, "controller"), controllerImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(telemetryProxyImageName, filepath.Join(repoRoot, "telemetryproxy"), telemetryProxyImageArchivePath, logger),
+		internal.BuildDockerImageAndExportArchive(watchdogImageName, filepath.Join(repoRoot, "watchdog"), watchdogImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(testJsClientImageName, filepath.Join(cwd, "apps", "client"), testJsClientImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(testJsServerImageName, filepath.Join(cwd, "apps", "server"), testJsServerImageArchivePath, logger),
 		internal.BuildDockerImageAndExportArchive(testPythonImageName, filepath.Join(cwd, "apps", "python"), testPythonImageArchivePath, logger),
@@ -231,6 +236,7 @@ func TestMain(m *testing.M) {
 
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, controllerImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, telemetryProxyImageArchivePath, logger),
+		internal.LoadDockerImageArchiveToCluster(kindClusterName, watchdogImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, testJsClientImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, testJsServerImageArchivePath, logger),
 		internal.LoadDockerImageArchiveToCluster(kindClusterName, testPythonImageArchivePath, logger),

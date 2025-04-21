@@ -81,43 +81,13 @@ func NewTopWatcher(config *config.Config) (*TopWatcher, error) {
 	return w, nil
 }
 
-func (w *TopWatcher) sanitizeEndpointURL(endpoint string) string {
-	// Remove https:// prefix if it exists, as the exporter will add it
-	if len(endpoint) >= 8 && endpoint[:8] == "https://" {
-		endpoint = endpoint[8:]
-	}
-
-	// Remove trailing slash if present
-	if len(endpoint) > 0 && endpoint[len(endpoint)-1] == '/' {
-		endpoint = endpoint[:len(endpoint)-1]
-	}
-
-	// Remove "/v1/metrics" suffix if present
-	const metricsPath = "/v1/metrics"
-	if len(endpoint) > len(metricsPath) && endpoint[len(endpoint)-len(metricsPath):] == metricsPath {
-		endpoint = endpoint[:len(endpoint)-len(metricsPath)]
-	}
-
-	if w.config.DEBUG {
-		stdlog.Printf("Original endpoint: %s, Sanitized endpoint: %s", w.config.LUMIGO_METRICS_ENDPOINT, endpoint)
-	}
-
-	return endpoint
-}
-
 func (w *TopWatcher) initOpenTelemetry() error {
 	ctx := context.Background()
 	version := w.getK8SVersion()
 	cloudProvider := w.getK8SCloudProvider()
 
-	endpoint := w.sanitizeEndpointURL(w.config.LUMIGO_METRICS_ENDPOINT)
-
-	exporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(endpoint),
-		otlpmetrichttp.WithHeaders(map[string]string{
-			"Authorization": fmt.Sprintf("LumigoToken %s", w.config.LUMIGO_TOKEN),
-		}),
-	)
+	opts := MetricsExporterConfigOptions(w.config.LUMIGO_METRICS_ENDPOINT, w.config.LUMIGO_TOKEN)
+	exporter, err := otlpmetrichttp.New(ctx, *opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create OTLP exporter: %w", err)
 	}
