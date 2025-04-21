@@ -104,6 +104,9 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					"node_",
 					"container_",
 					"kube_",
+					"otelcol_",
+					"http_client_",
+					"http_server_",
 				}
 
 				for _, metric := range metrics {
