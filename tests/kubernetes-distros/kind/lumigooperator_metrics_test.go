@@ -60,7 +60,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					for _, resourceMetrics := range allResourceMetrics {
 						clusterName, exists := resourceMetrics.Resource().Attributes().Get("k8s.cluster.name")
 						if !exists {
-							return false, fmt.Errorf("Cannot find cluster name in resource metrics")
+							return false, fmt.Errorf("Cannot find cluster name in metrics resource %v", resourceMetrics.Resource().Attributes().AsRaw())
 						}
 						if clusterName.AsString() != ctx.Value(internal.ContextKeyKubernetesClusterName) {
 							return false, fmt.Errorf("Cluster name mismatch: actual %v, expected: %v", clusterName, internal.ContextKeyKubernetesClusterName)
@@ -98,6 +98,8 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 				ownerMetricsFound := false
 				labelMetricsFound := false
 				containerMetricsWithCorrectJobFound := false
+				otelCollectorMetricsFound := false
+				topWatcherMetricsFound := false
 
 				// For essentialOnly mode
 				essentialMetricsPrefixes := []string{
@@ -107,6 +109,7 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 					"otelcol_",
 					"http_client_",
 					"http_server_",
+					"lumigo_operator_pod_container_resource_usage_",
 				}
 
 				for _, metric := range metrics {
@@ -142,6 +145,10 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 						if !exportedFromExpectedJobOnly || err != nil {
 							return false, err
 						}
+					} else if strings.HasPrefix(metric.Name(), "otelcol_") {
+						otelCollectorMetricsFound = true
+					} else if strings.HasPrefix(metric.Name(), "lumigo_operator_pod_container_resource_usage_") {
+						topWatcherMetricsFound = true
 					} else {
 						isEssentialMetric := false
 						for _, prefix := range essentialMetricsPrefixes {
@@ -157,6 +164,16 @@ func TestLumigoOperatorInfraMetrics(t *testing.T) {
 							labelMetricsFound = true
 						}
 					}
+				}
+
+				if !topWatcherMetricsFound {
+					t.Logf("could not find top watcher metrics. Seen metrics: %v\n retrying...", uniqueMetricNames)
+					return false, nil
+				}
+
+				if !otelCollectorMetricsFound {
+					t.Logf("could not find otel-collector self metrics. Seen metrics: %v\n retrying...", uniqueMetricNames)
+					return false, nil
 				}
 
 				if !prometheusNodeExporterMetricsFound {

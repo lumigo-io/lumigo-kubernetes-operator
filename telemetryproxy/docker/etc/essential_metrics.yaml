@@ -39,3 +39,4 @@ metrics:
   - otelcol_processor_*
   - otelcol_receiver_*
   - otelcol_scraper_*
+  - lumigo_operator_pod_container_resource_usage_*
