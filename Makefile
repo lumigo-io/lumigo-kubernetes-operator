@@ -147,7 +147,7 @@ docker-buildx-telemetry-proxy: ## Build and push docker image for the manager fo
 	rm Dockerfile.cross )
 
 .PHONY: docker-buildx-watchdog
-docker-buildx-watchdog: ## Build and push docker image for the manager for cross-platform support
+docker-buildx-watchdog: ## Build and push docker image for the watchdog for cross-platform support
 	( cd watchdog && \
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
 	docker buildx create --name project-v3-builder && \

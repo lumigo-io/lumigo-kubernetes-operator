@@ -17,7 +17,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.22
+          go-version: 1.23
       - name: Run tests
         run: |
           make test
@@ -78,10 +78,20 @@ jobs:
           build-args: version=${{ github.sha }}
           tags: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
           outputs: type=oci,dest=telemetry-proxy-image.tar
+      - name: Build watchdog image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          context: watchdog
+          file: watchdog/Dockerfile
+          build-args: version=${{ github.sha }}
+          tags: ${{ steps.hostip.outputs.ip }}:5000/watchdog:${{ github.run_id }}
+          outputs: type=oci,dest=watchdog-image.tar
       - name: Push container images to local repository
         env:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller:${{ github.run_id }}
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy:${{ github.run_id }}
+          WATCHDOG_IMG: ${{ steps.hostip.outputs.ip }}:5000/watchdog:${{ github.run_id }}
         run: |
           set -eux
           regctl image import "${CONTROLLER_IMG}" controller-image.tar -v info
@@ -89,12 +99,14 @@ jobs:
 
           regctl image import "${PROXY_IMG}" telemetry-proxy-image.tar -v info
           regctl image inspect "${PROXY_IMG}"
+
+          regctl image import "${WATCHDOG_IMG}" watchdog-image.tar -v info
+          regctl image inspect "${WATCHDOG_IMG}"
       - name: Install minikube
         uses: medyagh/setup-minikube@v0.0.11
         with:
           start-args: --insecure-registry "${{ steps.hostip.outputs.ip }}:5000"
           driver: docker
-          # cni: bridge
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
       - name: Set up Helm
@@ -115,6 +127,7 @@ jobs:
         env:
           CONTROLLER_IMG: ${{ steps.hostip.outputs.ip }}:5000/controller
           PROXY_IMG: ${{ steps.hostip.outputs.ip }}:5000/telemetry-proxy
+          WATCHDOG_IMG: ${{ steps.hostip.outputs.ip }}:5000/watchdog
         run: |
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm dependency build charts/lumigo-operator
@@ -125,6 +138,9 @@ jobs:
             --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
+            --set "watchdog.image.repository=${WATCHDOG_IMG}" \
+            --set "watchdog.image.tag=${{ github.run_id }}" \
+            --set "watchdog.enabled=true" \
             --dry-run
 
           if ! helm upgrade --install lumigo charts/lumigo-operator \
@@ -133,11 +149,15 @@ jobs:
             --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
+            --set "watchdog.image.repository=${WATCHDOG_IMG}" \
+            --set "watchdog.image.tag=${{ github.run_id }}" \
+            --set "watchdog.enabled=true" \
             --debug --wait --timeout 4m; then
 
             kubectl describe all -n lumigo-system
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c watchdog
             exit 1
           fi
       - name: Run end-to-end tests
@@ -148,6 +168,7 @@ jobs:
             kubectl describe all -A
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c watchdog
             exit 1
           fi
 
@@ -363,6 +384,35 @@ jobs:
           add-cpes-if-none: true
           output-format: table
 
+  test-watchdog-for-security-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # We do not need the git history
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build watchdog image and save it to file
+        uses: docker/build-push-action@v3
+        with:
+          platforms: linux/amd64
+          context: watchdog
+          file: watchdog/Dockerfile
+          build-args: version=${{ github.sha }}
+          tags: watchdog:${{ github.run_id }}
+          push: false
+          load: true
+      - name: Scan watchdog image
+        uses: anchore/scan-action@v3
+        with:
+          image: watchdog:${{ github.run_id }}
+          severity-cutoff: critical
+          only-fixed: true
+          add-cpes-if-none: true
+          output-format: table
+
   all-tests:
     runs-on: ubuntu-latest
     needs:
@@ -372,6 +422,7 @@ jobs:
     - test-kind
     - test-controller-for-security-issues
     - test-telemetry-proxy-for-security-issues
+    - test-watchdog-for-security-issues
     steps:
       - name: no-op
         run: echo '*tongue click* noice'
@@ -439,7 +490,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.22
+          go-version: 1.23
       - name: Install tools
         run: |
           make install-tools
@@ -482,7 +533,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.22
+          go-version: 1.23
       - name: Install tools
         run: |
           make install-tools
@@ -503,6 +554,49 @@ jobs:
           PROXY_IMG: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
         run: |
           make docker-buildx-telemetry-proxy
+
+  publish-watchdog-ecr-image:
+    strategy:
+      matrix:
+        include:
+          - ecr-registry: public.ecr.aws
+            registry-type: public
+          - ecr-registry: 709825985650.dkr.ecr.us-east-1.amazonaws.com
+            registry-type: private
+            registries: "709825985650"
+    runs-on: ubuntu-latest
+    needs:
+    - validate-release-increment
+    if: ${{ needs.validate-release-increment.outputs.perform-release == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.23
+      - name: Install tools
+        run: |
+          make install-tools
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: ${{ matrix.registry-type }}
+          registries: ${{ matrix.registries }}
+      - name: Build and push container image to Amazon ECR
+        env:
+          WATCHDOG_IMG: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-watchdog:${{ needs.validate-release-increment.outputs.version }}
+        run: |
+          make docker-buildx-watchdog
 
   publish-kube-rbac-proxy-ecr-image:
     strategy:
@@ -620,6 +714,8 @@ jobs:
           yq e -i ".controllerManager.telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.watchdog.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-watchdog\"" charts/lumigo-operator/values.yaml
+          yq e -i ".controllerManager.watchdog.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
       - name: Update Helm chart defaults for eks addon
         if: ${{ matrix.is_eks_addon }}
         run: |
