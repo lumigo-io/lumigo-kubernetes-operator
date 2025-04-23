@@ -83,7 +83,7 @@ rules:
   - update
 {{- if .Values.watchdog.enabled }}
 - apiGroups:
-  - metrics.k8s.io  # Add this section for metrics.k8s.io
+  - metrics.k8s.io
   resources:
   - pods
   verbs:
