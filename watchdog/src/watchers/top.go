@@ -47,14 +47,14 @@ func NewTopWatcher(ctx context.Context, config *config.Config, watchdogCtx *watc
 	w := &TopWatcher{
 		clientset:     watchdogCtx.Clientset,
 		metricsClient: metricsClient,
-		namespace:     config.LUMIGO_OPERATOR_NAMESPACE,
-		interval:      time.Duration(config.TOP_WATCHER_INTERVAL),
+		namespace:     config.LumigoOperatorNamespace,
+		interval:      time.Duration(config.TopWatcherIntervalSeconds),
 		config:        config,
 		watchdogCtx:   watchdogCtx,
 		logger:        watchdogCtx.Logger.WithName("TopWatcher"),
 	}
 
-	if w.config.LUMIGO_TOKEN == "" {
+	if w.config.LumigoToken == "" {
 		w.logger.Error(fmt.Errorf("lumigo token is missing"), "Please provide a valid token through the lumigoToken.value Helm setting.\nMetrics collection will be skipped. For more information, visit https://github.com/lumigo-io/lumigo-kubernetes-operator")
 		return w, nil
 	}
@@ -67,7 +67,7 @@ func NewTopWatcher(ctx context.Context, config *config.Config, watchdogCtx *watc
 }
 
 func (w *TopWatcher) initOpenTelemetry(ctx context.Context) error {
-	opts := MetricsExporterConfigOptions(w.config.LUMIGO_METRICS_ENDPOINT, w.config.LUMIGO_TOKEN)
+	opts := MetricsExporterConfigOptions(w.config.LumigoMetricsEndpoint, w.config.LumigoToken)
 	exporter, err := otlpmetrichttp.New(ctx, *opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create OTLP exporter: %w", err)
@@ -78,7 +78,7 @@ func (w *TopWatcher) initOpenTelemetry(ctx context.Context) error {
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(w.interval*time.Second))),
 	}
 
-	if w.config.DEBUG {
+	if w.config.Debug {
 		stdoutExporter, err := stdoutmetric.New()
 		if err != nil {
 			return fmt.Errorf("failed to create stdout exporter: %w", err)
@@ -129,7 +129,7 @@ func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observe
 	// as scraping the kubelet directly (using /metrics/resource) is already done by the telemetry proxy, but
 	// it will not be collected if it's down or misconfigured, and that's where the watchdog comes in.
 	podMetricsList, err := w.metricsClient.MetricsV1beta1().PodMetricses(w.namespace).List(context.TODO(), v1.ListOptions{})
-	if err != nil && w.config.DEBUG {
+	if err != nil && w.config.Debug {
 		w.logger.Error(err, "Unable to collect metrics. "+
 			"This likely means the Metrics Server is not installed in your cluster "+
 			"To enable metrics collection, please install the Kubernetes Metrics Server: https://github.com/kubernetes-sigs/metrics-server",
@@ -157,7 +157,7 @@ func (w *TopWatcher) collectMetrics(ctx context.Context, observer metric.Observe
 }
 
 func (w *TopWatcher) Watch(ctx context.Context) {
-	if w.config.LUMIGO_TOKEN == "" {
+	if w.config.LumigoToken == "" {
 		w.logger.Error(fmt.Errorf("no token provided"), "Skipping metrics collection")
 		return
 	}

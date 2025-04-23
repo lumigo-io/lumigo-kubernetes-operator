@@ -29,12 +29,12 @@ type KubeEventsWatcher struct {
 func NewKubeWatcher(ctx context.Context, config *config.Config, watchdogCtx *watchdogContext) (*KubeEventsWatcher, error) {
 	w := &KubeEventsWatcher{
 		kubeclient: watchdogCtx.Clientset,
-		namespace:  config.LUMIGO_OPERATOR_NAMESPACE,
+		namespace:  config.LumigoOperatorNamespace,
 		config:     config,
 		k8sContext: watchdogCtx,
 	}
 
-	if config.LUMIGO_TOKEN != "" {
+	if config.LumigoToken != "" {
 		if err := w.initOpenTelemetry(ctx); err != nil {
 			stdlog.Printf("Failed to initialize OpenTelemetry: %v", err)
 		}
@@ -44,7 +44,7 @@ func NewKubeWatcher(ctx context.Context, config *config.Config, watchdogCtx *wat
 }
 
 func (w *KubeEventsWatcher) initOpenTelemetry(ctx context.Context) error {
-	opts := LogsExporterConfigOptions(w.config.LUMIGO_LOGS_ENDPOINT, w.config.LUMIGO_TOKEN)
+	opts := LogsExporterConfigOptions(w.config.LumigoLogsEndpoint, w.config.LumigoToken)
 	exporter, err := otlploghttp.New(ctx, *opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create OTLP logs exporter: %w", err)
@@ -55,7 +55,7 @@ func (w *KubeEventsWatcher) initOpenTelemetry(ctx context.Context) error {
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
 	}
 
-	if w.config.DEBUG {
+	if w.config.Debug {
 		stdoutExporter, err := stdoutlog.New()
 		if err != nil {
 			return fmt.Errorf("failed to create stdout exporter: %w", err)
@@ -84,7 +84,7 @@ func (w *KubeEventsWatcher) Watch(ctx context.Context) {
 
 	stdlog.Printf("Watching for namespace changes in %s...\n", w.namespace)
 	for event := range ch {
-		if w.config.LUMIGO_TOKEN != "" {
+		if w.config.LumigoToken != "" {
 			eventAsLog := w.k8sEventToLogRecord(event.Object.(*coreV1.Event))
 			w.otelLogger.Emit(ctx, eventAsLog)
 		} else {

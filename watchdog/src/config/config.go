@@ -9,27 +9,27 @@ import (
 type Config struct {
 	MAX_BATCH_SIZE            int
 	KUBE_WATCHER_INTERVAL     int
-	LUMIGO_OPERATOR_NAMESPACE string
-	LUMIGO_OPERATOR_VERSION   string
-	LUMIGO_METRICS_ENDPOINT   string
-	LUMIGO_LOGS_ENDPOINT      string
-	LUMIGO_TOKEN              string
+	LumigoOperatorNamespace   string
+	LumigoOperatorVersion     string
+	LumigoMetricsEndpoint     string
+	LumigoLogsEndpoint        string
+	LumigoToken               string
 	TELEMETRY_PROXY_ENDPOINT  string
 	TELEMETRY_INTERVAL        int
-	TOP_WATCHER_INTERVAL      int
-	DEBUG                     bool
+	TopWatcherIntervalSeconds int
+	Debug                     bool
 	ClusterName               string
 }
 
 func LoadConfig() *Config {
 	return &Config{
-		LUMIGO_OPERATOR_NAMESPACE: getEnvString("LUMIGO_OPERATOR_NAMESPACE", "lumigo-system"),
-		LUMIGO_OPERATOR_VERSION:   getEnvString("LUMIGO_OPERATOR_VERSION", "latest"),
-		LUMIGO_METRICS_ENDPOINT:   getEnvString("LUMIGO_METRICS_ENDPOINT", "<not set>"),
-		LUMIGO_LOGS_ENDPOINT:      getEnvString("LUMIGO_LOGS_ENDPOINT", "<not set>"),
-		TOP_WATCHER_INTERVAL:      getEnvInt("LUMIGO_WATCHDOG_TOP_INTERVAL", 10),
-		LUMIGO_TOKEN:              getEnvString("LUMIGO_INFRA_METRICS_TOKEN", ""),
-		DEBUG:                     getEnvBool("LUMIGO_DEBUG", false),
+		LumigoOperatorNamespace:   getEnvString("LUMIGO_OPERATOR_NAMESPACE", "lumigo-system"),
+		LumigoOperatorVersion:     getEnvString("LUMIGO_OPERATOR_VERSION", "unknown"),
+		LumigoMetricsEndpoint:     getEnvString("LUMIGO_METRICS_ENDPOINT", "<not set>"),
+		LumigoLogsEndpoint:        getEnvString("LUMIGO_LOGS_ENDPOINT", "<not set>"),
+		TopWatcherIntervalSeconds: getEnvInt("LUMIGO_WATCHDOG_TOP_INTERVAL", 10),
+		LumigoToken:               getEnvString("LUMIGO_INFRA_METRICS_TOKEN", ""),
+		Debug:                     getEnvBool("LUMIGO_DEBUG", false),
 		ClusterName:               getEnvString("KUBERNETES_CLUSTER_NAME", ""),
 	}
 }

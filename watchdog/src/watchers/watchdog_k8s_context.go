@@ -103,7 +103,7 @@ func NewWatchdogK8sContext(ctx context.Context, config *config.Config) (*watchdo
 		return nil, err
 	}
 
-	namespaceUID, err := getNamespaceUid(ctx, clientset, config.LUMIGO_OPERATOR_NAMESPACE)
+	namespaceUID, err := getNamespaceUid(ctx, clientset, config.LumigoOperatorNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -120,9 +120,9 @@ func NewWatchdogK8sContext(ctx context.Context, config *config.Config) (*watchdo
 	otelResource := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName("lumigo-kubernetes-operator-watchdog"),
-		attribute.String("lumigo.k8s_operator.version", config.LUMIGO_OPERATOR_VERSION),
+		attribute.String("lumigo.k8s_operator.version", config.LumigoOperatorVersion),
 		attribute.String("k8s.cluster.version", clusterK8sVersion),
-		attribute.String("k8s.namespace.name", config.LUMIGO_OPERATOR_NAMESPACE),
+		attribute.String("k8s.namespace.name", config.LumigoOperatorNamespace),
 		attribute.String("k8s.cluster.uid", clusterUID),
 		attribute.String("k8s.cluster.name", config.ClusterName),
 		attribute.String("k8s.namespace.uid", namespaceUID),
