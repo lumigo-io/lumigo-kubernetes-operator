@@ -298,7 +298,6 @@ processors:
     send_batch_size: 100
     timeout: 1s
 {{- end }}
-  batch/metrics:
   transform/inject_operator_details_into_resource:
     trace_statements:
     - context: resource
