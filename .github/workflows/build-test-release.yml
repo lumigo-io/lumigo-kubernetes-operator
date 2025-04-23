@@ -671,6 +671,7 @@ jobs:
     - validate-release-increment
     - publish-controller-ecr-image
     - publish-telemetry-proxy-ecr-image
+    - publish-watchdog-ecr-image
     - publish-kube-rbac-proxy-ecr-image
     if: ${{ needs.validate-release-increment.outputs.perform-release }}
     steps:
@@ -714,8 +715,8 @@ jobs:
           yq e -i ".controllerManager.telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
-          yq e -i ".controllerManager.watchdog.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-watchdog\"" charts/lumigo-operator/values.yaml
-          yq e -i ".controllerManager.watchdog.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
+          yq e -i ".watchdog.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-watchdog\"" charts/lumigo-operator/values.yaml
+          yq e -i ".watchdog.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
       - name: Update Helm chart defaults for eks addon
         if: ${{ matrix.is_eks_addon }}
         run: |
