@@ -778,6 +778,7 @@ jobs:
         run: |
           git add charts/lumigo-operator
           git add config/manager/manager.yaml
+          git add config/watchdog/deployment.yaml
           git add CHANGELOG.md
           git commit -m "v${{ needs.validate-release-increment.outputs.version }}"
 
