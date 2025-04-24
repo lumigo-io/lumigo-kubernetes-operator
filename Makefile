@@ -9,6 +9,7 @@ VERSION ?= 0.0.1
 IMG_VERSION ?= latest
 CONTROLLER_IMG ?= host.docker.internal:5000/controller:$(IMG_VERSION)
 PROXY_IMG ?= host.docker.internal:5000/telemetry-proxy:$(IMG_VERSION)
+WATCHDOG_IMG ?= host.docker.internal:5000/watchdog:$(IMG_VERSION)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.0
 
@@ -91,7 +92,7 @@ e2e-tests:
 # (i.e. docker build --platform linux/arm64 ). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: test docker-build-without-tests ## Build docker image with the manager.
+docker-build: test docker-build-without-tests
 	echo "Finished building docker image"
 
 .PHONY: docker-build-controller
@@ -102,14 +103,18 @@ docker-build-controller:
 docker-build-telemetry-proxy:
 	docker build -t ${PROXY_IMG} -f telemetryproxy/Dockerfile telemetryproxy
 
-# Used by our IT because we dont want to run the tests there
+docker-build-watchdog:
+	docker build -t ${WATCHDOG_IMG} -f watchdog/Dockerfile watchdog
+
+# Used by our IT because we don't want to run the tests there
 .PHONY: docker-build-without-tests
-docker-build-without-tests: docker-build-controller docker-build-telemetry-proxy
+docker-build-without-tests: docker-build-controller docker-build-telemetry-proxy docker-build-watchdog
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${CONTROLLER_IMG}
 	docker push ${PROXY_IMG}
+	docker push ${WATCHDOG_IMG}
 
 # PLATFORMS defines the target platforms for  the manager image be build to provide support to multiple
 # architectures. (i.e. make docker-buildx CONTROLLER_IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
@@ -119,7 +124,7 @@ docker-push: ## Push docker image with the manager.
 # To properly provided solutions that supports more than one platform you should use this option.
 PLATFORMS ?= linux/arm64,linux/amd64 #,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
-docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy ## Build and push docker image for the manager for cross-platform support
+docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy docker-buildx-watchdog  ## Build and push docker image for the manager for cross-platform support
 
 .PHONY: docker-buildx-manager
 docker-buildx-manager: ## Build and push docker image for the manager for cross-platform support; this target does NOT run unit tests, it is meant for CI/CD
@@ -138,6 +143,16 @@ docker-buildx-telemetry-proxy: ## Build and push docker image for the manager fo
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
 	docker buildx build --push --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
+	docker buildx rm project-v3-builder && \
+	rm Dockerfile.cross )
+
+.PHONY: docker-buildx-watchdog
+docker-buildx-watchdog: ## Build and push docker image for the watchdog for cross-platform support
+	( cd watchdog && \
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
+	docker buildx create --name project-v3-builder && \
+	docker buildx use project-v3-builder && \
+	docker buildx build --push --provenance=false --platform=$(PLATFORMS) --tag ${WATCHDOG_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 

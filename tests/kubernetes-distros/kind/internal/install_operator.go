@@ -24,12 +24,14 @@ import (
 const (
 	DEFAULT_CONTROLLER_IMG_NAME = "host.docker.internal:5000/controller"
 	DEFAULT_PROXY_IMG_NAME      = "host.docker.internal:5000/telemetry-proxy"
+	DEFAULT_WATCHDOG_IMG_NAME   = "host.docker.internal:5000/watchdog"
 	DEFAULT_IMG_VERSION         = "latest"
 )
 
 func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfigFilePath string, lumigoNamespace string, otlpSinkUrl string, logger logr.Logger) (context.Context, error) {
 	controllerImageName, controllerImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorControllerImage).(string))
 	telemetryProxyImageName, telemetryProxyImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorTelemetryProxyImage).(string))
+	watchdogImageName, watchdogImageTag := splitContainerImageNameAndTag(ctx.Value(ContextKeyOperatorWatchdogImage).(string))
 	operatorDebug := ctx.Value(ContextKeyLumigoOperatorDebug).(bool)
 	kubernetesClusterName := ctx.Value(ContextKeyKubernetesClusterName).(string)
 	lumigoToken := ctx.Value(ContextKeyLumigoToken).(string)
@@ -42,6 +44,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 	logger.Info("Installing Operator via Helm", "Chart dir", chartDir)
 
 	manager := helm.New(kubeconfigFilePath)
+
 	err := exec.Command("helm", "dependency", "update", chartDir).Run()
 	if err != nil {
 		return ctx, fmt.Errorf("failed to run helm dependency update: %w", err)
@@ -56,6 +59,8 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
+		helm.WithArgs(fmt.Sprintf("--set watchdog.image.repository=%s", watchdogImageName)),
+		helm.WithArgs(fmt.Sprintf("--set watchdog.image.tag=%s", watchdogImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.logs_url=%s", otlpSinkUrl)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl)),
@@ -66,6 +71,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set clusterCollection.logs.exclude[0].containerPattern=%s*", busyboxExcludedContainerNamePrefix)),
 		helm.WithArgs(fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespace)), // Enable monitoring of a namespace during installation time
 		helm.WithArgs("--set clusterCollection.metrics.essentialOnly=true"),                          // Collect only metrics essential for the k8s page in the platform, to test this feature
+		helm.WithArgs("--set watchdog.enabled=true"),
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
 		helm.WithTimeout("3m"),

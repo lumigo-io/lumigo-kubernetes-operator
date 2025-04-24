@@ -1,0 +1,9 @@
+resources:
+- deployment.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+images:
+- name: watchdog
+  newName: host.docker.internal:5000/watchdog
+  newTag: latest

@@ -5,6 +5,10 @@
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
+{{- $essentialMetricsNames := (datasource "essential_metrics").metrics -}}
+{{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
+{{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
+{{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
 receivers:
   otlp:
     protocols:
@@ -12,10 +16,17 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
-{{- if $infraMetricsToken }}
+{{- if $metricsScrapingEnabled }}
   prometheus:
     config:
       scrape_configs:
+{{- if $watchdogEnabled }}
+        - job_name: 'lumigo-operator-self-metrics'
+          scrape_interval: {{ $infraMetricsFrequency }}
+          static_configs:
+            - targets: ['0.0.0.0:8888']
+{{- end }}
+{{- if $infraMetricsEnabled }}
         - job_name: 'k8s-infra-metrics'
           metrics_path: /metrics
           scrape_interval: {{ $infraMetricsFrequency }}
@@ -67,6 +78,7 @@ receivers:
           scrape_interval: {{ $infraMetricsFrequency }}
           static_configs:
             - targets: ['{{ getenv "LUMIGO_KUBE_STATE_METRICS_SERVICE" }}:{{ getenv "LUMIGO_KUBE_STATE_METRICS_PORT" }}']
+{{- end }}
 {{- end }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
@@ -156,7 +168,7 @@ exporters:
     endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
-{{- if $infraMetricsToken }}
+{{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
     endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     headers:
@@ -219,37 +231,9 @@ processors:
       include:
         match_type: regexp
         metric_names:
-          - container_cpu_usage_seconds_total
-          - container_memory_working_set_bytes
-          - kube_.+_labels
-          - kube_cronjob_status_active
-          - kube_daemonset_status_current_number_scheduled
-          - kube_daemonset_status_desired_number_scheduled
-          - kube_deployment_spec_replicas
-          - kube_deployment_status_replicas_available
-          - kube_job_owner
-          - kube_node_status_capacity
-          - kube_pod_container_info
-          - kube_pod_container_resource_limits
-          - kube_pod_container_status_restarts_total
-          - kube_pod_container_status_ready
-          - kube_pod_container_status_running
-          - kube_pod_container_status_terminated_reason
-          - kube_pod_container_status_waiting_reason
-          - kube_pod_status_ready
-          - kube_pod_owner
-          - kube_pod_status_phase
-          - kube_replicaset_owner
-          - kube_statefulset_replicas
-          - kube_statefulset_status_replicas_ready
-          - node_cpu_seconds_total
-          - node_memory_Active_bytes
-          - kube_deployment_created
-          - kube_statefulset_created
-          - kube_daemonset_created
-          - kube_cronjob_created
-          - kube_pod_created
-          - kube_pod_info
+{{- range $essentialMetricsNames }}
+          - {{ . }}
+{{- end }}
 {{- end }}
   k8sdataenricherprocessor:
     auth_type: serviceAccount
@@ -335,6 +319,9 @@ service:
   telemetry:
     logs:
       level: {{ $debug | ternary "debug" "info" }}
+    metrics:
+      level: detailed
+      address: ":8888"
   extensions:
   - headers_setter/lumigo
   - health_check
@@ -343,7 +330,7 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
-{{- if $infraMetricsToken }}
+{{- if $metricsScrapingEnabled }}
     metrics:
       receivers:
       - prometheus
@@ -369,6 +356,8 @@ service:
       # We cannot add a Batch processor to this pipeline as it would break the
       # `headers_setter/lumigo` extension.
       # See https://github.com/open-telemetry/opentelemetry-collector/issues/4544
+      # This might have been fixed in https://github.com/open-telemetry/opentelemetry-collector/pull/7578,
+      # but requires thorough testing.
       receivers:
       - otlp
       processors:

@@ -5,6 +5,18 @@ output:
   showOperatorStatus: true
 cluster:
   name:
+watchdog:
+  enabled: false
+  image:
+    repository: host.docker.internal:5000/watchdog
+    tag: latest
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
 controllerManager:
   kubeRbacProxy:
     image:

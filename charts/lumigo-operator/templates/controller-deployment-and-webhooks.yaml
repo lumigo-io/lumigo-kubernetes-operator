@@ -20,7 +20,7 @@ data:
   tls.key: {{ $cert.Key | b64enc }}
   ca.crt: {{ $ca.Cert | b64enc }}
 ---
-{{- if and .Values.clusterCollection.metrics.enabled .Values.lumigoToken.value }}
+{{- if .Values.lumigoToken.value }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -246,13 +246,17 @@ spec:
           value: "{{ .Values.endpoint.otlp.logs_url }}"
         - name: LUMIGO_METRICS_ENDPOINT
           value: "{{ .Values.endpoint.otlp.metrics_url }}"
-{{- if .Values.clusterCollection.metrics.enabled }}
+{{- if .Values.lumigoToken }}
         - name: LUMIGO_INFRA_METRICS_TOKEN
           valueFrom:
             secretKeyRef:
               name: {{ .Values.lumigoToken.secretName }}
               key: {{ .Values.lumigoToken.secretKey }}
               optional: true
+{{- end }}
+        - name: LUMIGO_INFRA_METRICS_ENABLED
+          value: "{{ .Values.clusterCollection.metrics.enabled }}"
+{{- if .Values.clusterCollection.metrics.enabled }}
         - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
           value: "{{ .Values.clusterCollection.metrics.frequency }}"
         - name: LUMIGO_CLUSTER_AGENT_SERVICE
@@ -266,6 +270,8 @@ spec:
         - name: LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY
           value: "{{ .Values.clusterCollection.metrics.essentialOnly }}"
 {{- end }}
+        - name: "LUMIGO_WATCHDOG_ENABLED"
+          value: "{{ .Values.watchdog.enabled }}"
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD

@@ -54,9 +54,9 @@ var (
 )
 
 type LumigoInjectorWebhookHandler struct {
-	client.Client
 	record.EventRecorder
-	*admission.Decoder
+	Client                           client.Client
+	Decoder                          admission.Decoder
 	LumigoOperatorVersion            string
 	LumigoInjectorImage              string
 	TelemetryProxyOtlpServiceUrl     string
@@ -65,6 +65,13 @@ type LumigoInjectorWebhookHandler struct {
 }
 
 func (h *LumigoInjectorWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	if err := h.InjectClient(mgr.GetClient()); err != nil {
+		return err
+	}
+	if err := h.InjectDecoder(admission.NewDecoder(mgr.GetScheme())); err != nil {
+		return err
+	}
+
 	webhook := &admission.Webhook{
 		Handler: h,
 	}
@@ -78,14 +85,12 @@ func (h *LumigoInjectorWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager)
 	return nil
 }
 
-// The client is automatically injected by the Webhook machinery
 func (h *LumigoInjectorWebhookHandler) InjectClient(c client.Client) error {
 	h.Client = c
 	return nil
 }
 
-// The decoder is automatically injected by the Webhook machinery
-func (h *LumigoInjectorWebhookHandler) InjectDecoder(d *admission.Decoder) error {
+func (h *LumigoInjectorWebhookHandler) InjectDecoder(d admission.Decoder) error {
 	h.Decoder = d
 	return nil
 }

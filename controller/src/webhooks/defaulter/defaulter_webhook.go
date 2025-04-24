@@ -41,13 +41,20 @@ var (
 )
 
 type LumigoDefaulterWebhookHandler struct {
-	client                client.Client
-	decoder               *admission.Decoder
+	Client                client.Client
+	Decoder               admission.Decoder
 	LumigoOperatorVersion string
 	Log                   logr.Logger
 }
 
 func (h *LumigoDefaulterWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	if err := h.InjectClient(mgr.GetClient()); err != nil {
+		return err
+	}
+	if err := h.InjectDecoder(admission.NewDecoder(mgr.GetScheme())); err != nil {
+		return err
+	}
+
 	webhook := &admission.Webhook{
 		Handler: h,
 	}
@@ -61,15 +68,13 @@ func (h *LumigoDefaulterWebhookHandler) SetupWebhookWithManager(mgr ctrl.Manager
 	return nil
 }
 
-// The client is automatically injected by the Webhook machinery
 func (h *LumigoDefaulterWebhookHandler) InjectClient(c client.Client) error {
-	h.client = c
+	h.Client = c
 	return nil
 }
 
-// The decoder is automatically injected by the Webhook machinery
-func (h *LumigoDefaulterWebhookHandler) InjectDecoder(d *admission.Decoder) error {
-	h.decoder = d
+func (h *LumigoDefaulterWebhookHandler) InjectDecoder(d admission.Decoder) error {
+	h.Decoder = d
 	return nil
 }
 
@@ -103,7 +108,7 @@ func (h *LumigoDefaulterWebhookHandler) Handle(ctx context.Context, request admi
 
 	if request.Operation == admissionv1.Create {
 		otherLumigos := &operatorv1alpha1.LumigoList{}
-		if err := h.client.List(ctx, otherLumigos, &client.ListOptions{
+		if err := h.Client.List(ctx, otherLumigos, &client.ListOptions{
 			Namespace: namespace,
 		}); err != nil {
 			log.Error(err, "failed to retrieve Lumigo instance in namespace")

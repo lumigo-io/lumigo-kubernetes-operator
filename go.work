@@ -1,4 +1,6 @@
-go 1.20
+go 1.23.0
+
+toolchain go1.23.8
 
 use (
 	./controller/src
@@ -7,4 +9,5 @@ use (
 	// ./telemetryproxy/src/internal/tools
 	./tests
 	./tools
+	./watchdog/src
 )

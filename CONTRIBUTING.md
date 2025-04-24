@@ -73,10 +73,14 @@ helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system -
 To avoid strange issues with Docker caching the wrong images in your test environment, it is usually a better to always build a new image tag:
 
 ```sh
-export IMG_VERSION=1 # Incremend this every time to try a deploy
-make docker-build docker-push
-helm dependency build
-helm upgrade --install lumigo charts/lumigo-operator --namespace lumigo-system --create-namespace --set "controllerManager.manager.image.tag=${IMG_VERSION}" --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" --set "debug.enabled=true"
+export IMG_VERSION=1 # Increment this every time to get a cache-free image
+make docker-build docker-push && \
+helm dependency build && \
+helm upgrade --install lumigo ./charts/lumigo-operator/ --namespace lumigo-system --create-namespace \
+  --set "controllerManager.manager.image.tag=${IMG_VERSION}" \
+  --set "controllerManager.telemetryProxy.image.tag=${IMG_VERSION}" \
+  --set "watchdog.image.tag=${IMG_VERSION}" \
+  --set "debug.enabled=true"
 ```
 
 (Notice that the `--set "debug.enabled=true"` is of course optional, but in development is very handy, as it will, among other things, make the `telemetry-proxy` container log which OTLP data it sends upstream.)

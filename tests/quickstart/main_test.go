@@ -81,14 +81,12 @@ func TestMain(m *testing.M) {
 	logger.Printf("Running tests on cluster '%s' using '%s' Kind image", kindClusterName, kindNodeImageVal)
 
 	repoRoot := filepath.Dir(filepath.Dir(cwd))
-	_ = repoRoot
 
 	controllerImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_CONTROLLER_IMG_NAME, runId)
 	controllerImageArchivePath := filepath.Join(tmpDir, "operator-controller.tgz")
 
 	telemetryProxyImageName := fmt.Sprintf("%s:%s", internal.DEFAULT_PROXY_IMG_NAME, runId)
 	telemetryProxyImageArchivePath := filepath.Join(tmpDir, "telemetry-proxy-controller.tgz")
-	_ = telemetryProxyImageArchivePath
 
 	quickstartNamespaces := []string{"quickstart-1", "quickstart-2", "quickstart-3"}
 	lumigoNamespace := "lumigo-system"

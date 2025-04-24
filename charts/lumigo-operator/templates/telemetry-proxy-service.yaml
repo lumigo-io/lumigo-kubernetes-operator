@@ -20,4 +20,3 @@ spec:
     # If we used self-signed certs, how would we pass the CA to OTLP exporters in client apps?
     port: 80
     targetPort: otlphttp
-

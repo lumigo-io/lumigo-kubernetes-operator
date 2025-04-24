@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/lumigo-io/lumigo-kubernetes-operator/api/v1alpha1"
@@ -86,13 +85,48 @@ func (r *LumigoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorv1alpha1.Lumigo{}).
 		// Watch for changes in secrets that are referenced in Lumigo instances as containing the Lumigo token
-		Watches(&source.Kind{Type: &corev1.Secret{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfSecretReferencedByLumigo)).
-		Watches(&source.Kind{Type: &appsv1.DaemonSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
-		Watches(&source.Kind{Type: &appsv1.Deployment{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
-		Watches(&source.Kind{Type: &appsv1.ReplicaSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
-		Watches(&source.Kind{Type: &appsv1.StatefulSet{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
-		Watches(&source.Kind{Type: &batchv1.CronJob{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
-		Watches(&source.Kind{Type: &batchv1.Job{}}, handler.EnqueueRequestsFromMapFunc(r.enqueueIfHasLumigoAutotraceLabel)).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return r.enqueueIfSecretReferencedByLumigo(obj)
+			}),
+		).
+		Watches(
+			&appsv1.DaemonSet{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return r.enqueueIfHasLumigoAutotraceLabel(obj)
+			}),
+		).
+		Watches(
+			&appsv1.Deployment{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return r.enqueueIfHasLumigoAutotraceLabel(obj)
+			}),
+		).
+		Watches(
+			&appsv1.ReplicaSet{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return r.enqueueIfHasLumigoAutotraceLabel(obj)
+			}),
+		).
+		Watches(
+			&appsv1.StatefulSet{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return r.enqueueIfHasLumigoAutotraceLabel(obj)
+			}),
+		).
+		Watches(
+			&batchv1.CronJob{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return r.enqueueIfHasLumigoAutotraceLabel(obj)
+			}),
+		).
+		Watches(
+			&batchv1.Job{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return r.enqueueIfHasLumigoAutotraceLabel(obj)
+			}),
+		).
 		Complete(r)
 }
 
