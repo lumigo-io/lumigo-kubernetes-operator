@@ -45,6 +45,7 @@ func TestLumigoOperatorQuickstart(t *testing.T) {
 					fmt.Sprintf("--set monitoredNamespaces[0].namespace=%s", quickstartNamespaceWithExistingCrd),
 					fmt.Sprintf("--set monitoredNamespaces[0].loggingEnabled=%t", true),
 					fmt.Sprintf("--set monitoredNamespaces[0].tracingEnabled=%t", true),
+					"--set watchdog.enabled=false",
 				})
 				if err != nil {
 					t.Fatalf("Failed to install or upgrade Lumigo operator: %v", err)
