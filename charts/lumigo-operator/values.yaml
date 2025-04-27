@@ -6,7 +6,7 @@ output:
 cluster:
   name:
 watchdog:
-  enabled: false
+  enabled: true
   image:
     repository: host.docker.internal:5000/watchdog
     tag: latest
@@ -17,6 +17,11 @@ watchdog:
     requests:
       cpu: 10m
       memory: 64Mi
+  otelCollector:
+    internalMetricsFrequency: 15s
+  watchers:
+    top:
+      frequency: 15s
 controllerManager:
   kubeRbacProxy:
     image:

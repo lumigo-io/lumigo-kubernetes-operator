@@ -44,11 +44,17 @@ func NewTopWatcher(ctx context.Context, config *config.Config, watchdogCtx *watc
 		return nil, err
 	}
 
+	topWatcherInterval, err := time.ParseDuration(config.TopWatcherInterval)
+	if err != nil {
+		watchdogCtx.Logger.Error(err, "Failed to parse TopWatcher interval, falling back to a default of 15 seconds")
+		topWatcherInterval = 15 * time.Second
+	}
+
 	w := &TopWatcher{
 		clientset:     watchdogCtx.Clientset,
 		metricsClient: metricsClient,
 		namespace:     config.LumigoOperatorNamespace,
-		interval:      time.Duration(config.TopWatcherIntervalSeconds),
+		interval:      topWatcherInterval,
 		config:        config,
 		watchdogCtx:   watchdogCtx,
 		logger:        watchdogCtx.Logger.WithName("TopWatcher"),

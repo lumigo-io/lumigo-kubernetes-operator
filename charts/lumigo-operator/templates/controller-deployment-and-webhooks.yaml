@@ -272,6 +272,10 @@ spec:
 {{- end }}
         - name: "LUMIGO_WATCHDOG_ENABLED"
           value: "{{ .Values.watchdog.enabled }}"
+{{ if .and .Values.watchdog.enabled }}
+        - name: "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY"
+          value: "{{ .Values.watchdog.otelCollector.internalMetricsFrequency }}"
+{{ end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
