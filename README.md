@@ -323,6 +323,7 @@ spec:
     matchLabels:
       app: hello-node
 ```
+
 In the logs of the Lumigo Kubernetes operator, you will see a message like the following:
 
 ```
@@ -496,6 +497,29 @@ kubectl -n lumigo-system patch deploy lumigo-lumigo-operator-controller-manager 
 ```
 
 NOTE: The container argument array is zero indexed, so the first argument is at index 0.
+
+### Watchdog
+
+The Lumigo Kubernetes operator includes a watchdog component that collects internal metrics and events for troubleshooting and support purposes. The watchdog is enabled by default and collects:
+
+- OpenTelemetry collector internal metrics
+- CPU and memory metrics from the operator containers in the `lumigo-system` namespace (or the namespace specified during installation)
+- Events from the operator namespace for troubleshooting purposes
+
+The collection frequency for both OpenTelemetry collector internal metrics and container CPU/memory metrics is set to 15 seconds by default. This can be adjusted using the following Helm settings:
+
+```sh
+helm upgrade -i lumigo lumigo/lumigo-operator \
+  --set watchdog.otelCollector.internalMetricsFrequency=30s \
+  --set watchdog.watchers.top.frequency=30s
+```
+
+While the watchdog can be disabled using the `watchdog.enabled` Helm setting, this is not recommended as it may impact Lumigo's ability to provide support and troubleshoot issues:
+
+```sh
+helm upgrade -i lumigo lumigo/lumigo-operator \
+  --set watchdog.enabled=false
+```
 
 ### Uninstall
 
