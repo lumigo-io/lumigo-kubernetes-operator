@@ -500,7 +500,7 @@ NOTE: The container argument array is zero indexed, so the first argument is at 
 
 ### Watchdog
 
-The Lumigo Kubernetes operator includes a watchdog component that collects internal metrics and events for troubleshooting and support purposes. The watchdog is enabled by default and collects:
+The Lumigo Kubernetes operator includes a watchdog component that collects internal metrics and events for Lumigo's internal use. These metrics and events are not available to customers and are used solely by Lumigo for support, troubleshooting, and monitoring the operator's health. The watchdog is enabled by default and collects:
 
 - OpenTelemetry collector internal metrics
 - CPU and memory metrics from the operator containers in the `lumigo-system` namespace (or the namespace specified during installation)
