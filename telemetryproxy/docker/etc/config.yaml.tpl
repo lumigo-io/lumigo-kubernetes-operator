@@ -4,6 +4,7 @@
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
+{{- $otelcolInternalMetricsFrequency := getenv "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
 {{- $essentialMetricsNames := (datasource "essential_metrics").metrics -}}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
@@ -22,7 +23,7 @@ receivers:
       scrape_configs:
 {{- if $watchdogEnabled }}
         - job_name: 'lumigo-operator-self-metrics'
-          scrape_interval: {{ $infraMetricsFrequency }}
+          scrape_interval: {{ $otelcolInternalMetricsFrequency }}
           static_configs:
             - targets: ['0.0.0.0:8888']
 {{- end }}

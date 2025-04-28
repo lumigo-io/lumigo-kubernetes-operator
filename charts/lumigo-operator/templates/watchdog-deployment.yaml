@@ -54,6 +54,8 @@ spec:
           value: "{{ .Values.endpoint.otlp.logs_url }}"
         - name: LUMIGO_DEBUG
           value: "{{ .Values.debug.enabled | default false }}"
+        - name: LUMIGO_WATCHDOG_TOP_WATCHER_INTERVAL
+          value: "{{ .Values.watchdog.watchers.top.frequency }}"
 {{- if .Values.cluster.name }}
         - name: KUBERNETES_CLUSTER_NAME
           value: "{{ .Values.cluster.name }}"
