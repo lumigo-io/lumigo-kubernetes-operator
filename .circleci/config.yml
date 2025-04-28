@@ -15,7 +15,7 @@ workflows:
           branches:
             ignore:
               - main
-              - /push-action\/.*/ # ignore the Github push-action branches, created after a release is triggered
+              - /^push-action\/.*/ # ignore the Github push-action branches, created after a release is triggered
 
     - lumigo-orb/be-deploy:
         context: common
