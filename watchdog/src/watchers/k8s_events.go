@@ -118,6 +118,22 @@ func (w *KubeEventsWatcher) k8sEventToLogRecord(ev *coreV1.Event) log.Record {
 	rec.SetTimestamp(getEventTimestamp(ev))
 	rec.SetSeverityText(ev.Type)
 
+	var rootOwnerReference log.KeyValue
+
+	if len(ev.OwnerReferences) == 0 {
+		rootOwnerReference = log.KeyValue{Key: "rootOwnerReference", Value: log.MapValue(
+			log.KeyValue{Key: "name", Value: log.StringValue("unknown")},
+			log.KeyValue{Key: "kind", Value: log.StringValue("unknown")},
+			log.KeyValue{Key: "uid", Value: log.StringValue("unknown")},
+		)}
+	} else {
+		rootOwnerReference = log.KeyValue{Key: "rootOwnerReference", Value: log.MapValue(
+			log.KeyValue{Key: "name", Value: log.StringValue(ev.OwnerReferences[0].Name)},
+			log.KeyValue{Key: "kind", Value: log.StringValue(ev.OwnerReferences[0].Kind)},
+			log.KeyValue{Key: "uid", Value: log.StringValue(string(ev.OwnerReferences[0].UID))},
+		)}
+	}
+
 	eventData := log.MapValue(
 		log.KeyValue{Key: "metadata", Value: log.MapValue(log.KeyValue{Key: "uid", Value: log.StringValue(string(ev.UID))})},
 		log.KeyValue{Key: "lastTimestamp", Value: log.StringValue(ev.LastTimestamp.Format("2006-01-02T15:04:05Z"))},
@@ -133,6 +149,7 @@ func (w *KubeEventsWatcher) k8sEventToLogRecord(ev *coreV1.Event) log.Record {
 			log.KeyValue{Key: "resourceVersion", Value: log.StringValue(ev.InvolvedObject.ResourceVersion)},
 			log.KeyValue{Key: "fieldPath", Value: log.StringValue(ev.InvolvedObject.FieldPath)},
 		)},
+		rootOwnerReference,
 		log.KeyValue{Key: "reason", Value: log.StringValue(ev.Reason)},
 		log.KeyValue{Key: "message", Value: log.StringValue(ev.Message)},
 		log.KeyValue{Key: "source", Value: log.MapValue(
@@ -140,6 +157,7 @@ func (w *KubeEventsWatcher) k8sEventToLogRecord(ev *coreV1.Event) log.Record {
 			log.KeyValue{Key: "host", Value: log.StringValue(ev.Source.Host)},
 		)},
 	)
+
 	rec.SetBody(eventData)
 
 	rec.SetEventName(ev.ObjectMeta.Name)

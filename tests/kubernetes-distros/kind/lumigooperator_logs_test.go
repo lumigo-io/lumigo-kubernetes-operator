@@ -190,7 +190,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if e, _, err := exportRequestToLogRecords(exportRequest); err != nil {
+					if e, _, _, err := exportRequestToLogRecords(exportRequest); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
 						eventLogs = append(eventLogs, e...)
@@ -265,7 +265,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					e, o, err := exportRequestToLogRecords(exportRequest)
+					e, o, _, err := exportRequestToLogRecords(exportRequest)
 					if err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					}
@@ -667,32 +667,115 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 				}
 
 				if len(logsBytes) < 1 {
-					return false, err
+					return false, fmt.Errorf("No log data found in '%s'", logsPath)
 				}
-
-				watchdogLogs := make([]plog.LogRecord, 0)
 
 				exportRequests := strings.Split(string(logsBytes), "\n")
 				for _, exportRequestJson := range exportRequests {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
-					if wdLogs, err := exportRequestLogRecords(exportRequest, filterWatchdogLogRecords); err != nil {
+					_, _, watchdogEvents, err := exportRequestToLogRecords(exportRequest)
+					if err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
-					} else {
-						watchdogLogs = append(watchdogLogs, wdLogs...)
+					}
+
+					if len(watchdogEvents) == 0 {
+						return false, fmt.Errorf("No watchdog events found in '%s'", logsPath)
+					}
+
+					for _, eventLog := range watchdogEvents {
+						var eventData map[string]interface{}
+						if err := json.Unmarshal([]byte(eventLog.Body().AsString()), &eventData); err != nil {
+							t.Fatalf("Cannot parse event body: %v", err)
+						}
+
+						requiredFields := []string{
+							"metadata",
+							"lastTimestamp",
+							"eventTime",
+							"creationTimestamp",
+							"type",
+							"involvedObject",
+							"rootOwnerReference",
+							"reason",
+							"message",
+							"source",
+						}
+
+						for _, field := range requiredFields {
+							if _, exists := eventData[field]; !exists {
+								t.Errorf("Missing required field in event: %s", field)
+							}
+						}
+
+						involvedObject, ok := eventData["involvedObject"].(map[string]interface{})
+						if !ok {
+							t.Errorf("involvedObject is not a map, got: %T", eventData["involvedObject"])
+						} else {
+							requiredInvolvedObjectFields := []string{
+								"kind",
+								"namespace",
+								"name",
+								"uid",
+								"apiVersion",
+								"resourceVersion",
+								"fieldPath",
+							}
+							for _, field := range requiredInvolvedObjectFields {
+								if _, exists := involvedObject[field]; !exists {
+									t.Errorf("Missing required involvedObject field: %s", field)
+								}
+							}
+						}
+
+						rootOwnerRef, ok := eventData["rootOwnerReference"].(map[string]interface{})
+						if !ok {
+							t.Error("rootOwnerReference is not a map")
+						} else {
+							requiredRootOwnerRefFields := []string{
+								"name",
+								"kind",
+								"uid",
+							}
+							for _, field := range requiredRootOwnerRefFields {
+								if _, exists := rootOwnerRef[field]; !exists {
+									t.Errorf("Missing required rootOwnerReference field: %s", field)
+								}
+							}
+						}
+
+						source, ok := eventData["source"].(map[string]interface{})
+						if !ok {
+							t.Error("source is not a map")
+						} else {
+							requiredSourceFields := []string{
+								"component",
+								"host",
+							}
+							for _, field := range requiredSourceFields {
+								if _, exists := source[field]; !exists {
+									t.Errorf("Missing required source field: %s", field)
+								}
+							}
+						}
+
+						// Verify severity mapping
+						if eventData["type"] == "Normal" {
+							if eventLog.SeverityNumber() != plog.SeverityNumberInfo {
+								t.Errorf("Expected Normal event to have Info severity, got %s", eventLog.SeverityNumber().String())
+							}
+						} else if eventData["type"] == "Warning" {
+							if eventLog.SeverityNumber() != plog.SeverityNumberError {
+								t.Errorf("Expected Warning event to have Error severity, got %s", eventLog.SeverityNumber().String())
+							}
+						}
 					}
 				}
 
-				if len(watchdogLogs) < 1 {
-					t.Fatalf("No watchdog logs found in '%s'.", logsPath)
-					return false, nil
-				}
-
-				t.Logf("Found watchdog logs: %d", len(watchdogLogs))
 				return true, nil
 			}); err != nil {
-				t.Fatalf("Failed to wait for watchdog logs: %v", err)
+				t.Fatalf("Failed to verify event structure: %v", err)
 			}
 
 			return ctx
@@ -735,31 +818,39 @@ func extractUnstructuredObjects(objectLogs []plog.LogRecord) ([]unstructured.Uns
 	return objects, nil
 }
 
-func exportRequestToLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, []plog.LogRecord, error) {
+func exportRequestToLogRecords(exportRequest plogotlp.ExportRequest) ([]plog.LogRecord, []plog.LogRecord, []plog.LogRecord, error) {
 	eventLogs := make([]plog.LogRecord, 0)
 	objectLogs := make([]plog.LogRecord, 0)
+	watchdogEventLogs := make([]plog.LogRecord, 0)
 	logs := exportRequest.Logs()
 
 	l := logs.ResourceLogs().Len()
 	for i := 0; i < l; i++ {
-		e, o, err := resourceLogsToLogRecords(logs.ResourceLogs().At(i))
+		e, o, w, err := resourceLogsToLogRecords(logs.ResourceLogs().At(i))
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		eventLogs = append(eventLogs, e...)
 		objectLogs = append(objectLogs, o...)
+		watchdogEventLogs = append(watchdogEventLogs, w...)
 	}
 
-	return eventLogs, objectLogs, nil
+	return eventLogs, objectLogs, watchdogEventLogs, nil
 }
 
-func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, []plog.LogRecord, error) {
+func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, []plog.LogRecord, []plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
 
+	watchdogEventLogRecords := make([]plog.LogRecord, 0)
 	serviceName, hasServiceName := resourceLogs.Resource().Attributes().Get("service.name")
 	if hasServiceName && serviceName.AsString() == "lumigo-kubernetes-operator-watchdog" {
-		return []plog.LogRecord{}, []plog.LogRecord{}, nil
+		for i := 0; i < l; i++ {
+			scopeLogs := resourceLogs.ScopeLogs().At(i)
+			watchdogEventLogRecords = append(watchdogEventLogRecords, scopeLogsToLogRecords(scopeLogs)...)
+		}
+
+		return nil, nil, watchdogEventLogRecords, nil
 	}
 
 	eventLogRecords := make([]plog.LogRecord, 0)
@@ -780,7 +871,7 @@ func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord,
 			}
 		}
 	}
-	return eventLogRecords, objectLogRecords, nil
+	return eventLogRecords, objectLogRecords, nil, nil
 }
 
 func scopeLogsToLogRecords(scopeLogs plog.ScopeLogs) []plog.LogRecord {
@@ -841,7 +932,7 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 		return d.Status.AvailableReplicas == expectedReplicas && d.Status.ReadyReplicas == expectedReplicas
 	}))
 
-	println("Deployment %s/%s is ready", deployment.Namespace, deployment.Name)
+	fmt.Printf("Deployment %s/%s is ready\n", deployment.Namespace, deployment.Name)
 
 	if err := client.Resources().Delete(ctx, deployment); err != nil {
 		return err
@@ -849,7 +940,7 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 
 	wait.For(conditions.New(config.Client().Resources()).ResourceDeleted(deployment))
 
-	println("Deployment %s/%s is deleted", deployment.Namespace, deployment.Name)
+	fmt.Printf("Deployment %s/%s is deleted\n", deployment.Namespace, deployment.Name)
 
 	return nil
 }
