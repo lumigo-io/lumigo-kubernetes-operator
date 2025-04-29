@@ -659,6 +659,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 		Assess("Watchdog events are exported as logs", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
+			foundWatchdogEvents := false
 
 			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
 				logsBytes, err := os.ReadFile(logsPath)
@@ -680,8 +681,10 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					}
 
-					if len(watchdogEvents) == 0 {
-						return false, fmt.Errorf("No watchdog events found in '%s'", logsPath)
+					if len(watchdogEvents) > 0 {
+						foundWatchdogEvents = true
+					} else {
+						continue
 					}
 
 					for _, eventLog := range watchdogEvents {
@@ -705,7 +708,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 
 						for _, field := range requiredFields {
 							if _, exists := eventData[field]; !exists {
-								t.Errorf("Missing required field in event: %s", field)
+								return false, fmt.Errorf("Missing required field in event: %s", field)
 							}
 						}
 
@@ -724,7 +727,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 							}
 							for _, field := range requiredInvolvedObjectFields {
 								if _, exists := involvedObject[field]; !exists {
-									t.Errorf("Missing required involvedObject field: %s", field)
+									return false, fmt.Errorf("Missing required involvedObject field: %s", field)
 								}
 							}
 						}
@@ -740,7 +743,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 							}
 							for _, field := range requiredRootOwnerRefFields {
 								if _, exists := rootOwnerRef[field]; !exists {
-									t.Errorf("Missing required rootOwnerReference field: %s", field)
+									return false, fmt.Errorf("Missing required rootOwnerReference field: %s", field)
 								}
 							}
 						}
@@ -755,7 +758,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 							}
 							for _, field := range requiredSourceFields {
 								if _, exists := source[field]; !exists {
-									t.Errorf("Missing required source field: %s", field)
+									return false, fmt.Errorf("Missing required source field: %s", field)
 								}
 							}
 						}
@@ -763,14 +766,19 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 						// Verify severity mapping
 						if eventData["type"] == "Normal" {
 							if eventLog.SeverityNumber() != plog.SeverityNumberInfo {
-								t.Errorf("Expected Normal event to have Info severity, got %s", eventLog.SeverityNumber().String())
+								return false, fmt.Errorf("Expected Normal event to have Info severity, got %s", eventLog.SeverityNumber().String())
 							}
 						} else if eventData["type"] == "Warning" {
 							if eventLog.SeverityNumber() != plog.SeverityNumberError {
-								t.Errorf("Expected Warning event to have Error severity, got %s", eventLog.SeverityNumber().String())
+								return false, fmt.Errorf("Expected Warning event to have Error severity, got %s", eventLog.SeverityNumber().String())
 							}
 						}
 					}
+				}
+
+				if !foundWatchdogEvents {
+					t.Log("No watchdog events found")
+					return false, nil
 				}
 
 				return true, nil
@@ -778,7 +786,10 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 				t.Fatalf("Failed to verify event structure: %v", err)
 			}
 
-			return ctx
+			timeoutCtx, cancel := context.WithTimeout(ctx, time.Minute*5)
+			defer cancel()
+
+			return timeoutCtx
 		}).
 		Feature()
 
@@ -849,7 +860,6 @@ func resourceLogsToLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord,
 			scopeLogs := resourceLogs.ScopeLogs().At(i)
 			watchdogEventLogRecords = append(watchdogEventLogRecords, scopeLogsToLogRecords(scopeLogs)...)
 		}
-
 		return nil, nil, watchdogEventLogRecords, nil
 	}
 
