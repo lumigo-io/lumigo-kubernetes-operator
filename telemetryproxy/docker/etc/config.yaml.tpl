@@ -17,70 +17,20 @@ receivers:
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
-{{- if $metricsScrapingEnabled }}
-  prometheus:
+  prometheus/collector-self-metrics:
     config:
       scrape_configs:
-{{- if $watchdogEnabled }}
         - job_name: 'lumigo-operator-self-metrics'
           scrape_interval: {{ $otelcolInternalMetricsFrequency }}
           static_configs:
             - targets: ['0.0.0.0:8888']
-{{- end }}
-{{- if $infraMetricsEnabled }}
-        - job_name: 'k8s-infra-metrics'
-          metrics_path: /metrics
-          scrape_interval: {{ $infraMetricsFrequency }}
-          scheme: https
-          tls_config:
-            insecure_skip_verify: true
-          kubernetes_sd_configs:
-            - role: node
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'k8s-infra-metrics-cadvisor'
-          metrics_path: /metrics/cadvisor
-          scrape_interval: {{ $infraMetricsFrequency }}
-          scheme: https
-          tls_config:
-            insecure_skip_verify: true
-          kubernetes_sd_configs:
-            - role: node
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'k8s-infra-metrics-resources'
-          metrics_path: /metrics/resource
-          scrape_interval: {{ $infraMetricsFrequency }}
-          scheme: https
-          tls_config:
-            insecure_skip_verify: true
-          kubernetes_sd_configs:
-            - role: node
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'prometheus-node-exporter'
-          kubernetes_sd_configs:
-            - role: node
-          relabel_configs:
-            - source_labels: [__meta_kubernetes_node_address_InternalIP]
-              action: replace
-              target_label: __address__
-              # Scrape a custom port provided by LUMIGO_PROM_NODE_EXPORTER_PORT.
-              # '$$1' escapes '$1', as Gomplate otherwise thinks it's an environment variable.
-              replacement: '$$1:$LUMIGO_PROM_NODE_EXPORTER_PORT'
-            - source_labels: [__meta_kubernetes_node_name]
-              action: replace
-              target_label: node
-          metrics_path: "/metrics"
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'kube-state-metrics'
-          metrics_path: /metrics
-          scrape_interval: {{ $infraMetricsFrequency }}
-          static_configs:
-            - targets: ['{{ getenv "LUMIGO_KUBE_STATE_METRICS_SERVICE" }}:{{ getenv "LUMIGO_KUBE_STATE_METRICS_PORT" }}']
-{{- end }}
-{{- end }}
+  prometheus/cluster-infra-metrics:
+    config:
+      scrape_configs: []
+    target_allocator:
+      endpoint: {{ getenv "LUMIGO_TARGET_ALLOCATOR_ENDPOINT" }}
+      interval: 30s
+      collector_id: {{ getenv "HOSTNAME" }}
 {{- range $i, $namespace := $namespaces }}
   lumigooperatorheartbeat/ns_{{ $namespace.name }}:
     namespace: {{ $namespace.name }}
@@ -162,16 +112,16 @@ extensions:
 
 exporters:
   otlphttp/lumigo:
-    endpoint: {{ env.Getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: {{ getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
   otlphttp/lumigo_logs:
-    endpoint: {{ env.Getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: {{ getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
 {{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
-    endpoint: {{ env.Getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: {{ getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     headers:
       # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
       # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
@@ -191,6 +141,7 @@ exporters:
 {{- end }}
 
 processors:
+  batch:
   filter/filter-prom-metrics:
     metrics:
       exclude:
@@ -331,10 +282,27 @@ service:
   - lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
   pipelines:
-{{- if $metricsScrapingEnabled }}
-    metrics:
+{{- if $watchdogEnabled }}
+    metrics/watchdog:
       receivers:
-      - prometheus
+      - prometheus/collector-self-metrics
+      processors:
+      - batch
+      - k8sdataenricherprocessor
+      - transform/inject_operator_details_into_resource
+{{- if $clusterName }}
+      - transform/add_cluster_name
+{{- end }}
+      exporters:
+      - otlphttp/lumigo_metrics
+{{- if $debug }}
+      - logging
+{{- end }}
+{{- end }}
+{{- if $metricsScrapingEnabled }}
+    metrics/cluster-infra-metrics:
+      receivers:
+      - prometheus/cluster-infra-metrics
       processors:
       - filter/filter-prom-metrics
 {{ if $essentialMetricsOnly }}

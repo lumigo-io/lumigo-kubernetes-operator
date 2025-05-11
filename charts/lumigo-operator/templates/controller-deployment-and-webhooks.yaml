@@ -374,6 +374,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: LUMIGO_TARGET_ALLOCATOR_ENDPOINT
+          value: "http://{{ include "helm.fullname" . }}-target-allocator.{{ .Release.Namespace }}.svc.cluster.local:8080"
         ports:
         - containerPort: 4318
           name: otlphttp
