@@ -124,6 +124,19 @@ spec:
   ports:
   {{- .Values.injectorWebhookService.ports | toYaml | nindent 2 }}
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helm.fullname" . }}-shared-configurations
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Mi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -226,9 +239,86 @@ spec:
         - name: cert
           mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
-        - name: namespace-configurations
+        - name: shared-configurations
           mountPath: /lumigo/etc/namespaces/
           readOnly: false
+      - name: kube-rbac-proxy
+        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag | default .Chart.AppVersion }}
+        args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=0
+        env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ .Values.kubernetesClusterDomain }}
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        resources: {{- toYaml .Values.controllerManager.kubeRbacProxy.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1234
+      serviceAccountName: lumigo-kubernetes-operator
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: '{{ include "helm.fullname" . }}-lumigo-injector-webhook-certs'
+      - name: shared-configurations
+        persistentVolumeClaim:
+          claimName: {{ include "helm.fullname" . }}-shared-configurations
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "helm.fullname" . }}-telemetry-proxy
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telemetry-proxy
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: telemetry-proxy
+    lumigo.auto-trace: 'false'
+spec:
+  replicas: {{ .Values.controllerManager.telemetryProxy.replicas }}
+  selector:
+    matchLabels:
+      control-plane: telemetry-proxy
+    {{- include "helm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+      {{- include "helm.selectorLabels" . | nindent 8 }}
+        control-plane: telemetry-proxy
+        lumigo.auto-trace: 'false'
+      annotations:
+        kubectl.kubernetes.io/default-container: telemetry-proxy
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+                - arm64
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+      containers:
       - name: telemetry-proxy
         image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
         env:
@@ -294,51 +384,23 @@ spec:
           capabilities:
             drop:
             - ALL
-          # readOnlyRootFilesystem: true
           runAsNonRoot: true
           runAsUser: 1234
         volumeMounts:
         - name: telemetry-proxy-configurations
           mountPath: /lumigo/etc/otelcol/
           readOnly: false
-        - name: namespace-configurations
+        - name: shared-configurations
           mountPath: /lumigo/etc/namespaces/
           readOnly: false
-      - name: kube-rbac-proxy
-        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag | default .Chart.AppVersion }}
-        args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://127.0.0.1:8080/
-        - --logtostderr=true
-        - --v=0
-        env:
-        - name: KUBERNETES_CLUSTER_DOMAIN
-          value: {{ .Values.kubernetesClusterDomain }}
-        # - name: GOMEMLIMIT
-        #   value: {{ .Values.controllerManager.kubeRbacProxy.resources.limits.memory }}
-        ports:
-        - containerPort: 8443
-          name: https
-          protocol: TCP
-        resources: {{- toYaml .Values.controllerManager.kubeRbacProxy.resources | nindent 10 }}
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
       securityContext:
         runAsNonRoot: true
         fsGroup: 1234
       serviceAccountName: lumigo-kubernetes-operator
       terminationGracePeriodSeconds: 10
       volumes:
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: '{{ include "helm.fullname" . }}-lumigo-injector-webhook-certs'
-      - name: namespace-configurations
-        emptyDir: {}
+      - name: shared-configurations
+        persistentVolumeClaim:
+          claimName: {{ include "helm.fullname" . }}-shared-configurations
       - name: telemetry-proxy-configurations
         emptyDir: {}
