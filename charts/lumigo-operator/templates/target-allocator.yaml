@@ -33,9 +33,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
 data:
   target-allocator-config.yaml: |
-    allocation_strategy: least-weighted
+    allocation_strategy: consistent-hashing
     collector_selector:
-      strategy: random
+      matchlabels:
+        lumigo.metrics-scraper: 'true'
     config:
       global:
         scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
@@ -46,11 +47,6 @@ data:
           scheme: https
           tls_config:
             insecure_skip_verify: true
-          relabel_configs:
-            - source_labels: [__address__]
-              regex: (.+)
-              replacement: ${1}:10250
-              target_label: __address__
           kubernetes_sd_configs:
             - role: node
           authorization:
@@ -61,11 +57,6 @@ data:
           scheme: https
           tls_config:
             insecure_skip_verify: true
-          relabel_configs:
-            - source_labels: [__address__]
-              regex: (.+)
-              replacement: ${1}:10250
-              target_label: __address__
           kubernetes_sd_configs:
             - role: node
           authorization:
@@ -76,11 +67,6 @@ data:
           scheme: https
           tls_config:
             insecure_skip_verify: true
-          relabel_configs:
-            - source_labels: [__address__]
-              regex: (.+)
-              replacement: ${1}:10250
-              target_label: __address__
           kubernetes_sd_configs:
             - role: node
           authorization:

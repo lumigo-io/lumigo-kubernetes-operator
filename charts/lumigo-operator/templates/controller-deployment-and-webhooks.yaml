@@ -300,6 +300,7 @@ spec:
       labels:
       {{- include "helm.selectorLabels" . | nindent 8 }}
         control-plane: telemetry-proxy
+        lumigo.metrics-scraper: 'true'
         lumigo.auto-trace: 'false'
       annotations:
         kubectl.kubernetes.io/default-container: telemetry-proxy
