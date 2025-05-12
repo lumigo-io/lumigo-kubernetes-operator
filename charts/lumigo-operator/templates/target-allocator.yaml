@@ -46,6 +46,11 @@ data:
           scheme: https
           tls_config:
             insecure_skip_verify: true
+          relabel_configs:
+            - source_labels: [__address__]
+              regex: (.+)
+              replacement: ${1}:10250
+              target_label: __address__
           kubernetes_sd_configs:
             - role: node
           authorization:
@@ -56,6 +61,11 @@ data:
           scheme: https
           tls_config:
             insecure_skip_verify: true
+          relabel_configs:
+            - source_labels: [__address__]
+              regex: (.+)
+              replacement: ${1}:10250
+              target_label: __address__
           kubernetes_sd_configs:
             - role: node
           authorization:
@@ -66,6 +76,11 @@ data:
           scheme: https
           tls_config:
             insecure_skip_verify: true
+          relabel_configs:
+            - source_labels: [__address__]
+              regex: (.+)
+              replacement: ${1}:10250
+              target_label: __address__
           kubernetes_sd_configs:
             - role: node
           authorization:
@@ -77,9 +92,8 @@ data:
             - source_labels: [__meta_kubernetes_node_address_InternalIP]
               action: replace
               target_label: __address__
-              # Scrape a custom port provided by LUMIGO_PROM_NODE_EXPORTER_PORT.
-              # '$$1' escapes '$1', as Gomplate otherwise thinks it's an environment variable.
-              replacement: '$$1:$LUMIGO_PROM_NODE_EXPORTER_PORT'
+              # Scrape a custom port
+              replacement: '$1:{{ .Values.prometheusNodeExporter.service.nodePort }}'
             - source_labels: [__meta_kubernetes_node_name]
               action: replace
               target_label: node
