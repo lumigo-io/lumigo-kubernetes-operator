@@ -88,7 +88,7 @@ data:
             credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         - job_name: 'kube-state-metrics'
           metrics_path: /metrics
-          scrape_interval: 15s
+          scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
           static_configs:
             - targets: ['{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ index .Values "kube-state-metrics" "service" "port" }}']
 ---
@@ -110,7 +110,7 @@ spec:
       serviceAccountName: {{ include "helm.fullname" . }}-target-allocator
       containers:
         - name: target-allocator
-          image: ghcr.io/open-telemetry/opentelemetry-operator/target-allocator:0.124.0
+          image: "{{ .Values.targetAllocator.image.repository }}:{{ .Values.targetAllocator.image.tag }}"
           env:
             - name: OTELCOL_NAMESPACE
               value: "{{ .Release.Namespace }}"
