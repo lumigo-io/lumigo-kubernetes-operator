@@ -124,19 +124,6 @@ spec:
   ports:
   {{- .Values.injectorWebhookService.ports | toYaml | nindent 2 }}
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "helm.fullname" . }}-shared-configurations
-  labels:
-  {{- include "helm.labels" . | nindent 4 }}
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Mi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -239,7 +226,53 @@ spec:
         - name: cert
           mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
-        - name: shared-configurations
+        - name: namespace-configurations
+          mountPath: /lumigo/etc/namespaces/
+          readOnly: false
+      - name: events-scraper
+        image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
+        env:
+{{- if and .Values.cluster .Values.cluster.name }}
+        - name: KUBERNETES_CLUSTER_NAME
+          value: "{{ .Values.cluster.name }}"
+{{- end }}
+        - name: LUMIGO_DEBUG
+          value: "{{ .Values.debug.enabled | default false }}"
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: "LUMIGO_WATCHDOG_ENABLED"
+          value: "{{ .Values.watchdog.enabled }}"
+{{ if .Values.watchdog.enabled }}
+        - name: "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY"
+          value: "{{ .Values.watchdog.otelCollector.internalMetricsFrequency }}"
+{{ end }}
+        - name: LUMIGO_OPERATOR_VERSION
+          value: "{{ $lumigoOperatorVersion }}"
+        - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
+          value: "Helm-{{ .Capabilities.HelmVersion.Version }}"
+        - name: LUMIGO_OPERATOR_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: OTELCOL_CONFIG_TEMPLATE_FILE_PATH
+          value: /lumigo/etc/otelcol-events-config.yaml.tpl
+        ports:
+        - containerPort: 4318
+          name: otlphttp
+          protocol: TCP
+        resources: {{- toYaml .Values.controllerManager.telemetryProxy.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1234
+        volumeMounts:
+        - name: telemetry-proxy-configurations
+          mountPath: /lumigo/etc/otelcol/
+          readOnly: false
+        - name: namespace-configurations
           mountPath: /lumigo/etc/namespaces/
           readOnly: false
       - name: kube-rbac-proxy
@@ -252,6 +285,8 @@ spec:
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ .Values.kubernetesClusterDomain }}
+        # - name: GOMEMLIMIT
+        #   value: {{ .Values.controllerManager.kubeRbacProxy.resources.limits.memory }}
         ports:
         - containerPort: 8443
           name: https
@@ -274,134 +309,7 @@ spec:
         secret:
           defaultMode: 420
           secretName: '{{ include "helm.fullname" . }}-lumigo-injector-webhook-certs'
-      - name: shared-configurations
-        persistentVolumeClaim:
-          claimName: {{ include "helm.fullname" . }}-shared-configurations
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ include "helm.fullname" . }}-telemetry-proxy
-  labels:
-  {{- include "helm.labels" . | nindent 4 }}
-    app.kubernetes.io/component: telemetry-proxy
-    app.kubernetes.io/created-by: lumigo
-    app.kubernetes.io/part-of: lumigo
-    control-plane: telemetry-proxy
-    lumigo.auto-trace: 'false'
-spec:
-  replicas: {{ .Values.controllerManager.telemetryProxy.replicas }}
-  selector:
-    matchLabels:
-      control-plane: telemetry-proxy
-    {{- include "helm.selectorLabels" . | nindent 6 }}
-  template:
-    metadata:
-      labels:
-      {{- include "helm.selectorLabels" . | nindent 8 }}
-        control-plane: telemetry-proxy
-        lumigo.metrics-scraper: 'true'
-        lumigo.auto-trace: 'false'
-      annotations:
-        kubectl.kubernetes.io/default-container: telemetry-proxy
-    spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/arch
-                operator: In
-                values:
-                - amd64
-                - arm64
-              - key: kubernetes.io/os
-                operator: In
-                values:
-                - linux
-      containers:
-      - name: telemetry-proxy
-        image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
-        env:
-{{- if .Values.cluster }}
-{{- if .Values.cluster.name }}
-        - name: KUBERNETES_CLUSTER_NAME
-          value: "{{ .Values.cluster.name }}"
-{{- end }}
-{{- end }}
-        - name: LUMIGO_DEBUG
-          value: "{{ .Values.debug.enabled | default false }}"
-        - name: LUMIGO_ENDPOINT
-          value: "{{ .Values.endpoint.otlp.url }}"
-        - name: LUMIGO_LOGS_ENDPOINT
-          value: "{{ .Values.endpoint.otlp.logs_url }}"
-        - name: LUMIGO_METRICS_ENDPOINT
-          value: "{{ .Values.endpoint.otlp.metrics_url }}"
-{{- if .Values.lumigoToken }}
-        - name: LUMIGO_INFRA_METRICS_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.lumigoToken.secretName }}
-              key: {{ .Values.lumigoToken.secretKey }}
-              optional: true
-{{- end }}
-        - name: LUMIGO_INFRA_METRICS_ENABLED
-          value: "{{ .Values.clusterCollection.metrics.enabled }}"
-{{- if .Values.clusterCollection.metrics.enabled }}
-        - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
-          value: "{{ .Values.clusterCollection.metrics.frequency }}"
-        - name: LUMIGO_CLUSTER_AGENT_SERVICE
-          value: "{{ include "helm.fullname" . }}-cluster-agent-service.{{ .Release.Namespace }}.svc.cluster.local"
-        - name: LUMIGO_KUBE_STATE_METRICS_SERVICE
-          value: "{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
-        - name: LUMIGO_KUBE_STATE_METRICS_PORT
-          value: "{{ index .Values "kube-state-metrics" "service" "port" }}"
-        - name: LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY
-          value: "{{ .Values.clusterCollection.metrics.essentialOnly }}"
-{{- end }}
-        - name: "LUMIGO_WATCHDOG_ENABLED"
-          value: "{{ .Values.watchdog.enabled }}"
-{{ if .Values.watchdog.enabled }}
-        - name: "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY"
-          value: "{{ .Values.watchdog.otelCollector.internalMetricsFrequency }}"
-{{ end }}
-        - name: LUMIGO_OPERATOR_VERSION
-          value: "{{ $lumigoOperatorVersion }}"
-        - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
-          value: "Helm-{{ .Capabilities.HelmVersion.Version }}"
-        - name: LUMIGO_OPERATOR_NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: LUMIGO_TARGET_ALLOCATOR_ENDPOINT
-          value: "http://{{ include "helm.fullname" . }}-target-allocator.{{ .Release.Namespace }}.svc.cluster.local:8080"
-        ports:
-        - containerPort: 4318
-          name: otlphttp
-          protocol: TCP
-        resources: {{- toYaml .Values.controllerManager.telemetryProxy.resources | nindent 10 }}
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          runAsNonRoot: true
-          runAsUser: 1234
-        volumeMounts:
-        - name: telemetry-proxy-configurations
-          mountPath: /lumigo/etc/otelcol/
-          readOnly: false
-        - name: shared-configurations
-          mountPath: /lumigo/etc/namespaces/
-          readOnly: false
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 1234
-      serviceAccountName: lumigo-kubernetes-operator
-      terminationGracePeriodSeconds: 10
-      volumes:
-      - name: shared-configurations
-        persistentVolumeClaim:
-          claimName: {{ include "helm.fullname" . }}-shared-configurations
+      - name: namespace-configurations
+        emptyDir: {}
       - name: telemetry-proxy-configurations
         emptyDir: {}
