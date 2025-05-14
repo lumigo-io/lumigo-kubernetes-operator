@@ -4,8 +4,11 @@
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 {{- $otelcolInternalMetricsFrequency := getenv "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
+{{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 
 {{- if eq (len $namespaces) 0 }}
+# This entire section is meant to prevent an empty config file situation,
+# when there are no namespaces monitored yet - as this will fail the collector to start.
 receivers:
   otlp:
     protocols:
@@ -21,6 +24,7 @@ service:
       processors: []
       exporters: [logging]
 {{- else }}
+
 receivers:
 
   prometheus/collector-self-metrics:
@@ -119,6 +123,15 @@ extensions:
 
 
 exporters:
+
+{{- if $watchdogEnabled }}
+  otlphttp/lumigo_metrics:
+    endpoint: {{ getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    headers:
+      # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
+      # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
+      Authorization: "LumigoToken {{ $infraMetricsToken }}"
+{{- end }}
 
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:

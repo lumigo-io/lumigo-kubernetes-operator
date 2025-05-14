@@ -28,7 +28,7 @@ receivers:
           static_configs:
             - targets: ['0.0.0.0:8888']
 
-{{- if $metricsScrapingEnabled }}
+{{- if $infraMetricsEnabled }}
   prometheus/cluster-infra-metrics:
     config:
       scrape_configs: []
@@ -263,7 +263,7 @@ service:
 {{- end }}
 {{- end }}
 
-{{- if $metricsScrapingEnabled }}
+{{- if $infraMetricsEnabled }}
     metrics/cluster-infra-metrics:
       receivers:
       - prometheus/cluster-infra-metrics

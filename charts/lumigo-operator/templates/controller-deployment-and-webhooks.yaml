@@ -245,9 +245,19 @@ spec:
         - name: "LUMIGO_WATCHDOG_ENABLED"
           value: "{{ .Values.watchdog.enabled }}"
 {{ if .Values.watchdog.enabled }}
+        - name: LUMIGO_METRICS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.metrics_url }}"
         - name: "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY"
           value: "{{ .Values.watchdog.otelCollector.internalMetricsFrequency }}"
 {{ end }}
+{{- if .Values.lumigoToken }}
+        - name: LUMIGO_INFRA_METRICS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.lumigoToken.secretName }}
+              key: {{ .Values.lumigoToken.secretKey }}
+              optional: true
+{{- end }}
         - name: LUMIGO_OPERATOR_VERSION
           value: "{{ $lumigoOperatorVersion }}"
         - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
