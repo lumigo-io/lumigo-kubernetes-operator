@@ -363,6 +363,7 @@ spec:
         control-plane: telemetry-proxy
         lumigo.auto-trace: 'false' # We do not need the operator to inject itself
         lumigo.cert-digest: {{ print $certFingerprint }}
+        lumigo.metrics-scraper: 'true' # so it will be assigned with scraping targets by the target-allocator
       annotations:
         kubectl.kubernetes.io/default-container: telemetry-proxy
     spec:

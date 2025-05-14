@@ -105,7 +105,7 @@ function watch_namespaces_file() {
 
 function watch_remote_namespaces_file() {
     if [ "${debug}" == 'true' ]; then
-        wget_flags="-S"
+        wget_flags=""
     else
         wget_flags="-q"
     fi
