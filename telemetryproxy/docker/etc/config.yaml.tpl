@@ -100,21 +100,6 @@ processors:
 
   batch:
 
-  filter/filter-prom-metrics:
-    metrics:
-      exclude:
-        match_type: regexp
-        metric_names:
-          # Exclude Prometheus scrape metrics
-          - 'scrape_.+'
-          - 'up'
-          # Exclude Go runtime metrics
-          - 'go_.+'
-          # Exclude API server metrics
-          - 'apiserver_.+'
-          - 'authentication_token_.+'
-          - 'aggregator_discovery_aggregation_count'
-
   # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics job
   filter/remove-duplicate-process-metrics:
     metrics:

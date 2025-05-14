@@ -154,4 +154,6 @@ echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH}"
     watch_namespaces_file &
 fi
 
-exec /lumigo/bin/otelcol "--config=${OTELCOL_CONFIG_FILE_PATH}"
+exec /lumigo/bin/otelcol \
+    "--config=/lumigo/etc/otelcol-common-config.yaml" \
+    "--config=${OTELCOL_CONFIG_FILE_PATH}"

@@ -263,6 +263,7 @@ service:
       receivers:
       - prometheus/collector-self-metrics
       processors:
+      - filter/filter-prom-metrics
       - batch
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
