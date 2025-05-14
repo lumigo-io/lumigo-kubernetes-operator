@@ -6,7 +6,7 @@
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $otelcolInternalMetricsFrequency := getenv "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
-{{- $essentialMetricsNames := (datasource "essential_metrics").metrics -}}
+{{- $essentialMetricsNames := (datasource "essential-metrics").metrics -}}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 {{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
 {{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
@@ -235,6 +235,7 @@ service:
       receivers:
       - prometheus/collector-self-metrics
       processors:
+      - filter/filter-prom-metrics
       - batch
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource

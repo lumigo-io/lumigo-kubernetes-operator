@@ -7,7 +7,7 @@ readonly OTELCOL_CONFIG_TEMPLATE_FILE_PATH=${OTELCOL_CONFIG_TEMPLATE_FILE_PATH:-
 readonly GENERATION_CONFIG_FILE_PATH="/lumigo/etc/otelcol/generation-config.json"
 readonly NAMESPACES_FILE_PATH="/lumigo/etc/namespaces/namespaces_to_monitor.json"
 readonly NAMESPACES_FILE_SHA_PATH="${NAMESPACES_FILE_PATH}.sha1"
-readonly ESSENTIAL_METRICS_NAMES_FILE_PATH="/lumigo/etc/essential_metrics.yaml"
+readonly ESSENTIAL_METRICS_NAMES_FILE_PATH="/lumigo/etc/essential-metrics.yaml"
 
 readonly DEFAULT_MEMORY_LIMIT_MIB=4000
 readonly NO_MEMORY_LIMIT=9223372036854771712
