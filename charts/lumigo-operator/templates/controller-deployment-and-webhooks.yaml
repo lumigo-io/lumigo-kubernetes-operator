@@ -136,7 +136,9 @@ metadata:
     control-plane: controller-manager
     lumigo.auto-trace: 'false' # We do not need the operator to inject itself
 spec:
-  replicas: {{ .Values.controllerManager.replicas }}
+  # this must be 1, as the events-scraper is not meant run in multiple replicas
+  # as this will result in duplicate events being scraped
+  replicas: 1
   selector:
     matchLabels:
       control-plane: controller-manager
@@ -309,6 +311,133 @@ spec:
         secret:
           defaultMode: 420
           secretName: '{{ include "helm.fullname" . }}-lumigo-injector-webhook-certs'
+      - name: namespace-configurations
+        emptyDir: {}
+      - name: telemetry-proxy-configurations
+        emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "helm.fullname" . }}-telemetry-proxy
+  labels:
+  {{- include "helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telemetry-proxy
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+    control-plane: telemetry-proxy
+    lumigo.auto-trace: 'false' # We do not need the operator to inject itself
+spec:
+  replicas: {{ .Values.controllerManager.telemetryProxy.replicas }}
+  selector:
+    matchLabels:
+      control-plane: telemetry-proxy
+    {{- include "helm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+      {{- include "helm.selectorLabels" . | nindent 8 }}
+        control-plane: telemetry-proxy
+        lumigo.auto-trace: 'false' # We do not need the operator to inject itself
+        lumigo.cert-digest: {{ print $certFingerprint }}
+      annotations:
+        kubectl.kubernetes.io/default-container: telemetry-proxy
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+                - arm64
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+      containers:
+      - name: telemetry-proxy
+        image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
+        env:
+{{- if and .Values.cluster .Values.cluster.name }}
+        - name: KUBERNETES_CLUSTER_NAME
+          value: "{{ .Values.cluster.name }}"
+{{- end }}
+        - name: LUMIGO_DEBUG
+          value: "{{ .Values.debug.enabled | default false }}"
+        - name: LUMIGO_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.url }}"
+        - name: LUMIGO_LOGS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.logs_url }}"
+        - name: LUMIGO_METRICS_ENDPOINT
+          value: "{{ .Values.endpoint.otlp.metrics_url }}"
+{{- if .Values.lumigoToken }}
+        - name: LUMIGO_INFRA_METRICS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.lumigoToken.secretName }}
+              key: {{ .Values.lumigoToken.secretKey }}
+              optional: true
+{{- end }}
+        - name: LUMIGO_INFRA_METRICS_ENABLED
+          value: "{{ .Values.clusterCollection.metrics.enabled }}"
+{{- if .Values.clusterCollection.metrics.enabled }}
+        - name: LUMIGO_TARGET_ALLOCATOR_ENDPOINT
+          value: "http://{{ include "helm.fullname" . }}-target-allocator.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY
+          value: "{{ .Values.clusterCollection.metrics.frequency }}"
+        - name: LUMIGO_CLUSTER_AGENT_SERVICE
+          value: "{{ include "helm.fullname" . }}-cluster-agent-service.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_PROM_NODE_EXPORTER_PORT
+          value: "{{ .Values.prometheusNodeExporter.service.nodePort }}"
+        - name: LUMIGO_KUBE_STATE_METRICS_SERVICE
+          value: "{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: LUMIGO_KUBE_STATE_METRICS_PORT
+          value: "{{ index .Values "kube-state-metrics" "service" "port" }}"
+        - name: LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY
+          value: "{{ .Values.clusterCollection.metrics.essentialOnly }}"
+{{- end }}
+        - name: "LUMIGO_WATCHDOG_ENABLED"
+          value: "{{ .Values.watchdog.enabled }}"
+{{ if .Values.watchdog.enabled }}
+        - name: "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY"
+          value: "{{ .Values.watchdog.otelCollector.internalMetricsFrequency }}"
+{{ end }}
+        - name: LUMIGO_OPERATOR_VERSION
+          value: "{{ $lumigoOperatorVersion }}"
+        - name: LUMIGO_OPERATOR_DEPLOYMENT_METHOD
+          value: "Helm-{{ .Capabilities.HelmVersion.Version }}"
+        - name: LUMIGO_OPERATOR_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        ports:
+        - containerPort: 4318
+          name: otlphttp
+          protocol: TCP
+        resources: {{- toYaml .Values.controllerManager.telemetryProxy.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1234
+        volumeMounts:
+        - name: telemetry-proxy-configurations
+          mountPath: /lumigo/etc/otelcol/
+          readOnly: false
+        - name: namespace-configurations
+          mountPath: /lumigo/etc/namespaces/
+          readOnly: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1234
+      serviceAccountName: lumigo-kubernetes-operator
+      terminationGracePeriodSeconds: 10
+      volumes:
       - name: namespace-configurations
         emptyDir: {}
       - name: telemetry-proxy-configurations
