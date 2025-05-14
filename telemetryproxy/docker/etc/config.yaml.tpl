@@ -318,13 +318,8 @@ service:
 {{- end }}
       - transform/inject_operator_details_into_resource
       exporters:
-{{- if $config.debug }}
-      - logging
-{{- end }}
-      - otlphttp/lumigo_logs
-      exporters:
 {{- if $debug }}
       - logging
 {{- end }}
-      - otlphttp/lumigo_ns_{{ $namespace.name }}
+      - otlphttp/lumigo_logs
 {{ end }}

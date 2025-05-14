@@ -104,11 +104,17 @@ function watch_namespaces_file() {
 }
 
 function watch_remote_namespaces_file() {
+    if [ "${debug}" == 'true' ]; then
+        wget_flags="-S"
+    else
+        wget_flags="-q"
+    fi
+
     while true; do
         sleep 5s
 
         # override the local namespaces file with the one from the controller
-        wget "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" -O "${NAMESPACES_FILE_PATH}"
+        wget $wget_flags "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" -O "${NAMESPACES_FILE_PATH}"
 
         # check if the fetched file has a different sha1sum than what we have
         if ! sha1sum -c "${NAMESPACES_FILE_SHA_PATH}" > /dev/null 2>&1; then
@@ -141,7 +147,7 @@ generate_configs
 
 
 if [ "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" ]; then
-    echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH} (remotely at ${LUMIGO_OPERATOR_NAMESPACE_LIST_URL})"
+    echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH} (periodically updated from ${LUMIGO_OPERATOR_NAMESPACE_LIST_URL})"
     watch_remote_namespaces_file &
 else
 echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH}"
