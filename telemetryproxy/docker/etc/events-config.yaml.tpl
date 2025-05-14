@@ -5,7 +5,22 @@
 {{- $otelcolInternalMetricsFrequency := getenv "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 
-{{- if gt (len $namespaces) 0 }}
+{{- if eq (len $namespaces) 0 }}
+receivers:
+  otlp:
+    protocols:
+      http:
+
+exporters:
+  logging:
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: []
+      exporters: [logging]
+{{- else }}
 receivers:
 
   prometheus/collector-self-metrics:

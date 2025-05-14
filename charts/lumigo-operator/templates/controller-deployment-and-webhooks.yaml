@@ -301,6 +301,19 @@ spec:
             - ALL
           readOnlyRootFilesystem: true
           runAsNonRoot: true
+      - name: namespace-config-server
+        image: busybox:1.35
+        command: ["httpd", "-f", "-p", "8077", "-h", "/namespaces"]
+        volumeMounts:
+        - name: namespace-configurations
+          mountPath: /namespaces
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: false
       securityContext:
         runAsNonRoot: true
         fsGroup: 1234
@@ -393,7 +406,7 @@ spec:
         - name: LUMIGO_PROM_NODE_EXPORTER_PORT
           value: "{{ .Values.prometheusNodeExporter.service.nodePort }}"
         - name: LUMIGO_KUBE_STATE_METRICS_SERVICE
-          value: "{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
+          value: "{{ include "helm.fullname" . }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
         - name: LUMIGO_KUBE_STATE_METRICS_PORT
           value: "{{ index .Values "kube-state-metrics" "service" "port" }}"
         - name: LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY
@@ -413,6 +426,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: LUMIGO_OPERATOR_NAMESPACE_LIST_URL
+          value: "http://{{ include "helm.fullname" . }}-webhooks-service.{{ .Release.Namespace }}.svc.cluster.local:8077/namespaces_to_monitor.json"
         ports:
         - containerPort: 4318
           name: otlphttp

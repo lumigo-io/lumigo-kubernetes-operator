@@ -103,6 +103,31 @@ function watch_namespaces_file() {
     done
 }
 
+function watch_remote_namespaces_file() {
+    while true; do
+        sleep 5s
+
+        # override the local namespaces file with the one from the controller
+        wget "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" -O "${NAMESPACES_FILE_PATH}"
+
+        # check if the fetched file has a different sha1sum than what we have
+        if ! sha1sum -c "${NAMESPACES_FILE_SHA_PATH}" > /dev/null 2>&1; then
+            if [ "${debug}" == 'true' ]; then
+                echo 'Namespace file change detected'
+                cat "${NAMESPACES_FILE_PATH}"
+                echo
+            fi
+            generate_configs
+            trigger_config_reload
+            sha1sum -b "${NAMESPACES_FILE_PATH}" > "${NAMESPACES_FILE_SHA_PATH}"
+        else
+            if [ "${debug}" == 'true' ]; then
+                echo 'No namespace file change detected'
+            fi
+        fi
+    done
+}
+
 mkdir -p "$(dirname "${NAMESPACES_FILE_PATH}")"
 
 if [ ! -s "${NAMESPACES_FILE_PATH}" ]; then
@@ -114,8 +139,13 @@ fi
 
 generate_configs
 
-echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH}"
 
-watch_namespaces_file &
+if [ "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" ]; then
+    echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH} (remotely at ${LUMIGO_OPERATOR_NAMESPACE_LIST_URL})"
+    watch_remote_namespaces_file &
+else
+echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH}"
+    watch_namespaces_file &
+fi
 
 exec /lumigo/bin/otelcol "--config=${OTELCOL_CONFIG_FILE_PATH}"
