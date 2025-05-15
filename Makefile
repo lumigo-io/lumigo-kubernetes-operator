@@ -142,7 +142,7 @@ docker-buildx-telemetry-proxy: ## Build and push docker image for the manager fo
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
-	docker buildx build --push --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
+	docker buildx build --output=type=docker --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 
