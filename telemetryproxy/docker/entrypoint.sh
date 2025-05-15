@@ -64,7 +64,7 @@ function generate_configs() {
     gomplate -f "${OTELCOL_CONFIG_TEMPLATE_FILE_PATH}" \
         -d "config=${GENERATION_CONFIG_FILE_PATH}" \
         -d "namespaces=${NAMESPACES_FILE_PATH}" \
-        -d "essential_metrics=${ESSENTIAL_METRICS_NAMES_FILE_PATH}" \
+        -d "essential-metrics=${ESSENTIAL_METRICS_NAMES_FILE_PATH}" \
         --in "${config}" > "${OTELCOL_CONFIG_FILE_PATH}"
 
     if [ "${debug}" == 'true' ]; then
