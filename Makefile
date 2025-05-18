@@ -126,7 +126,7 @@ docker-push: ## Push docker image with the manager.
 # To properly provided solutions that supports more than one platform you should use this option.
 PLATFORM_ARRAY := linux/arm64 linux/amd64 # linux/s390x linux/ppc64le
 # Convert the array to a comma-separated string for docker buildx
-PLATFORMS ?= $(subst $(space),$(comma),$(strip $(PLATFORM_ARRAY)))
+PLATFORMS ?= $(shell echo $(PLATFORM_ARRAY) | sed 's/ /,/g')
 
 .PHONY: docker-buildx
 docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy docker-buildx-watchdog  ## Build and push docker image for the manager for cross-platform support
