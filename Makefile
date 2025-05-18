@@ -15,6 +15,8 @@ ENVTEST_K8S_VERSION = 1.28.0
 
 GOCMD?= go
 
+POST_BUILD_FLAG ?= --push
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell $(GOCMD) env GOBIN))
 GOBIN=$(shell $(GOCMD)go env GOPATH)/bin
@@ -142,17 +144,21 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 
-.PHONY: verify-telemetry-proxy-image
-verify-telemetry-proxy-architecture-match:
-	@arch=$$(echo $(PLATFORM) | cut -d'/' -f2); \
-	tag=${PROXY_IMG}-$$arch; \
-	docker inspect $$tag >/dev/null 2>&1 || { echo "Image $$tag not found"; exit 1; }; \
-	file_output=$$(docker run --rm --entrypoint="" $$tag sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol"); \
-	case "$$arch" in \
-		"arm64") [[ "$$file_output" =~ ARM|aarch64 ]] || { echo "Architecture mismatch: Expected arm64/aarch64, found: $$file_output"; exit 1; };; \
-		"amd64") [[ "$$file_output" =~ x86-64|x86_64|AMD64 ]] || { echo "Architecture mismatch: Expected amd64/x86_64, found: $$file_output"; exit 1; };; \
-		*) echo "$$file_output" | grep -qi "$$arch" || { echo "Architecture mismatch: Expected $$arch, found: $$file_output"; exit 1; };; \
-	esac
+verify-telemetry-proxy-arch:
+	@for platform in $(PLATFORM_ARRAY); do \
+		arch=$$(echo $$platform | cut -d'/' -f2); \
+		$(MAKE) docker-buildx-telemetry-proxy PLATFORMS=$$platform IMG_VERSION=${IMG_VERSION}-$$arch POST_BUILD_FLAG=--load; \
+		image_arch=$$(docker inspect ${PROXY_IMG}-$$arch | jq -r '.[] | select(.RepoTags[0] == "${PROXY_IMG}-'$$arch'") | .Architecture'); \
+		file_output=$$(docker run --rm --entrypoint="" "${PROXY_IMG}-$$arch" sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol"); \
+		if [[ "$$arch" == "arm64" && ! "$$file_output" =~ ARM|aarch64 ]]; then \
+			echo "Architecture mismatch: $$arch container should contain ARM binary but found: $$file_output"; \
+			exit 1; \
+		elif [[ "$$arch" == "amd64" && ! "$$file_output" =~ x86-64|x86_64|AMD64 ]]; then \
+			echo "❌ Architecture mismatch: $$arch container should contain x86_64 binary but found: $$file_output"; \
+			exit 1; \
+		fi; \
+		echo "✅ Architecture verification passed for $$arch"; \
+	done
 
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
@@ -160,14 +166,8 @@ docker-buildx-telemetry-proxy: ## Build and push docker image for the manager fo
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
 	docker buildx rm project-v3-builder >/dev/null 2>&1 || true && \
 	docker buildx create --name project-v3-builder && \
-	docker buildx use project-v3-builder)
-
-	for platform in $(PLATFORM_ARRAY); do \
-		$(MAKE) verify-telemetry-proxy-architecture-match PLATFORM=$$platform ; \
-	done
-
-	(cd telemetryproxy && \
-	docker buildx build --push --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
+	docker buildx use project-v3-builder && \
+	docker buildx build $(POST_BUILD_FLAG) --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross)
 
