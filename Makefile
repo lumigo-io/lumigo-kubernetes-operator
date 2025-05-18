@@ -126,9 +126,6 @@ docker-push: ## Push docker image with the manager.
 # To properly provided solutions that supports more than one platform you should use this option.
 PLATFORM_ARRAY := linux/arm64 linux/amd64 # linux/s390x linux/ppc64le
 # Convert the array to a comma-separated string for docker buildx
-comma := ,
-space :=
-space +=
 PLATFORMS ?= $(subst $(space),$(comma),$(strip $(PLATFORM_ARRAY)))
 
 .PHONY: docker-buildx
@@ -144,6 +141,7 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 
+.PHONY: verify-telemetry-proxy-arch
 verify-telemetry-proxy-arch:
 	@for platform in $(PLATFORM_ARRAY); do \
 		arch=$$(echo $$platform | cut -d'/' -f2); \
