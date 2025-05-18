@@ -122,7 +122,13 @@ docker-push: ## Push docker image with the manager.
 # - have enable BuildKit, More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image for your registry (i.e. if you do not inform a valid value via CONTROLLER_IMG=<myregistry/image:<tag>> than the export will fail)
 # To properly provided solutions that supports more than one platform you should use this option.
-PLATFORMS ?= linux/arm64,linux/amd64 #,linux/s390x,linux/ppc64le
+PLATFORM_ARRAY := linux/arm64 linux/amd64 # linux/s390x linux/ppc64le
+# Convert the array to a comma-separated string for docker buildx
+comma := ,
+space :=
+space +=
+PLATFORMS ?= $(subst $(space),$(comma),$(strip $(PLATFORM_ARRAY)))
+
 .PHONY: docker-buildx
 docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy docker-buildx-watchdog  ## Build and push docker image for the manager for cross-platform support
 
@@ -136,15 +142,34 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 
+.PHONY: verify-telemetry-proxy-image
+verify-telemetry-proxy-architecture-match:
+	@arch=$$(echo $(PLATFORM) | cut -d'/' -f2); \
+	tag=${PROXY_IMG}-$$arch; \
+	docker inspect $$tag >/dev/null 2>&1 || { echo "Image $$tag not found"; exit 1; }; \
+	file_output=$$(docker run --rm --entrypoint="" $$tag sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol"); \
+	case "$$arch" in \
+		"arm64") [[ "$$file_output" =~ ARM|aarch64 ]] || { echo "Architecture mismatch: Expected arm64/aarch64, found: $$file_output"; exit 1; };; \
+		"amd64") [[ "$$file_output" =~ x86-64|x86_64|AMD64 ]] || { echo "Architecture mismatch: Expected amd64/x86_64, found: $$file_output"; exit 1; };; \
+		*) echo "$$file_output" | grep -qi "$$arch" || { echo "Architecture mismatch: Expected $$arch, found: $$file_output"; exit 1; };; \
+	esac
+
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
-	( cd telemetryproxy && \
+	(cd telemetryproxy && \
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
+	docker buildx rm project-v3-builder >/dev/null 2>&1 || true && \
 	docker buildx create --name project-v3-builder && \
-	docker buildx use project-v3-builder && \
+	docker buildx use project-v3-builder)
+
+	for platform in $(PLATFORM_ARRAY); do \
+		$(MAKE) verify-telemetry-proxy-architecture-match PLATFORM=$$platform ; \
+	done
+
+	(cd telemetryproxy && \
 	docker buildx build --push --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
 	docker buildx rm project-v3-builder && \
-	rm Dockerfile.cross )
+	rm Dockerfile.cross)
 
 .PHONY: docker-buildx-watchdog
 docker-buildx-watchdog: ## Build and push docker image for the watchdog for cross-platform support
