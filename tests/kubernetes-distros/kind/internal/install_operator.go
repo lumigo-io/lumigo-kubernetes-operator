@@ -73,7 +73,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs("--set clusterCollection.metrics.essentialOnly=true"),                          // Collect only metrics essential for the k8s page in the platform, to test this feature
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
-		helm.WithTimeout("3m"),
+		helm.WithTimeout("4m"),
 	); err != nil {
 		return ctx, fmt.Errorf("failed to invoke helm install operation due to an error: %w", err)
 	}
