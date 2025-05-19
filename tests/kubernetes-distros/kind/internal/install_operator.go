@@ -59,6 +59,8 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName)),
 		helm.WithArgs(fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
+		helm.WithArgs(fmt.Sprintf("--set telemetryProxy.image.repository=%s", telemetryProxyImageName)),
+		helm.WithArgs(fmt.Sprintf("--set telemetryProxy.image.tag=%s", telemetryProxyImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set watchdog.image.repository=%s", watchdogImageName)),
 		helm.WithArgs(fmt.Sprintf("--set watchdog.image.tag=%s", watchdogImageTag)),
 		helm.WithArgs(fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl)),

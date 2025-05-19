@@ -54,6 +54,8 @@ func InstallOrUpgradeLumigoOperator(ctx context.Context, client klient.Client, k
 		fmt.Sprintf("--set controllerManager.manager.image.tag=%s", controllerImageTag),
 		fmt.Sprintf("--set controllerManager.telemetryProxy.image.repository=%s", telemetryProxyImageName),
 		fmt.Sprintf("--set controllerManager.telemetryProxy.image.tag=%s", telemetryProxyImageTag),
+		fmt.Sprintf("--set telemetryProxy.image.repository=%s", telemetryProxyImageName),
+		fmt.Sprintf("--set telemetryProxy.image.tag=%s", telemetryProxyImageTag),
 		fmt.Sprintf("--set endpoint.otlp.url=%s", otlpSinkUrl),
 		fmt.Sprintf("--set endpoint.otlp.logs_url=%s", otlpSinkUrl),
 		fmt.Sprintf("--set endpoint.otlp.metrics_url=%s", otlpSinkUrl),
