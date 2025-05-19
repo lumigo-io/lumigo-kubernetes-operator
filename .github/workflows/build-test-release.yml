@@ -156,8 +156,9 @@ jobs:
 
             kubectl describe all -n lumigo-system
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
-            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c events-scraper
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c watchdog
+            kubectl logs -l control-plane=telemetry-proxy -n lumigo-system -c telemtry-proxy
             exit 1
           fi
       - name: Run end-to-end tests
