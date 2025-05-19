@@ -49,5 +49,5 @@ otelcontribcolbuilder: install-tools $(BUILDER)
 	# Split source generation and compilation in two steps, because the GOARCH and GOOS may be different when cross-compiling
 	mkdir -p ./dist
 	$(BUILDER) --skip-compilation --config ./builder/config.yaml --version $(VERSION)
-	cd ./dist/ && GOOS= GOARCH= CGO_ENABLED=0 $(GOCMD) build -trimpath -o $(OTELCONTRIBCOL_FILENAME) \
+	cd ./dist/ && GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 $(GOCMD) build -trimpath -o $(OTELCONTRIBCOL_FILENAME) \
 		$(BUILD_INFO) -tags $(GO_BUILD_TAGS) .
