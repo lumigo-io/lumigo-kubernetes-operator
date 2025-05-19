@@ -22,6 +22,18 @@ watchdog:
   watchers:
     top:
       frequency: 15s
+telemetryProxy: # for the standalone deployment version of the telemetry-proxy
+  replicas: 1
+  image:
+    repository: host.docker.internal:5000/telemetry-proxy
+    tag: latest
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 10m
+      memory: 256Mi
 controllerManager:
   kubeRbacProxy:
     image:
@@ -45,7 +57,7 @@ controllerManager:
       requests:
         cpu: 10m
         memory: 64Mi
-  telemetryProxy:
+  telemetryProxy: # for the telemetry-proxy running in the controller-manager
     replicas: 1
     image:
       repository: host.docker.internal:5000/telemetry-proxy

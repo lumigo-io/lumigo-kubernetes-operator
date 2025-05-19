@@ -351,7 +351,7 @@ metadata:
     control-plane: telemetry-proxy
     lumigo.auto-trace: 'false' # We do not need the operator to inject itself
 spec:
-  replicas: {{ .Values.controllerManager.telemetryProxy.replicas }}
+  replicas: {{ .Values.telemetryProxy.replicas }}
   selector:
     matchLabels:
       control-plane: telemetry-proxy
@@ -383,7 +383,7 @@ spec:
                 - linux
       containers:
       - name: telemetry-proxy
-        image: {{ .Values.controllerManager.telemetryProxy.image.repository }}:{{ .Values.controllerManager.telemetryProxy.image.tag | default .Chart.AppVersion }}
+        image: {{ .Values.telemetryProxy.image.repository }}:{{ .Values.telemetryProxy.image.tag | default .Chart.AppVersion }}
         env:
 {{- if and .Values.cluster .Values.cluster.name }}
         - name: KUBERNETES_CLUSTER_NAME
@@ -443,7 +443,7 @@ spec:
         - containerPort: 4318
           name: otlphttp
           protocol: TCP
-        resources: {{- toYaml .Values.controllerManager.telemetryProxy.resources | nindent 10 }}
+        resources: {{- toYaml .Values.telemetryProxy.resources | nindent 10 }}
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
