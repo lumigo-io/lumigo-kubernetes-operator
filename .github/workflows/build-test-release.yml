@@ -138,6 +138,8 @@ jobs:
             --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
+            --set "telemetryProxy.image.repository=${PROXY_IMG}" \
+            --set "telemetryProxy.image.tag=${{ github.run_id }}" \
             --set "watchdog.image.repository=${WATCHDOG_IMG}" \
             --set "watchdog.image.tag=${{ github.run_id }}" \
             --set "watchdog.enabled=true" \
@@ -149,6 +151,8 @@ jobs:
             --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
+            --set "telemetryProxy.image.repository=${PROXY_IMG}" \
+            --set "telemetryProxy.image.tag=${{ github.run_id }}" \
             --set "watchdog.image.repository=${WATCHDOG_IMG}" \
             --set "watchdog.image.tag=${{ github.run_id }}" \
             --set "watchdog.enabled=true" \
