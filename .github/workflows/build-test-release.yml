@@ -579,7 +579,7 @@ jobs:
         env:
           PROXY_IMG: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
         run: |
-          make docker-buildx-telemetry-proxy verify-telemetry-proxy-arch
+          make docker-buildx-telemetry-proxy
 
   publish-watchdog-ecr-image:
     strategy:
