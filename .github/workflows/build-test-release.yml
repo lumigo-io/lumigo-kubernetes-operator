@@ -458,8 +458,6 @@ jobs:
   check-should-release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs:
-    - all-tests
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -581,7 +579,7 @@ jobs:
         env:
           PROXY_IMG: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
         run: |
-          make verify-telemetry-proxy-arch docker-buildx-telemetry-proxy
+          make docker-buildx-telemetry-proxy verify-telemetry-proxy-arch
 
   publish-watchdog-ecr-image:
     strategy:
