@@ -448,6 +448,7 @@ jobs:
     - test-helm-upgrade
     - test-kustomize
     - test-kind
+    - test-quickstart
     - test-controller-for-security-issues
     - test-telemetry-proxy-for-security-issues
     - test-watchdog-for-security-issues
