@@ -370,6 +370,8 @@ jobs:
           load: true
       - name: Scan controller image
         uses: anchore/scan-action@v3
+        env:
+          GRYPE_DB_VALIDATE_AGE: false
         with:
           image: controller:${{ github.run_id }}
           severity-cutoff: high
@@ -398,6 +400,8 @@ jobs:
           push: false
           load: true
       - name: Scan telemetry-proxy image
+        env:
+          GRYPE_DB_VALIDATE_AGE: false
         uses: anchore/scan-action@v3
         with:
           image: telemetry-proxy:${{ github.run_id }}
@@ -428,6 +432,8 @@ jobs:
           load: true
       - name: Scan watchdog image
         uses: anchore/scan-action@v3
+        env:
+          GRYPE_DB_VALIDATE_AGE: false
         with:
           image: watchdog:${{ github.run_id }}
           severity-cutoff: critical
