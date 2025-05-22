@@ -5,6 +5,10 @@ on:
 
   pull_request:
 
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit-test:
     timeout-minutes: 30
@@ -448,6 +452,7 @@ jobs:
     - test-helm-upgrade
     - test-kustomize
     - test-kind
+    - test-quickstart
     - test-controller-for-security-issues
     - test-telemetry-proxy-for-security-issues
     - test-watchdog-for-security-issues
@@ -458,6 +463,8 @@ jobs:
   check-should-release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    needs:
+      - all-tests
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -738,9 +745,9 @@ jobs:
           yq e -i ".controllerManager.manager.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-operator\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.manager.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.telemetryProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy\"" charts/lumigo-operator/values.yaml
-          yq e -i ".telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
-          yq e -i ".telemetryProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
+          yq e -i ".telemetryProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy\"" charts/lumigo-operator/values.yaml
+          yq e -i ".telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
           yq e -i ".watchdog.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-watchdog\"" charts/lumigo-operator/values.yaml

@@ -114,7 +114,10 @@ function watch_remote_namespaces_file() {
         sleep 5s
 
         # override the local namespaces file with the one from the controller
-        wget $wget_flags "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" -O "${NAMESPACES_FILE_PATH}"
+        if ! wget $wget_flags "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" -O "${NAMESPACES_FILE_PATH}" 2>&1; then
+            echo "Error: Failed to download namespaces file from ${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" >&2
+            continue
+        fi
 
         # check if the fetched file has a different sha1sum than what we have
         if ! sha1sum -c "${NAMESPACES_FILE_SHA_PATH}" > /dev/null 2>&1; then
