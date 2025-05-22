@@ -5,6 +5,10 @@ on:
 
   pull_request:
 
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit-test:
     timeout-minutes: 30
