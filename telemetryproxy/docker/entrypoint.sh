@@ -3,11 +3,11 @@
 set -eo pipefail
 
 readonly OTELCOL_CONFIG_FILE_PATH="/lumigo/etc/otelcol/config.yaml"
-readonly OTELCOL_CONFIG_TEMPLATE_FILE_PATH=${OTELCOL_CONFIG_TEMPLATE_FILE_PATH:-"/lumigo/etc/otelcol-config.yaml.tpl"}
+readonly OTELCOL_CONFIG_TEMPLATE_FILE_PATH="/lumigo/etc/otelcol-config.yaml.tpl"
 readonly GENERATION_CONFIG_FILE_PATH="/lumigo/etc/otelcol/generation-config.json"
 readonly NAMESPACES_FILE_PATH="/lumigo/etc/namespaces/namespaces_to_monitor.json"
 readonly NAMESPACES_FILE_SHA_PATH="${NAMESPACES_FILE_PATH}.sha1"
-readonly ESSENTIAL_METRICS_NAMES_FILE_PATH="/lumigo/etc/essential-metrics.yaml"
+readonly ESSENTIAL_METRICS_NAMES_FILE_PATH="/lumigo/etc/essential_metrics.yaml"
 
 readonly DEFAULT_MEMORY_LIMIT_MIB=4000
 readonly NO_MEMORY_LIMIT=9223372036854771712
@@ -64,7 +64,7 @@ function generate_configs() {
     gomplate -f "${OTELCOL_CONFIG_TEMPLATE_FILE_PATH}" \
         -d "config=${GENERATION_CONFIG_FILE_PATH}" \
         -d "namespaces=${NAMESPACES_FILE_PATH}" \
-        -d "essential-metrics=${ESSENTIAL_METRICS_NAMES_FILE_PATH}" \
+        -d "essential_metrics=${ESSENTIAL_METRICS_NAMES_FILE_PATH}" \
         --in "${config}" > "${OTELCOL_CONFIG_FILE_PATH}"
 
     if [ "${debug}" == 'true' ]; then
@@ -103,37 +103,6 @@ function watch_namespaces_file() {
     done
 }
 
-function watch_remote_namespaces_file() {
-    if [ "${debug}" == 'true' ]; then
-        wget_flags=""
-    else
-        wget_flags="-q"
-    fi
-
-    while true; do
-        sleep 5s
-
-        # override the local namespaces file with the one from the controller
-        wget $wget_flags "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" -O "${NAMESPACES_FILE_PATH}"
-
-        # check if the fetched file has a different sha1sum than what we have
-        if ! sha1sum -c "${NAMESPACES_FILE_SHA_PATH}" > /dev/null 2>&1; then
-            if [ "${debug}" == 'true' ]; then
-                echo 'Namespace file change detected'
-                cat "${NAMESPACES_FILE_PATH}"
-                echo
-            fi
-            generate_configs
-            trigger_config_reload
-            sha1sum -b "${NAMESPACES_FILE_PATH}" > "${NAMESPACES_FILE_SHA_PATH}"
-        else
-            if [ "${debug}" == 'true' ]; then
-                echo 'No namespace file change detected'
-            fi
-        fi
-    done
-}
-
 mkdir -p "$(dirname "${NAMESPACES_FILE_PATH}")"
 
 if [ ! -s "${NAMESPACES_FILE_PATH}" ]; then
@@ -145,15 +114,8 @@ fi
 
 generate_configs
 
-
-if [ "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}" ]; then
-    echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH} (periodically updated from ${LUMIGO_OPERATOR_NAMESPACE_LIST_URL})"
-    watch_remote_namespaces_file &
-else
 echo "Starting watch for config updates on file ${NAMESPACES_FILE_PATH}"
-    watch_namespaces_file &
-fi
 
-exec /lumigo/bin/otelcol \
-    "--config=/lumigo/etc/otelcol-common-config.yaml" \
-    "--config=${OTELCOL_CONFIG_FILE_PATH}"
+watch_namespaces_file &
+
+exec /lumigo/bin/otelcol "--config=${OTELCOL_CONFIG_FILE_PATH}"

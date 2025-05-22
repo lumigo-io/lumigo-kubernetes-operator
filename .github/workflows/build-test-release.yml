@@ -138,8 +138,6 @@ jobs:
             --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
-            --set "telemetryProxy.image.repository=${PROXY_IMG}" \
-            --set "telemetryProxy.image.tag=${{ github.run_id }}" \
             --set "watchdog.image.repository=${WATCHDOG_IMG}" \
             --set "watchdog.image.tag=${{ github.run_id }}" \
             --set "watchdog.enabled=true" \
@@ -151,8 +149,6 @@ jobs:
             --set "controllerManager.manager.image.tag=${{ github.run_id }}" \
             --set "controllerManager.telemetryProxy.image.repository=${PROXY_IMG}" \
             --set "controllerManager.telemetryProxy.image.tag=${{ github.run_id }}" \
-            --set "telemetryProxy.image.repository=${PROXY_IMG}" \
-            --set "telemetryProxy.image.tag=${{ github.run_id }}" \
             --set "watchdog.image.repository=${WATCHDOG_IMG}" \
             --set "watchdog.image.tag=${{ github.run_id }}" \
             --set "watchdog.enabled=true" \
@@ -160,9 +156,8 @@ jobs:
 
             kubectl describe all -n lumigo-system
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
-            kubectl logs -l control-plane=controller-manager -n lumigo-system -c events-scraper
-            kubectl logs -l control-plane=watchdog -n lumigo-system -c watchdog
-            kubectl logs -l control-plane=telemetry-proxy -n lumigo-system -c telemetry-proxy
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c watchdog
             exit 1
           fi
       - name: Run end-to-end tests
@@ -293,7 +288,6 @@ jobs:
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
             kubectl logs -l control-plane=watchdog -n lumigo-system -c watchdog
-            kubectl logs -l control-plane=telemetry-proxy -n lumigo-system -c telemtry-proxy
             exit 1
           fi
 
@@ -738,8 +732,6 @@ jobs:
           yq e -i ".controllerManager.manager.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-operator\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.manager.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.telemetryProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy\"" charts/lumigo-operator/values.yaml
-          yq e -i ".telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
-          yq e -i ".telemetryProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.telemetryProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-rbac-proxy\"" charts/lumigo-operator/values.yaml
           yq e -i ".controllerManager.kubeRbacProxy.image.tag = \"${{ needs.validate-release-increment.outputs.version }}\"" charts/lumigo-operator/values.yaml

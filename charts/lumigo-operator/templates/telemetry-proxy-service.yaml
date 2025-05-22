@@ -7,12 +7,12 @@ metadata:
     app.kubernetes.io/component: telemetry-proxy
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
-    control-plane: telemetry-proxy
+    control-plane: controller-manager
 spec:
   type: {{ .Values.metricsService.type }}
   selector:
   {{- include "helm.selectorLabels" . | nindent 4 }}
-    control-plane: telemetry-proxy
+    control-plane: controller-manager
   ports:
   - name: otlphttp
     protocol: TCP
