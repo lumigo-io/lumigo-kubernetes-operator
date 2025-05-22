@@ -387,7 +387,21 @@ spec:
         command:
         - /bin/sh
         - -c
-        - for i in $(seq 1 60); do sleep 2; if nslookup {{ include "helm.fullname" . }}-target-allocator.{{ .Release.Namespace }}.svc.cluster.local; then exit 0; fi; echo "Waiting... $i"; done; exit 1
+        - for i in $(seq 1 60); do sleep 2; if nslookup {{ include "helm.fullname" . }}-target-allocator.{{ .Release.Namespace }}.svc.cluster.local; then exit 0; fi; echo "Waiting for target-allocator... $i"; done; exit 1
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1234
+      - name: wait-for-namespace-list-url
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - for i in $(seq 1 60); do sleep 2; if nslookup "${LUMIGO_OPERATOR_NAMESPACE_LIST_URL}"; then exit 0; fi; echo "Waiting for namespace list URL... $i"; done; exit 1
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
