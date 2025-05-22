@@ -1,0 +1,30 @@
+name: Verify Telemetry Proxy Architecture
+      - "**"
+
+on:
+  pull_request:
+
+jobs:
+  verify-telemetry-proxy-arch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          install: true
+      # - name: Start local registry
+      #   run: |
+      #     docker run -d -p 5000:5000 --restart=always --name registry registry:2
+      - name: Verify telemetry proxy architecture
+        run: |
+          # Run the verify target directly
+          make verify-telemetry-proxy-arch
+        env:
+          PROXY_IMG: localhost:5000/telemetry-proxy
+          IMG_VERSION: test
+          POST_BUILD_FLAG: --output=type=docker
+          PLATFORM_ARRAY: linux/amd64 linux/arm64

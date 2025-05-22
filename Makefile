@@ -145,7 +145,7 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 verify-telemetry-proxy-arch:
 	@for platform in $(PLATFORM_ARRAY); do \
 		arch=$$(echo $$platform | cut -d'/' -f2); \
-		$(MAKE) docker-buildx-telemetry-proxy PLATFORMS=$$platform IMG_VERSION=${IMG_VERSION}-$$arch POST_BUILD_FLAG=--load; \
+		$(MAKE) docker-buildx-telemetry-proxy PLATFORMS=$$platform PROXY_IMG=${PROXY_IMG}-$$arch POST_BUILD_FLAG=--load; \
 		image_arch=$$(docker inspect ${PROXY_IMG}-$$arch | jq -r '.[] | select(.RepoTags[0] == "${PROXY_IMG}-'$$arch'") | .Architecture'); \
 		file_output=$$(docker run --rm --entrypoint="" "${PROXY_IMG}-$$arch" sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol"); \
 		if [[ "$$arch" == "arm64" && ! "$$file_output" =~ ARM|aarch64 ]]; then \
