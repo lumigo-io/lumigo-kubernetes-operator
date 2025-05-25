@@ -98,26 +98,6 @@ processors:
 
   batch:
 
-  # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics job
-  filter/remove-duplicate-process-metrics:
-    metrics:
-      metric:
-        - 'name == "process_virtual_memory_max_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics"'
-        - 'name == "process_virtual_memory_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics"'
-        - 'name == "process_start_time_seconds" and resource.attributes["service.name"] != "k8s-infra-metrics"'
-        - 'name == "process_resident_memory_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics"'
-        - 'name == "process_open_fds" and resource.attributes["service.name"] != "k8s-infra-metrics"'
-        - 'name == "process_max_fds" and resource.attributes["service.name"] != "k8s-infra-metrics"'
-        - 'name == "process_cpu_seconds_total" and resource.attributes["service.name"] != "k8s-infra-metrics"'
-
-  # Remove duplicate metrics reported by both prometheus-node-exporter and the k8s-infra-metrics-cadvisor job
-  filter/remove-duplicate-container-metrics:
-    metrics:
-      metric:
-        - 'name == "container_cpu_usage_seconds_total" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
-        - 'name == "container_start_time_seconds" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
-        - 'name == "container_memory_working_set_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
-
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 
@@ -242,8 +222,6 @@ service:
       - prometheus/cluster-infra-metrics
       processors:
       - filter/filter-prom-metrics
-      - filter/remove-duplicate-process-metrics
-      - filter/remove-duplicate-container-metrics
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
 {{- if $clusterName }}

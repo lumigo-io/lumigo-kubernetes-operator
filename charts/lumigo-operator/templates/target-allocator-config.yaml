@@ -54,12 +54,16 @@ config:
         - role: node
       authorization:
         credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-      {{- if .Values.clusterCollection.metrics.essentialOnly }}
       metric_relabel_configs:
+      {{- if .Values.clusterCollection.metrics.essentialOnly }}
         - source_labels: [__name__]
           action: keep
           regex: '{{ include "essentialMetricsRegex" . }}'
       {{- end }}
+        # remove duplicate metrics scraped by the k8s-infra-metrics-cadvisor job
+        - source_labels: [__name__]
+          action: drop
+          regex: 'container_cpu_usage_seconds_total|container_start_time_seconds|container_memory_working_set_bytes'
     - job_name: 'prometheus-node-exporter'
       kubernetes_sd_configs:
         - role: node
@@ -75,12 +79,16 @@ config:
       metrics_path: "/metrics"
       authorization:
         credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-      {{- if .Values.clusterCollection.metrics.essentialOnly }}
       metric_relabel_configs:
+      {{- if .Values.clusterCollection.metrics.essentialOnly }}
         - source_labels: [__name__]
           action: keep
           regex: '{{ include "essentialMetricsRegex" . }}'
       {{- end }}
+        # remove duplicate metrics scraped by the k8s-infra-metrics job
+        - source_labels: [__name__]
+          action: drop
+          regex: 'process_virtual_memory_max_bytes|process_virtual_memory_bytes|process_start_time_seconds|process_resident_memory_bytes|process_open_fds|process_max_fds|process_cpu_seconds_total'
     - job_name: 'kube-state-metrics'
       metrics_path: /metrics
       scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
