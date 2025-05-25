@@ -32,65 +32,8 @@ metadata:
   name: {{ include "helm.fullname" . }}-target-allocator-config
   namespace: {{ .Release.Namespace }}
 data:
-  target-allocator-config.yaml: |
-    allocation_strategy: consistent-hashing
-    collector_selector:
-      matchlabels:
-        lumigo.metrics-scraper: 'true'
-    config:
-      global:
-        scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
-      scrape_configs:
-        - job_name: 'k8s-infra-metrics'
-          metrics_path: /metrics
-          scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
-          scheme: https
-          tls_config:
-            insecure_skip_verify: true
-          kubernetes_sd_configs:
-            - role: node
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'k8s-infra-metrics-cadvisor'
-          metrics_path: /metrics/cadvisor
-          scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
-          scheme: https
-          tls_config:
-            insecure_skip_verify: true
-          kubernetes_sd_configs:
-            - role: node
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'k8s-infra-metrics-resources'
-          metrics_path: /metrics/resource
-          scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
-          scheme: https
-          tls_config:
-            insecure_skip_verify: true
-          kubernetes_sd_configs:
-            - role: node
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'prometheus-node-exporter'
-          kubernetes_sd_configs:
-            - role: node
-          relabel_configs:
-            - source_labels: [__meta_kubernetes_node_address_InternalIP]
-              action: replace
-              target_label: __address__
-              # Scrape a custom port
-              replacement: '$1:{{ .Values.prometheusNodeExporter.service.nodePort }}'
-            - source_labels: [__meta_kubernetes_node_name]
-              action: replace
-              target_label: node
-          metrics_path: "/metrics"
-          authorization:
-            credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        - job_name: 'kube-state-metrics'
-          metrics_path: /metrics
-          scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
-          static_configs:
-            - targets: ['{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ index .Values "kube-state-metrics" "service" "port" }}']
+  target-allocator-config.yaml:
+      {{ include "targetAllocator.config" . | toYaml | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
