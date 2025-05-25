@@ -1,3 +1,8 @@
+{{- define "essentialMetricsRegex" -}}
+{{- $essentialMetrics := .Values.clusterCollection.metrics.essentialMetrics.names -}}
+{{- $essentialMetricsRegex := join "|" $essentialMetrics -}}
+{{- $essentialMetricsRegex -}}
+{{- end -}}
 {{- define "targetAllocator.config" -}}
 allocation_strategy: consistent-hashing
 collector_selector:
@@ -17,6 +22,12 @@ config:
         - role: node
       authorization:
         credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      {{- if .Values.clusterCollection.metrics.essentialOnly }}
+      metric_relabel_configs:
+        - source_labels: [__name__]
+          action: keep
+          regex: '{{ include "essentialMetricsRegex" . }}'
+      {{- end }}
     - job_name: 'k8s-infra-metrics-cadvisor'
       metrics_path: /metrics/cadvisor
       scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
@@ -27,6 +38,12 @@ config:
         - role: node
       authorization:
         credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      {{- if .Values.clusterCollection.metrics.essentialOnly }}
+      metric_relabel_configs:
+        - source_labels: [__name__]
+          action: keep
+          regex: '{{ include "essentialMetricsRegex" . }}'
+      {{- end }}
     - job_name: 'k8s-infra-metrics-resources'
       metrics_path: /metrics/resource
       scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
@@ -37,6 +54,12 @@ config:
         - role: node
       authorization:
         credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      {{- if .Values.clusterCollection.metrics.essentialOnly }}
+      metric_relabel_configs:
+        - source_labels: [__name__]
+          action: keep
+          regex: '{{ include "essentialMetricsRegex" . }}'
+      {{- end }}
     - job_name: 'prometheus-node-exporter'
       kubernetes_sd_configs:
         - role: node
@@ -52,9 +75,21 @@ config:
       metrics_path: "/metrics"
       authorization:
         credentials_file: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      {{- if .Values.clusterCollection.metrics.essentialOnly }}
+      metric_relabel_configs:
+        - source_labels: [__name__]
+          action: keep
+          regex: '{{ include "essentialMetricsRegex" . }}'
+      {{- end }}
     - job_name: 'kube-state-metrics'
       metrics_path: /metrics
       scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
       static_configs:
         - targets: ['{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ index .Values "kube-state-metrics" "service" "port" }}']
+      {{- if .Values.clusterCollection.metrics.essentialOnly }}
+      metric_relabel_configs:
+        - source_labels: [__name__]
+          action: keep
+          regex: '{{ include "essentialMetricsRegex" . }}'
+      {{- end }}
 {{- end }}

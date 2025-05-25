@@ -49,6 +49,9 @@ spec:
     metadata:
       labels:
         app: {{ include "helm.fullname" . }}-target-allocator
+      annotations:
+        # This effectively triggers a restart of the Deployment pods when the config changes, which is otherwise not the case for ConfigMaps in k8s.
+        lumigo.io/ta-config-version: {{ include "targetAllocator.config" . | sha256sum | substr 0 10 | quote }}
     spec:
       serviceAccountName: {{ include "helm.fullname" . }}-target-allocator
       containers:

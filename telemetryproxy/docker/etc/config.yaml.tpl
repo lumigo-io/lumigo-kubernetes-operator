@@ -5,8 +5,6 @@
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
 {{- $otelcolInternalMetricsFrequency := getenv "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY" "15s" }}
-{{- $essentialMetricsOnly := getenv "LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY" "" | conv.ToBool }}
-{{- $essentialMetricsNames := (datasource "essential-metrics").metrics -}}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 {{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
 {{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
@@ -119,17 +117,6 @@ processors:
         - 'name == "container_cpu_usage_seconds_total" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
         - 'name == "container_start_time_seconds" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
         - 'name == "container_memory_working_set_bytes" and resource.attributes["service.name"] != "k8s-infra-metrics-cadvisor"'
-
-{{ if $essentialMetricsOnly }}
-  filter/essential-metrics-only:
-    metrics:
-      include:
-        match_type: regexp
-        metric_names:
-{{- range $essentialMetricsNames }}
-          - {{ . }}
-{{- end }}
-{{- end }}
 
   k8sdataenricherprocessor:
     auth_type: serviceAccount
@@ -255,9 +242,6 @@ service:
       - prometheus/cluster-infra-metrics
       processors:
       - filter/filter-prom-metrics
-{{ if $essentialMetricsOnly }}
-      - filter/essential-metrics-only
-{{- end }}
       - filter/remove-duplicate-process-metrics
       - filter/remove-duplicate-container-metrics
       - k8sdataenricherprocessor
