@@ -292,13 +292,11 @@ service:
       - logging
 {{- end }}
 
-{{- range $i, $namespace := $namespaces }}
-    logs/application_logs_ns_{{ $namespace.name }}:
+    logs:
       receivers:
       - otlp
       processors:
       - k8sdataenricherprocessor
-      - transform/add_ns_attributes_ns_{{ $namespace.name }}
 {{- if $clusterName }}
       - transform/add_cluster_name
 {{- end }}
@@ -308,4 +306,3 @@ service:
       - logging
 {{- end }}
       - otlphttp/lumigo_logs
-{{ end }}
