@@ -1,0 +1,2 @@
+# in case the makefile target breaks and does not clean up this file properly
+Dockerfile.cross
