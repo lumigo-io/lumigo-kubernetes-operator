@@ -466,6 +466,8 @@ jobs:
         uses: docker/setup-buildx-action@v2
         with:
           install: true
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
       - name: Verify telemetry proxy architecture
         run: |
           make docker-buildx-telemetry-proxy PROXY_IMG=${PROXY_IMG}-${{ matrix.arch }}
