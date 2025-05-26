@@ -469,7 +469,7 @@ jobs:
       - name: Verify telemetry proxy architecture
         run: |
           make docker-buildx-telemetry-proxy PROXY_IMG=${PROXY_IMG}-${{ matrix.arch }}
-          image_arch=$(docker inspect ${PROXY_IMG}-$arch | jq -r '.[] | select(.RepoTags[0] == "${PROXY_IMG}-$arch") | .Architecture')
+          image_arch=$(docker inspect ${PROXY_IMG}-${{ matrix.arch }} | jq -r '.[] | select(.RepoTags[0] == "${PROXY_IMG}-$arch") | .Architecture')
           file_output=$(docker run --rm --entrypoint="" "${PROXY_IMG}-${{ matrix.arch }}" sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol")
           if [[ "${{ matrix.arch }}" == "arm64" && ! "$file_output" =~ ARM|aarch64 ]]; then
             echo "Architecture mismatch: ${{ matrix.arch }} container should contain ARM binary but found: $file_output"
