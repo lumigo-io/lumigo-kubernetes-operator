@@ -448,7 +448,7 @@ jobs:
   verify-telemetry-proxy-arch:
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }} # effectively means a concurrency of 1, as the docker-buildx-telemetry-proxy does not handle a concurrent build
+      group: ${{ github.workflow }}-${{ github.ref }}-verify-telemetry-proxy-arch # effectively means a concurrency of 1, as the docker-buildx-telemetry-proxy does not handle a concurrent build
     strategy:
       matrix:
         platform: [linux/amd64, linux/arm64]
