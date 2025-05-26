@@ -12,7 +12,7 @@ RUN apk add --update make git
 ADD ./src /src
 WORKDIR /src
 
-RUN make VERSION=${VERSION} GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} OTELCONTRIBCOL_FILENAME=otelcontribcol otelcontribcolbuilder
+RUN make VERSION=${VERSION} GOOS= GOARCH= OTELCONTRIBCOL_FILENAME=otelcontribcol otelcontribcolbuilder
 
 # We need to chmod files to fit the expected uid and gid
 # at runtime. Since we do not want to depend on buildkit,
