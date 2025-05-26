@@ -451,7 +451,7 @@ jobs:
       group: verify-telemetry-proxy-arch # effectively means a concurrency of 1, as the docker-buildx-telemetry-proxy does not handle a concurrent build
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64]
+        platform: [linux/arm64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
