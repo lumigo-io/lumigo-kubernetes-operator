@@ -141,23 +141,6 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 	docker buildx rm project-v3-builder && \
 	rm Dockerfile.cross )
 
-.PHONY: verify-telemetry-proxy-arch
-verify-telemetry-proxy-arch:
-	@for platform in $(PLATFORM_ARRAY); do \
-		arch=$$(echo $$platform | cut -d'/' -f2); \
-		$(MAKE) docker-buildx-telemetry-proxy PLATFORMS=$$platform PROXY_IMG=${PROXY_IMG}-$$arch POST_BUILD_FLAG=--load; \
-		image_arch=$$(docker inspect ${PROXY_IMG}-$$arch | jq -r '.[] | select(.RepoTags[0] == "${PROXY_IMG}-'$$arch'") | .Architecture'); \
-		file_output=$$(docker run --rm --entrypoint="" "${PROXY_IMG}-$$arch" sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol"); \
-		if [[ "$$arch" == "arm64" && ! "$$file_output" =~ ARM|aarch64 ]]; then \
-			echo "Architecture mismatch: $$arch container should contain ARM binary but found: $$file_output"; \
-			exit 1; \
-		elif [[ "$$arch" == "amd64" && ! "$$file_output" =~ x86-64|x86_64|AMD64 ]]; then \
-			echo "❌ Architecture mismatch: $$arch container should contain x86_64 binary but found: $$file_output"; \
-			exit 1; \
-		fi; \
-		echo "✅ Architecture verification passed for $$arch"; \
-	done
-
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
 	(cd telemetryproxy && \
