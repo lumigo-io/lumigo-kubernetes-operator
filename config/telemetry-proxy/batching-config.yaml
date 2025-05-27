@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telemetry-proxy-batching-config
+data:
+  config.yaml: |
+    traces:
+      enabled: false
+      sendBatchSize: 8192
+      timeout: 200ms
+      sendBatchMaxSize: 0
+      metadataKeys:
+    logs:
+      enabled: false
+      sendBatchSize: 8192
+      timeout: 200ms
+      sendBatchMaxSize: 0
+      metadataKeys:
+    metrics:
+      enabled: false
+      sendBatchSize: 8192
+      timeout: 200ms
+      sendBatchMaxSize: 0
+      metadataKeys:
