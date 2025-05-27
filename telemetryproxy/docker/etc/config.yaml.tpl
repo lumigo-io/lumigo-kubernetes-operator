@@ -179,7 +179,7 @@ processors:
       - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
       - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
 
-{{- if $tracesBatching.enabled | conv.ToBool }}
+{{- if $tracesBatching.enabled }}
   batch/traces:
     timeout: {{ $tracesBatching.timeout }}
     send_batch_size: {{ $tracesBatching.sendBatchSize }}
@@ -187,7 +187,7 @@ processors:
     metadata_keys: {{ $tracesBatching.metadataKeys }}
 {{- end }}
 
-{{- if $logsBatching.enabled | conv.ToBool }}
+{{- if $logsBatching.enabled }}
   batch/logs:
     timeout: {{ $logsBatching.timeout }}
     send_batch_size: {{ $logsBatching.sendBatchSize }}
@@ -195,7 +195,7 @@ processors:
     metadata_keys: {{ $logsBatching.metadataKeys }}
 {{- end }}
 
-{{- if $metricsBatching.enabled | conv.ToBool }}
+ {{- if $metricsBatching.enabled }}
   batch/metrics:
     timeout: {{ $metricsBatching.timeout }}
     send_batch_size: {{ $metricsBatching.sendBatchSize }}
@@ -228,13 +228,13 @@ service:
       - prometheus/collector-self-metrics
       processors:
       - filter/filter-prom-metrics
-{{- if $metricsBatching.enabled }}
-      - batch/metrics
-{{- end }}
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
 {{- if $clusterName }}
       - transform/add_cluster_name
+{{- end }}
+{{- if $metricsBatching.enabled }}
+      - batch/metrics
 {{- end }}
       exporters:
       - otlphttp/lumigo_metrics
@@ -254,7 +254,7 @@ service:
 {{- if $clusterName }}
       - transform/add_cluster_name
 {{- end }}
-{{- if $metricsBatching.enabled | conv.ToBool }}
+{{- if $metricsBatching.enabled }}
       - batch/metrics
 {{- end }}
       exporters:
@@ -273,7 +273,7 @@ service:
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
-{{- if $tracesBatching.enabled | conv.ToBool }}
+{{- if $tracesBatching.enabled }}
       - batch/traces
 {{- end }}
       exporters:
@@ -291,7 +291,7 @@ service:
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
-{{- if $logsBatching.enabled | conv.ToBool }}
+{{- if $logsBatching.enabled }}
       - batch/logs
 {{- end }}
       exporters:
