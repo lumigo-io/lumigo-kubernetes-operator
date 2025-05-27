@@ -68,13 +68,11 @@ exporters:
     endpoint: {{ getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
-    include_metadata: true # Needed by `headers_setter/lumigo` for batching to work
 
   otlphttp/lumigo_logs:
     endpoint: {{ getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
-    include_metadata: true # Needed by `headers_setter/lumigo` for batching to work
 
 {{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
@@ -90,13 +88,6 @@ exporters:
     verbosity: detailed
     sampling_initial: 1
     sampling_thereafter: 1
-{{- end }}
-
-{{- range $i, $namespace := $namespaces }}
-  otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: $LUMIGO_ENDPOINT
-    auth:
-      authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
 
 
@@ -218,9 +209,6 @@ service:
   - headers_setter/lumigo
   - health_check
   - lumigoauth/server
-{{- range $i, $namespace := $namespaces }}
-  - lumigoauth/ns_{{ $namespace.name }}
-{{- end }}
 
   pipelines:
 
