@@ -610,11 +610,13 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
 				logsBytes, err := os.ReadFile(logsPath)
 				if err != nil {
-					return false, err
+					t.Errorf("Cannot read logs from '%s': %v", logsPath, err)
+					return false, nil
 				}
 
 				if len(logsBytes) < 1 {
-					return false, err
+					t.Errorf("No log data found in '%s'", logsPath)
+					return false, nil
 				}
 
 				applicationLogs := make([]plog.LogRecord, 0)
