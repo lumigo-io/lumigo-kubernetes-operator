@@ -235,14 +235,10 @@ service:
 {{- end }}
 
     traces:
-      # We cannot add a Batch processor to this pipeline as it would break the
-      # `headers_setter/lumigo` extension.
-      # See https://github.com/open-telemetry/opentelemetry-collector/issues/4544
-      # This might have been fixed in https://github.com/open-telemetry/opentelemetry-collector/pull/7578,
-      # but requires thorough testing.
       receivers:
       - otlp
       processors:
+      - batch
       - k8sdataenricherprocessor
 {{- if $clusterName }}
       - transform/add_cluster_name
@@ -258,6 +254,7 @@ service:
       receivers:
       - otlp
       processors:
+      - batch
       - k8sdataenricherprocessor
 {{- if $clusterName }}
       - transform/add_cluster_name
