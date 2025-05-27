@@ -21,7 +21,6 @@ FROM alpine:latest AS chmod-helper
 ADD ./docker/etc/config.yaml.tpl /lumigo/etc/otelcol-config.yaml.tpl
 ADD ./docker/etc/events-config.yaml.tpl /lumigo/etc/otelcol-events-config.yaml.tpl
 ADD ./docker/etc/common-config.yaml /lumigo/etc/otelcol-common-config.yaml
-ADD ./docker/etc/essential-metrics.yaml /lumigo/etc/essential-metrics.yaml
 RUN chown -R 1234:1234 /lumigo/etc/otelcol-config.yaml.tpl
 RUN chown -R 1234:1234 /lumigo/etc/otelcol-events-config.yaml.tpl
 
