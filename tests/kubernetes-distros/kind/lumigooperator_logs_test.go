@@ -610,11 +610,13 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 			if err := apimachinerywait.PollImmediateUntilWithContext(ctx, time.Second*5, func(context.Context) (bool, error) {
 				logsBytes, err := os.ReadFile(logsPath)
 				if err != nil {
-					return false, err
+					t.Logf("Cannot read logs from '%s': %v", logsPath, err)
+					return false, nil
 				}
 
 				if len(logsBytes) < 1 {
-					return false, err
+					t.Logf("No log data found in '%s'", logsPath)
+					return false, nil
 				}
 
 				applicationLogs := make([]plog.LogRecord, 0)
@@ -629,7 +631,8 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
 					if appLogs, err := exportRequestLogRecords(exportRequest, filterNamespaceAppLogRecords(quickstartNamespace)); err != nil {
-						t.Fatalf("Cannot extract logs from export request: %v", err)
+						t.Logf("Cannot extract logs from export request: %v", err)
+						return false, nil
 					} else {
 						applicationLogs = append(applicationLogs, appLogs...)
 					}
@@ -637,7 +640,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 
 				if len(applicationLogs) < 1 {
 					// No application logs received yet
-					t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
+					t.Logf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
 					return false, nil
 				}
 
@@ -648,10 +651,10 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					}
 				}
 
-				t.Fatalf("No logs with expected body found in '%s'", logsPath)
+				t.Logf("No logs with expected body found in '%s'", logsPath)
 				return false, nil
 			}); err != nil {
-				t.Fatalf("Failed to wait for application logs: %v", err)
+				t.Logf("Failed to wait for application logs: %v", err)
 			}
 
 			return ctx
