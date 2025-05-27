@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: telemetry-proxy-batching-config
+  name: lumigo-telemetry-proxy-batching-config
 data:
   config.yaml: |
     traces:

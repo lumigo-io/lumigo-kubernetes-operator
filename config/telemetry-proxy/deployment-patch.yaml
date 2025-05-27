@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumigo-lumigo-operator-telemetry-proxy
+spec:
+  template:
+    spec:
+      containers:
+      - name: telemetry-proxy
+        volumeMounts:
+        - name: batching-config
+          mountPath: /lumigo/etc/otelcol-batching/config.yaml
+          subPath: config.yaml
+          readOnly: true

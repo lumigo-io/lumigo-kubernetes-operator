@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumigo-lumigo-operator-telemetry-proxy
+spec:
+  selector:
+    matchLabels:
+      control-plane: telemetry-proxy
+  template:
+    metadata:
+      labels:
+        control-plane: telemetry-proxy
+    spec:
+      serviceAccountName: lumigo-kubernetes-operator
+      containers:
+      - name: telemetry-proxy
+        image: host.docker.internal:5000/telemetry-proxy:latest
+        env:
+        - name: LUMIGO_OPERATOR_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      volumes:
+      - name: batching-config
+        configMap:
+          name: lumigo-telemetry-proxy-batching-config
