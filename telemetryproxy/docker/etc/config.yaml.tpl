@@ -1,5 +1,6 @@
 {{- $namespaces := (datasource "namespaces") -}}
 {{- $config := (datasource "config") -}}
+{{- $batchingConfig := (datasource "batchingConfig") -}}
 {{- $debug := $config.debug | conv.ToBool -}}
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
@@ -8,6 +9,9 @@
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 {{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
 {{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
+{{- $tracesBatching := $batchingConfig.traces -}}
+{{- $logsBatching := $batchingConfig.logs -}}
+{{- $metricsBatching := $batchingConfig.metrics -}}
 
 receivers:
 
@@ -96,8 +100,6 @@ exporters:
 
 processors:
 
-  batch:
-
   k8sdataenricherprocessor:
     auth_type: serviceAccount
 
@@ -177,6 +179,29 @@ processors:
       - set(attributes["lumigo.k8s_operator.version"], "{{ $config.operator.version }}")
       - set(attributes["lumigo.k8s_operator.deployment_method"], "{{ $config.operator.deployment_method }}")
 
+{{- if $tracesBatching.enabled | conv.ToBool }}
+  batch/traces:
+    timeout: {{ $tracesBatching.timeout }}
+    send_batch_size: {{ $tracesBatching.sendBatchSize }}
+    send_batch_max_size: {{ $tracesBatching.sendBatchMaxSize }}
+    metadata_keys: {{ $tracesBatching.metadataKeys }}
+{{- end }}
+
+{{- if $logsBatching.enabled | conv.ToBool }}
+  batch/logs:
+    timeout: {{ $logsBatching.timeout }}
+    send_batch_size: {{ $logsBatching.sendBatchSize }}
+    send_batch_max_size: {{ $logsBatching.sendBatchMaxSize }}
+    metadata_keys: {{ $logsBatching.metadataKeys }}
+{{- end }}
+
+{{- if $metricsBatching.enabled | conv.ToBool }}
+  batch/metrics:
+    timeout: {{ $metricsBatching.timeout }}
+    send_batch_size: {{ $metricsBatching.sendBatchSize }}
+    send_batch_max_size: {{ $metricsBatching.sendBatchMaxSize }}
+    metadata_keys: {{ $metricsBatching.metadataKeys }}
+{{- end }}
 
 service:
 
@@ -203,7 +228,9 @@ service:
       - prometheus/collector-self-metrics
       processors:
       - filter/filter-prom-metrics
-      - batch
+{{- if $metricsBatching.enabled }}
+      - batch/metrics
+{{- end }}
       - k8sdataenricherprocessor
       - transform/inject_operator_details_into_resource
 {{- if $clusterName }}
@@ -227,7 +254,9 @@ service:
 {{- if $clusterName }}
       - transform/add_cluster_name
 {{- end }}
-      - batch
+{{- if $metricsBatching.enabled | conv.ToBool }}
+      - batch/metrics
+{{- end }}
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
@@ -244,7 +273,9 @@ service:
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
-      - batch
+{{- if $tracesBatching.enabled | conv.ToBool }}
+      - batch/traces
+{{- end }}
       exporters:
       - otlphttp/lumigo
 {{- if $debug }}
@@ -260,7 +291,9 @@ service:
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
-      - batch
+{{- if $logsBatching.enabled | conv.ToBool }}
+      - batch/logs
+{{- end }}
       exporters:
 {{- if $debug }}
       - logging

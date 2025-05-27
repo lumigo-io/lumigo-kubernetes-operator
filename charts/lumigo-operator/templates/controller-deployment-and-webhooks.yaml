@@ -7,6 +7,7 @@ we are forced to put in the same file all resources that are related with self-s
 {{- $cert := genSignedCert ( include "helm.name" . ) nil $altNames 365 $ca -}}
 {{- $certFingerprint := $cert.Cert | b64enc | substr 10 25 | quote }}
 {{- $lumigoOperatorVersion := .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+{{- $batchingConfigContent := .Values.telemetryProxy.batching | toYaml }}
 ---
 apiVersion: v1
 kind: Secret
@@ -123,6 +124,16 @@ spec:
     lumigo.cert-digest: {{ $certFingerprint }}
   ports:
   {{- .Values.injectorWebhookService.ports | toYaml | nindent 2 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.fullname" . }}-batching-config
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- $batchingConfigContent | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -350,6 +361,7 @@ metadata:
     app.kubernetes.io/part-of: lumigo
     control-plane: telemetry-proxy
     lumigo.auto-trace: 'false' # We do not need the operator to inject itself
+    lumigo.io/otel-batching-config-version: {{ $batchingConfigContent | sha256sum | substr 0 10 | quote }}
 spec:
   replicas: {{ .Values.telemetryProxy.replicas }}
   selector:
@@ -488,6 +500,9 @@ spec:
         - name: namespace-configurations
           mountPath: /lumigo/etc/namespaces/
           readOnly: false
+        - name: batching-config
+          mountPath: /lumigo/etc/otelcol-batching
+          readOnly: true
       securityContext:
         runAsNonRoot: true
         fsGroup: 1234
@@ -498,3 +513,6 @@ spec:
         emptyDir: {}
       - name: telemetry-proxy-configurations
         emptyDir: {}
+      - name: batching-config
+        configMap:
+          name: {{ include "helm.fullname" . }}-batching-config
