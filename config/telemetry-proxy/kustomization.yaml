@@ -1,7 +1,2 @@
 resources:
 - service.yaml
-- batching-config.yaml
-- deployment.yaml
-
-patches:
-- path: deployment-patch.yaml
