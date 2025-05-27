@@ -68,11 +68,13 @@ exporters:
     endpoint: {{ getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
+    include_metadata: true # Needed by `headers_setter/lumigo` for batching to work
 
   otlphttp/lumigo_logs:
     endpoint: {{ getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: headers_setter/lumigo
+    include_metadata: true # Needed by `headers_setter/lumigo` for batching to work
 
 {{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
