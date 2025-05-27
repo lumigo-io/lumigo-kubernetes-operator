@@ -452,8 +452,6 @@ spec:
           value: "{{ include "helm.fullname" . }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local"
         - name: LUMIGO_KUBE_STATE_METRICS_PORT
           value: "{{ index .Values "kube-state-metrics" "service" "port" }}"
-        - name: LUMIGO_EXPORT_ESSENTIAL_METRICS_ONLY
-          value: "{{ .Values.clusterCollection.metrics.essentialOnly }}"
 {{- end }}
         - name: "LUMIGO_WATCHDOG_ENABLED"
           value: "{{ .Values.watchdog.enabled }}"
