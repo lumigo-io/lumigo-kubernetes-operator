@@ -227,6 +227,7 @@ service:
 {{- if $clusterName }}
       - transform/add_cluster_name
 {{- end }}
+      - batch
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
@@ -238,12 +239,12 @@ service:
       receivers:
       - otlp
       processors:
-      - batch
       - k8sdataenricherprocessor
 {{- if $clusterName }}
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
+      - batch
       exporters:
       - otlphttp/lumigo
 {{- if $debug }}
@@ -254,12 +255,12 @@ service:
       receivers:
       - otlp
       processors:
-      - batch
       - k8sdataenricherprocessor
 {{- if $clusterName }}
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
+      - batch
       exporters:
 {{- if $debug }}
       - logging
