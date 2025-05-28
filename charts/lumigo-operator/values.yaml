@@ -24,6 +24,25 @@ watchdog:
       frequency: 15s
 telemetryProxy: # for the standalone deployment version of the telemetry-proxy
   replicas: 1
+  batching:
+    logs:
+      enabled: false
+      sendBatchSize: 8192
+      timeout: 200ms
+      sendBatchMaxSize: 0
+      metadataKeys:
+    traces:
+      enabled: false
+      sendBatchSize: 8192
+      timeout: 200ms
+      sendBatchMaxSize: 0
+      metadataKeys:
+    metrics:
+      enabled: false
+      sendBatchSize: 8192
+      timeout: 200ms
+      sendBatchMaxSize: 0
+      metadataKeys:
   image:
     repository: host.docker.internal:5000/telemetry-proxy
     tag: latest

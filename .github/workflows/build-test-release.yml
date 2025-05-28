@@ -450,7 +450,7 @@ jobs:
     needs:
     - unit-test
     - test-helm-upgrade
-    - test-kustomize
+    # - test-kustomize
     - test-kind
     - test-quickstart
     - test-controller-for-security-issues

@@ -19,7 +19,7 @@ exporters:
 
 service:
   pipelines:
-    logs:
+    logs/empty:
       receivers: [otlp]
       processors: []
       exporters: [logging]
