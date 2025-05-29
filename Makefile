@@ -15,8 +15,6 @@ ENVTEST_K8S_VERSION = 1.28.0
 
 GOCMD?= go
 
-POST_BUILD_FLAG ?= --push
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell $(GOCMD) env GOBIN))
 GOBIN=$(shell $(GOCMD)go env GOPATH)/bin
@@ -124,10 +122,7 @@ docker-push: ## Push docker image with the manager.
 # - have enable BuildKit, More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image for your registry (i.e. if you do not inform a valid value via CONTROLLER_IMG=<myregistry/image:<tag>> than the export will fail)
 # To properly provided solutions that supports more than one platform you should use this option.
-PLATFORM_ARRAY := linux/arm64 linux/amd64 # linux/s390x linux/ppc64le
-# Convert the array to a comma-separated string for docker buildx
-PLATFORMS ?= $(shell echo $(PLATFORM_ARRAY) | sed 's/ /,/g')
-
+PLATFORMS ?= linux/arm64,linux/amd64 #,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
 docker-buildx: test docker-buildx-manager docker-buildx-telemetry-proxy docker-buildx-watchdog  ## Build and push docker image for the manager for cross-platform support
 
@@ -143,13 +138,13 @@ docker-buildx-manager: ## Build and push docker image for the manager for cross-
 
 .PHONY: docker-buildx-telemetry-proxy
 docker-buildx-telemetry-proxy: ## Build and push docker image for the manager for cross-platform support
-	(cd telemetryproxy && \
+	( cd telemetryproxy && \
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross && \
 	docker buildx create --name project-v3-builder && \
 	docker buildx use project-v3-builder && \
-	docker buildx build $(POST_BUILD_FLAG) --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
+	docker buildx build --push --provenance=false --platform=$(PLATFORMS) --tag ${PROXY_IMG} -f Dockerfile.cross --build-arg "version=$(VERSION)" . && \
 	docker buildx rm project-v3-builder && \
-	rm Dockerfile.cross)
+	rm Dockerfile.cross )
 
 .PHONY: docker-buildx-watchdog
 docker-buildx-watchdog: ## Build and push docker image for the watchdog for cross-platform support

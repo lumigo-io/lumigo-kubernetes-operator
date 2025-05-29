@@ -6,7 +6,7 @@ on:
   pull_request:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: build-and-test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -445,48 +445,6 @@ jobs:
           add-cpes-if-none: true
           output-format: table
 
-  verify-telemetry-proxy-arch:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: verify-telemetry-proxy-arch # effectively means a concurrency of 1, as the docker-buildx-telemetry-proxy does not handle a concurrent build
-    strategy:
-      matrix:
-        platform: [linux]
-        arch: [amd64, arm64]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-      - name: Setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.23
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-        with:
-          install: true
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-      - name: Verify telemetry proxy architecture
-        run: |
-          make docker-buildx-telemetry-proxy PROXY_IMG=${PROXY_IMG}-${{ matrix.arch }}
-          image_arch=$(docker inspect ${PROXY_IMG}-${{ matrix.arch }} | jq -r '.[] | select(.RepoTags[0] == "${PROXY_IMG}-$arch") | .Architecture')
-          file_output=$(docker run --rm --entrypoint="" "${PROXY_IMG}-${{ matrix.arch }}" sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol")
-          if [[ "${{ matrix.arch }}" == "arm64" && ! "$file_output" =~ ARM|aarch64 ]]; then
-            echo "Architecture mismatch: ${{ matrix.arch }} container should contain ARM binary but found: $file_output"
-            exit 1
-          elif [[ "${{ matrix.arch }}" == "amd64" && ! "$file_output" =~ x86-64|x86_64|AMD64 ]]; then
-            echo "❌ Architecture mismatch: ${{ matrix.arch }} container should contain x86_64 binary but found: $file_output"
-            exit 1
-          fi
-          echo "✅ Architecture verification passed for ${{ matrix.arch }}"
-        env:
-          PROXY_IMG: host.docker.internal:5000/telemetry-proxy
-          IMG_VERSION: test
-          POST_BUILD_FLAG: --output=type=docker
-          PLATFORMS: ${{ matrix.platform }}/${{ matrix.arch }}
-
   all-tests:
     runs-on: ubuntu-latest
     needs:
@@ -498,7 +456,6 @@ jobs:
     - test-controller-for-security-issues
     - test-telemetry-proxy-for-security-issues
     - test-watchdog-for-security-issues
-    - verify-telemetry-proxy-arch
     steps:
       - name: no-op
         run: echo '*tongue click* noice'

@@ -26,7 +26,7 @@ $(TOOLS_BIN_DIR):
 	mkdir -p $@
 
 $(TOOLS_BIN_NAMES): $(TOOLS_BIN_DIR) $(TOOLS_MOD_DIR)/go.mod
-	cd $(TOOLS_MOD_DIR) && GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOCMD) build -o $@ -trimpath $(filter %/$(notdir $@),$(TOOLS_PKG_NAMES))
+	cd $(TOOLS_MOD_DIR) && GOOS= GOARCH= $(GOCMD) build -o $@ -trimpath $(filter %/$(notdir $@),$(TOOLS_PKG_NAMES))
 
 ADDLICENCESE        := $(TOOLS_BIN_DIR)/addlicense
 MDLINKCHECK         := $(TOOLS_BIN_DIR)/markdown-link-check
@@ -49,5 +49,5 @@ otelcontribcolbuilder: install-tools $(BUILDER)
 	# Split source generation and compilation in two steps, because the GOARCH and GOOS may be different when cross-compiling
 	mkdir -p ./dist
 	$(BUILDER) --skip-compilation --config ./builder/config.yaml --version $(VERSION)
-	cd ./dist/ && GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 $(GOCMD) build -trimpath -o $(OTELCONTRIBCOL_FILENAME) \
+	cd ./dist/ && GOOS= GOARCH= CGO_ENABLED=0 $(GOCMD) build -trimpath -o $(OTELCONTRIBCOL_FILENAME) \
 		$(BUILD_INFO) -tags $(GO_BUILD_TAGS) .
