@@ -2,11 +2,17 @@ name: build-and-test
 on:
   push:
     branches: [ main ]
-
   pull_request:
+  workflow_dispatch:
+    inputs:
+      create_preview:
+        description: 'Create Preview Release'
+        type: boolean
+        required: true
+        default: false
 
 concurrency:
-  group: build-and-test-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -445,6 +451,48 @@ jobs:
           add-cpes-if-none: true
           output-format: table
 
+  verify-telemetry-proxy-arch:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: verify-telemetry-proxy-arch # effectively means a concurrency of 1, as the docker-buildx-telemetry-proxy does not handle a concurrent build
+    strategy:
+      matrix:
+        platform: [linux]
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.23
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          install: true
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Verify telemetry proxy architecture
+        run: |
+          make docker-buildx-telemetry-proxy PROXY_IMG=${PROXY_IMG}-${{ matrix.arch }}
+          image_arch=$(docker inspect ${PROXY_IMG}-${{ matrix.arch }} | jq -r '.[] | select(.RepoTags[0] == "${PROXY_IMG}-$arch") | .Architecture')
+          file_output=$(docker run --rm --entrypoint="" "${PROXY_IMG}-${{ matrix.arch }}" sh -c "apk add --no-cache --quiet file >/dev/null 2>&1; file -b /lumigo/bin/otelcol")
+          if [[ "${{ matrix.arch }}" == "arm64" && ! "$file_output" =~ ARM|aarch64 ]]; then
+            echo "Architecture mismatch: ${{ matrix.arch }} container should contain ARM binary but found: $file_output"
+            exit 1
+          elif [[ "${{ matrix.arch }}" == "amd64" && ! "$file_output" =~ x86-64|x86_64|AMD64 ]]; then
+            echo "❌ Architecture mismatch: ${{ matrix.arch }} container should contain x86_64 binary but found: $file_output"
+            exit 1
+          fi
+          echo "✅ Architecture verification passed for ${{ matrix.arch }}"
+        env:
+          PROXY_IMG: host.docker.internal:5000/telemetry-proxy
+          IMG_VERSION: test
+          POST_BUILD_FLAG: --output=type=docker
+          PLATFORMS: ${{ matrix.platform }}/${{ matrix.arch }}
+
   all-tests:
     runs-on: ubuntu-latest
     needs:
@@ -456,28 +504,38 @@ jobs:
     - test-controller-for-security-issues
     - test-telemetry-proxy-for-security-issues
     - test-watchdog-for-security-issues
+    - verify-telemetry-proxy-arch
     steps:
       - name: no-op
         run: echo '*tongue click* noice'
 
   check-should-release:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_preview == 'true')
     runs-on: ubuntu-latest
     needs:
       - all-tests
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Check whether we need to release
-        id: release-check
-        uses: dorny/paths-filter@v2
-        with:
-          filters: .github/file-filters.yaml
+      - name: Set release info
+        id: release-info
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "type=stable" >> $GITHUB_OUTPUT
+          else
+            echo "type=preview" >> $GITHUB_OUTPUT
+          fi
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "do_release=true" >> $GITHUB_OUTPUT
     outputs:
-      do-release: steps.release-check.outputs.new-release
+      do-release: ${{ steps.release-info.outputs.do_release }}
+      release-type: ${{ steps.release-info.outputs.type }}
+      source-branch: ${{ steps.release-info.outputs.branch }}
+      commit_sha: ${{ steps.release-info.outputs.sha }}
 
   validate-release-increment:
-    if: github.ref == 'refs/heads/main' && needs.check-should-release.outputs.do-release
+    if: needs.check-should-release.outputs.do-release
     runs-on: ubuntu-latest
     needs:
     - check-should-release
@@ -485,22 +543,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2 # We need this commit and the previous to check validity of version change
-      - name: Validate version change
-        id: validate-version-change
+          fetch-depth: 2
+      - name: Set version
+        id: set-version
         run: |
-          if ./.github/workflows/scripts/validate_version_increment.sh; then
-            echo -n "perform-release=true" >> ${GITHUB_OUTPUT}
+          if [[ "${{ needs.check-should-release.outputs.release-type }}" == "stable" ]]; then
+            # Main branch releases use VERSION file
+            if ./.github/workflows/scripts/validate_version_increment.sh; then
+              echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
+              echo "perform-release=true" >> $GITHUB_OUTPUT
+            else
+              echo "perform-release=false" >> $GITHUB_OUTPUT
+              echo "version=" >> $GITHUB_OUTPUT
+            fi
           else
-            echo -n "perform-release=false" >> ${GITHUB_OUTPUT}
+            BRANCH="${{ needs.check-should-release.outputs.source-branch }}"
+            BRANCH_SHORT=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | cut -c1-10)
+            echo "version=preview-${BRANCH_SHORT}-${{ needs.check-should-release.outputs.commit_sha }}" >> $GITHUB_OUTPUT
+            echo "perform-release=true" >> $GITHUB_OUTPUT
           fi
-      - name: Export version
-        id: export_version
-        run: |
-          echo -n "version=$(cat VERSION)" >> ${GITHUB_OUTPUT}
     outputs:
-      perform-release: ${{ steps.validate-version-change.outputs.perform-release }}
-      version: ${{ steps.export_version.outputs.version }}
+      perform-release: ${{ steps.set-version.outputs.perform-release }}
+      version: ${{ steps.set-version.outputs.version }}
 
   publish-controller-ecr-image:
     strategy:
@@ -582,6 +646,8 @@ jobs:
         with:
           registry-type: ${{ matrix.registry-type }}
           registries: ${{ matrix.registries }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
       - name: Build and push container image to Amazon ECR
         env:
           PROXY_IMG: ${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-telemetry-proxy:${{ needs.validate-release-increment.outputs.version }}
@@ -740,6 +806,10 @@ jobs:
         run: |
           yq e -i '.version = "${{ needs.validate-release-increment.outputs.version }}"' charts/lumigo-operator/Chart.yaml
           yq e -i '.appVersion = "${{ needs.validate-release-increment.outputs.version }}"' charts/lumigo-operator/Chart.yaml
+
+          if [[ "${{ needs.validate-release-increment.outputs.version }}" == preview-* ]]; then
+            yq e -i '.annotations.previewRelease = "true"' charts/lumigo-operator/Chart.yaml
+          fi
       - name: Update Helm chart defaults
         run: |
           yq e -i ".controllerManager.manager.image.repository = \"${{ matrix.ecr-registry }}/lumigo/lumigo-kubernetes-operator\"" charts/lumigo-operator/values.yaml
