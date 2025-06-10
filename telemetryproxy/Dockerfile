@@ -2,6 +2,9 @@
 FROM golang:1.23-alpine AS telemetry-proxy-builder
 
 ARG version='dev'
+ARG TARGETOS
+ARG TARGETARCH
+
 ENV VERSION=${version}
 
 RUN apk add --update make git
@@ -9,7 +12,7 @@ RUN apk add --update make git
 ADD ./src /src
 WORKDIR /src
 
-RUN make VERSION=${VERSION} OTELCONTRIBCOL_FILENAME=otelcontribcol otelcontribcolbuilder
+RUN make VERSION=${VERSION} GOOS=${TARGETOS} GOARCH=${TARGETARCH} OTELCONTRIBCOL_FILENAME=otelcontribcol otelcontribcolbuilder
 
 # We need to chmod files to fit the expected uid and gid
 # at runtime. Since we do not want to depend on buildkit,
