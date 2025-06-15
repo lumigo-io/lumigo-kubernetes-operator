@@ -5,7 +5,7 @@ go 1.21.0
 toolchain go1.21.11
 
 require (
-	go.opentelemetry.io/collector/cmd/builder v0.103.0
+	go.opentelemetry.io/collector/cmd/builder v0.104.0
 	golang.org/x/tools v0.15.0
 )
 
@@ -22,7 +22,7 @@ require (
 	github.com/knadh/koanf/v2 v2.1.1 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/spf13/cobra v1.8.0 // indirect
+	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect

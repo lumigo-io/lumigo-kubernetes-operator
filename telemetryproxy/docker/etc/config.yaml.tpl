@@ -80,15 +80,16 @@ exporters:
 {{- end }}
 
 {{- if $debug }}
-  logging:
+  debug:
     verbosity: detailed
     sampling_initial: 1
     sampling_thereafter: 1
+    use_internal_logger: true
 {{- end }}
 
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: $LUMIGO_ENDPOINT
+    endpoint: ${env:LUMIGO_ENDPOINT}
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
@@ -183,6 +184,7 @@ service:
   telemetry:
     logs:
       level: {{ $debug | ternary "debug" "info" }}
+      encoding: json
     metrics:
       level: detailed
       address: ":8888"
@@ -212,7 +214,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -230,7 +232,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -251,7 +253,7 @@ service:
       exporters:
       - otlphttp/lumigo
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 
     logs:
@@ -265,6 +267,6 @@ service:
       - transform/inject_operator_details_into_resource
       exporters:
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_logs
