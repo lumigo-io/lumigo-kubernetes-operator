@@ -3,11 +3,11 @@ receivers:
   otlp:
     protocols:
       http:
-        endpoint: "0.0.0.0:${OTLP_PORT}"
+        endpoint: "0.0.0.0:${env:OTLP_PORT}"
 
 exporters:
-  logging:
-    loglevel: debug
+  debug:
+    level: detailed
 {{- if $config.lumigo_token }}
   otlphttp/lumigo:
     endpoint: {{ $config.lumigo_endpoint }}
@@ -15,11 +15,11 @@ exporters:
       Authorization: "LumigoToken {{ $config.lumigo_token }}"
 {{ end }}
   file/logs:
-    path: ${LOGS_PATH}
+    path: ${env:LOGS_PATH}
   file/traces:
-    path: ${TRACES_PATH}
+    path: ${env:TRACES_PATH}
   file/metrics:
-    path: ${METRICS_PATH}
+    path: ${env:METRICS_PATH}
 service:
   pipelines:
     logs:

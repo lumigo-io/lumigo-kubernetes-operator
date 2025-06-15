@@ -15,14 +15,16 @@ receivers:
       http:
 
 exporters:
-  logging:
-
+  debug:
+    sampling_initial: 1
+    sampling_thereafter: 1
+    use_internal_logger: true
 service:
   pipelines:
     logs:
       receivers: [otlp]
       processors: []
-      exporters: [logging]
+      exporters: [debug]
 {{- else }}
 
 receivers:
@@ -135,13 +137,13 @@ exporters:
 
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: $LUMIGO_LOGS_ENDPOINT
+    endpoint: ${env:LUMIGO_LOGS_ENDPOINT}
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
 
 {{- if $debug }}
-  logging:
+  debug:
     verbosity: detailed
     sampling_initial: 1
     sampling_thereafter: 1
@@ -245,6 +247,7 @@ service:
   telemetry:
     logs:
       level: {{ $debug | ternary "debug" "info" }}
+      encoding: json
     metrics:
       level: detailed
       address: ":8888"
@@ -273,7 +276,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -291,7 +294,7 @@ service:
       - transform/inject_operator_details_into_resource
       exporters:
 {{- if $config.debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
 
@@ -310,7 +313,7 @@ service:
       - batch/k8s_objects_ns_{{ $namespace.name }}
       exporters:
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
 
@@ -329,7 +332,7 @@ service:
       - batch/k8s_events_ns_{{ $namespace.name }}
       exporters:
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
 {{ end }}
