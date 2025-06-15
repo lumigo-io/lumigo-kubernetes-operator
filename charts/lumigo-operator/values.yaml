@@ -7,6 +7,8 @@ cluster:
   name:
 watchdog:
   enabled: true
+  logs:
+    enabled: false
   image:
     repository: host.docker.internal:5000/watchdog
     tag: latest

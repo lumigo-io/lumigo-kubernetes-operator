@@ -1,6 +1,13 @@
 {{- define "clusterAgent.otelCollectorConfig" -}}
 receivers:
-  filelog:
+{{- if or .Values.watchdog.logs.enabled .Values.watchdog.logs.include }}
+  filelog/watchdog:
+    include:
+      - /var/log/pods/{{ .Release.Namespace }}_*_*/*/*.log
+    exclude:
+      - /var/log/pods/{{ .Release.Namespace }}_*-cluster-agent-*_*/*/*.log
+{{- end }}
+  filelog/application:
     include:
     {{ if .Values.clusterCollection.logs.include }}
     {{- range .Values.clusterCollection.logs.include }}
@@ -118,9 +125,20 @@ service:
       level: debug
 {{- end }}
   pipelines:
-    logs:
+    logs/application:
       receivers:
-        - filelog
+        - filelog/application
+      processors:
+        - transform
+        - batch
+      exporters:
+        - otlphttp
+{{- if .Values.debug.enabled }}
+        - debug
+{{- end }}
+    logs/watchdog:
+      receivers:
+        - filelog/watchdog
       processors:
         - transform
         - batch
