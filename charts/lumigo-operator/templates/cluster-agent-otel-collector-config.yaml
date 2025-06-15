@@ -3,9 +3,8 @@ receivers:
 {{- if or .Values.watchdog.logs.enabled .Values.watchdog.logs.include }}
   filelog/watchdog:
     include:
-      - /var/log/pods/{{ .Release.Namespace }}_*_*/*/*.log
-    exclude:
-      - /var/log/pods/{{ .Release.Namespace }}_*-cluster-agent-*_*/*/*.log
+      - /var/log/pods/{{ .Release.Namespace }}_{{ include "helm.fullname" . }}-controller-manager_*/*/*.log
+      - /var/log/pods/{{ .Release.Namespace }}_{{ include "helm.fullname" . }}-telemetry-proxy_*/*/*.log
 {{- end }}
   filelog/application:
     include:
@@ -111,36 +110,50 @@ exporters:
     verbosity: detailed
 {{- end }}
 processors:
-  transform:
+  transform/application:
     log_statements:
       - context: log
         statements:
           - set(instrumentation_scope.name, "lumigo-operator.log_file_collector")
           - set(resource.attributes["k8s.cluster.name"], "${env:KUBERNETES_CLUSTER_NAME}")
+  transform/watchdog:
+    log_statements:
+      - context: log
+        statements:
+          - set(instrumentation_scope.name, "lumigo-operator.watchdog_log_file_collector")
+          - set(resource.attributes["k8s.cluster.name"], "${env:KUBERNETES_CLUSTER_NAME}")
+  filter/drop_non_error_logs:
+    logs:
+      log_record:
+        - 'not IsMatch(body, ".*error.*")'
   batch:
 service:
 {{- if .Values.debug.enabled }}
   telemetry:
     logs:
       level: debug
+      encoding: json
 {{- end }}
   pipelines:
+{{- if .Values.watchdog.logs.enabled }}
     logs/application:
       receivers:
         - filelog/application
       processors:
-        - transform
+        - transform/application
         - batch
       exporters:
         - otlphttp
 {{- if .Values.debug.enabled }}
         - debug
 {{- end }}
+{{- end }}
     logs/watchdog:
       receivers:
         - filelog/watchdog
       processors:
-        - transform
+        - filter/drop_non_error_logs
+        - transform/watchdog
         - batch
       exporters:
         - otlphttp
