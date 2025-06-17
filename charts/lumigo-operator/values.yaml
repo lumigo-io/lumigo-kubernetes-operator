@@ -74,7 +74,7 @@ controllerManager:
 logFileCollector:
   image:
     repository: otel/opentelemetry-collector-contrib
-    tag: 0.112.0
+    tag: 0.122.0
   resources:
     limits:
       cpu: 500m

@@ -1,5 +1,6 @@
-{{- $logsEnabled := or .Values.clusterCollection.logs.enabled .Values.watchdog.logs.enabled }}
-{{- if or $logsEnabled .Values.clusterCollection.metrics.enabled }}
+{{- $watchdogLogsEnabled := and .Values.watchdog.enabled .Values.watchdog.logs.enabled -}}
+{{- $logCollectionEnabled := or .Values.clusterCollection.logs.enabled $watchdogLogsEnabled -}}
+{{- if $logCollectionEnabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -35,7 +36,7 @@ spec:
         lumigo.auto-trace: 'false' # We don't want the operator to inject itself into pods from this daemonset
     spec:
       containers:
-{{- if $logsEnabled }}
+{{- if $logCollectionEnabled }}
       - name: otel-collector
         image: {{ .Values.logFileCollector.image.repository }}:{{ .Values.logFileCollector.image.tag }}
         env:
@@ -89,7 +90,7 @@ spec:
       - name: collector-config
         configMap:
           name: {{ include "helm.fullname" . }}-cluster-agent-config
-{{- if $logsEnabled }}
+{{- if $logCollectionEnabled }}
       - name: varlogpods
         hostPath:
           path: /var/log/pods/
