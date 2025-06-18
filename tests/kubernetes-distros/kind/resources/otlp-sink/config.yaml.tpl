@@ -7,7 +7,7 @@ receivers:
 
 exporters:
   debug:
-    level: detailed
+    verbosity: detailed
 {{- if $config.lumigo_token }}
   otlphttp/lumigo:
     endpoint: {{ $config.lumigo_endpoint }}
