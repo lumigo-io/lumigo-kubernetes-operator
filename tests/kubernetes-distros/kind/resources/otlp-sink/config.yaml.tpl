@@ -43,4 +43,4 @@ service:
       - otlp
       exporters:
       - file/metrics
-      - logging
+      - debug
