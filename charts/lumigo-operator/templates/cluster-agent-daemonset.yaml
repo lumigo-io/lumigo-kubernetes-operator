@@ -1,10 +1,13 @@
 {{- $watchdogLogsEnabled := and .Values.watchdog.enabled .Values.watchdog.logs.enabled -}}
 {{- $logCollectionEnabled := or .Values.clusterCollection.logs.enabled $watchdogLogsEnabled -}}
+{{- $clusterAgentConfigVersion := include "clusterAgent.otelCollectorConfig" . | sha256sum | substr 0 10 }}
 {{- if $logCollectionEnabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "helm.fullname" . }}-cluster-agent-config
+  annotations:
+    lumigo.io/ca-otel-config-version: {{ $clusterAgentConfigVersion | quote }}
 data:
   otel-collector-config.yaml:
       {{ include "clusterAgent.otelCollectorConfig" . | toYaml | nindent 4 }}
@@ -29,7 +32,7 @@ spec:
     metadata:
       annotations:
         # This effectively triggers a restart of the Daemonset pods when the config changes, which is otherwise not the case for ConfigMaps in k8s.
-        lumigo.io/ca-otel-config-version: {{ include "clusterAgent.otelCollectorConfig" . | sha256sum | substr 0 10 | quote }}
+        lumigo.io/ca-otel-config-version: {{ $clusterAgentConfigVersion | quote }}
       labels:
       {{- include "helm.selectorLabels" . | nindent 8 }}
         control-plane: cluster-agent

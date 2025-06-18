@@ -41,8 +41,7 @@
   to: body
 # best effort attempt to parse the body as a stringified JSON object
 - type: json_parser
-  parse_from: body
-  parse_to: attributes["parsed_body"]
+  parse_to: body
   on_error: send_quiet
 # Extract metadata from file path
 - type: regex_parser

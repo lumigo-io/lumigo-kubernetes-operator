@@ -68,8 +68,8 @@ processors:
     error_mode: propagate
     logs:
       log_record:
-        - not IsMap(log.attributes["parsed_body"])
-        - not IsString(log.attributes["parsed_body"]["error"])
+        - not IsMap(body)
+        - not IsString(body["error"])
 
 service:
 {{- if .Values.debug.enabled }}
