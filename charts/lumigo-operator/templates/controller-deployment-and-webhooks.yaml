@@ -312,7 +312,7 @@ spec:
           readOnlyRootFilesystem: true
           runAsNonRoot: true
       - name: namespace-config-server
-        image: busybox:1.35
+        image: {{ .Values.namespaceFileServer.image.repository }}:{{ .Values.namespaceFileServer.image.tag }}
         command: ["httpd", "-f", "-p", "8077", "-h", "/namespaces"]
         volumeMounts:
         - name: namespace-configurations
