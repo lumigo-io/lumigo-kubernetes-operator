@@ -312,7 +312,7 @@ spec:
           readOnlyRootFilesystem: true
           runAsNonRoot: true
       - name: namespace-config-server
-        image: busybox:1.35
+        image: {{ .Values.controllerManager.namespaceFileServer.image.repository }}:{{ .Values.controllerManager.namespaceFileServer.image.tag }}
         command: ["httpd", "-f", "-p", "8077", "-h", "/namespaces"]
         volumeMounts:
         - name: namespace-configurations
@@ -383,7 +383,7 @@ spec:
                 - linux
       initContainers:
       - name: wait-for-services
-        image: busybox:1.35
+        image: {{ .Values.controllerManager.initContainer.image.repository }}:{{ .Values.controllerManager.initContainer.image.tag }}
         command:
         - /bin/sh
         - -c

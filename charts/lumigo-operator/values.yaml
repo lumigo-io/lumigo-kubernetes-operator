@@ -69,6 +69,14 @@ controllerManager:
       requests:
         cpu: 10m
         memory: 256Mi
+  namespaceFileServer:
+    image:
+      repository: public.ecr.aws/docker/library/busybox
+      tag: 1.37.0
+  initContainer:
+    image:
+      repository: public.ecr.aws/docker/library/busybox
+      tag: 1.37.0
 logFileCollector:
   image:
     repository: otel/opentelemetry-collector-contrib
