@@ -329,6 +329,10 @@ spec:
         fsGroup: 1234
       serviceAccountName: lumigo-kubernetes-operator
       terminationGracePeriodSeconds: 10
+{{- if .Values.tolerations }}
+      tolerations:
+{{- toYaml .Values.tolerations | nindent 8 }}
+{{- end }}
       volumes:
       - name: cert
         secret:
@@ -493,6 +497,10 @@ spec:
         fsGroup: 1234
       serviceAccountName: lumigo-kubernetes-operator
       terminationGracePeriodSeconds: 10
+{{- if .Values.tolerations }}
+      tolerations:
+{{- toYaml .Values.tolerations | nindent 8 }}
+{{- end }}
       volumes:
       - name: namespace-configurations
         emptyDir: {}

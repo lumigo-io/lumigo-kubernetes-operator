@@ -54,6 +54,10 @@ spec:
         lumigo.io/ta-config-version: {{ include "targetAllocator.config" . | sha256sum | substr 0 10 | quote }}
     spec:
       serviceAccountName: {{ include "helm.fullname" . }}-target-allocator
+{{- if .Values.tolerations }}
+      tolerations:
+{{- toYaml .Values.tolerations | nindent 8 }}
+{{- end }}
       containers:
         - name: target-allocator
           image: "{{ .Values.targetAllocator.image.repository }}:{{ .Values.targetAllocator.image.tag }}"

@@ -72,6 +72,35 @@ helm delete lumigo --namespace lumigo-system
 
 All the `Lumigo` resources you have created in your namespaces are going to be automatically deleted.
 
+## Advanced Configuration
+
+### Tolerations
+
+You can configure tolerations for all pods created by the Lumigo operator by setting the `tolerations` value. This is useful for scheduling pods on nodes with taints.
+
+Example:
+
+```yaml
+tolerations:
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "dedicated"
+    operator: "Equal"
+    value: "lumigo"
+    effect: "NoSchedule"
+```
+
+The tolerations will be applied to all pod-creating resources including:
+- Controller manager deployment
+- Telemetry proxy deployment
+- Cluster agent daemonset
+- Watchdog deployment
+- Target allocator deployment
+
 # Detailed documentation
 
 See the [repository documentation](https://github.com/lumigo-io/lumigo-kubernetes-operator) for more information on how to use the Lumigo Kubernetes Operator.
