@@ -37,6 +37,7 @@ import (
 
 var (
 	DEFAULT_LUMIGO_TOKEN = "t_1234567890123456789AB"
+	SCOPE_LOGGER_NAME    = "my-test-logger" // The logger name is hardcoded in the app.py file deployed to the cluster
 )
 
 // These tests assume:
@@ -959,8 +960,7 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 }
 
 func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	scopeLoggerName := "my-test-logger" // The logger name is hardcoded in the app.py file deployed to the cluster
-	return resourceLogsToScopedLogRecords(resourceLogs, scopeLoggerName, "*", "*")
+	return resourceLogsToScopedLogRecords(resourceLogs, SCOPE_LOGGER_NAME, "*", "*")
 }
 
 func filterHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
@@ -973,7 +973,7 @@ func filterPodLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, erro
 
 func filterNamespaceAppLogRecords(namespaceName string) LogRecordFilter {
 	return func(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-		return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", namespaceName, "*")
+		return resourceLogsToScopedLogRecords(resourceLogs, SCOPE_LOGGER_NAME, namespaceName, "*")
 	}
 }
 
