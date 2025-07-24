@@ -62,6 +62,10 @@ func InstallOrUpgradeLumigoOperator(ctx context.Context, client klient.Client, k
 		fmt.Sprintf("--set lumigoToken.value=%s", lumigoToken),           // Use the the test-token for infra metrics as well
 		fmt.Sprintf("--set debug.enabled=%v", operatorDebug),             // Operator debug logging at runtime
 		fmt.Sprintf("--set clusterCollection.metrics.enabled=%t", false), // Disable metrics
+		fmt.Sprintf("--set tolerations[0].key=%s", "some-test-taint"),
+		fmt.Sprintf("--set tolerations[0].operator=%s", "Equal"),
+		fmt.Sprintf("--set tolerations[0].value=%s", "voila"),
+		fmt.Sprintf("--set tolerations[0].effect=%s", "NoExecute"),
 	}
 	if len(extraHelmFlags) > 0 {
 		helmArgs = append(helmArgs, extraHelmFlags...)
