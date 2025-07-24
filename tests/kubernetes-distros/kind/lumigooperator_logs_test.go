@@ -439,7 +439,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 
 			return ctx
 		}).
-		Assess("Application logs are collected successfully and added k8s.* attributes", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+		Assess("Application logs are collected successfully via instrumentation and added k8s.* attributes", func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
 			otlpSinkDataPath := ctx.Value(internal.ContextKeyOtlpSinkDataPath).(string)
 			logsPath := filepath.Join(otlpSinkDataPath, "logs.json")
 
@@ -473,7 +473,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 
 				if len(applicationLogs) < 1 {
 					// No application logs received yet
-					t.Fatalf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
+					t.Logf("No application logs found in '%s'. \r\nMake sure the application has LUMIGO_ENABLE_LOGS=true and is emitting logs using a supported logger", logsPath)
 					return false, nil
 				}
 
@@ -519,7 +519,7 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 
 				if len(applicationLogs) < 1 {
 					// No application logs received yet
-					t.Fatalf("No application logs found in '%s'. \r\nMake sure log files are emitted under /var/logs/pods/ in the cluster node", logsPath)
+					t.Logf("No application logs found in '%s'. \r\nMake sure log files are emitted under /var/logs/pods/ in the cluster node", logsPath)
 					return false, nil
 				}
 
@@ -959,7 +959,8 @@ func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, 
 }
 
 func filterApplicationLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "opentelemetry.sdk._logs._internal", "*", "*")
+	scopeLoggerName := "my-test-logger" // The logger name is hardcoded in the app.py file deployed to the cluster
+	return resourceLogsToScopedLogRecords(resourceLogs, scopeLoggerName, "*", "*")
 }
 
 func filterHeartbeatLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {

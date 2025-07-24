@@ -3,7 +3,7 @@ import time
 import logging
 import json
 
-logger = logging.getLogger("test")
+logger = logging.getLogger("my-test-logger")
 logger.setLevel(logging.INFO)
 
 # Non-mandatory in our OTEL setup, but recommended for troubleshooting - adds a console handler to see the logs in the console
