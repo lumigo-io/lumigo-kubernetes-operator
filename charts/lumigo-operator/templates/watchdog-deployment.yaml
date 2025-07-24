@@ -39,9 +39,8 @@ spec:
                 values:
                 - linux
       serviceAccountName: lumigo-kubernetes-operator
-{{- if .Values.tolerations }}
-      tolerations:
-{{- toYaml .Values.tolerations | nindent 8 }}
+{{- if or .Values.tolerations.watchdog .Values.tolerations.global }}
+      tolerations: {{- toYaml (.Values.tolerations.watchdog | default .Values.tolerations.global) | nindent 8 }}
 {{- end }}
       containers:
       - name: watchdog

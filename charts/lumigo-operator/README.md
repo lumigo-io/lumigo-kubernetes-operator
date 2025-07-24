@@ -76,30 +76,60 @@ All the `Lumigo` resources you have created in your namespaces are going to be a
 
 ### Tolerations
 
-You can configure tolerations for all pods created by the Lumigo operator by setting the `tolerations` value. This is useful for scheduling pods on nodes with taints.
+You can configure tolerations for specific components created by the Lumigo operator by setting the `tolerations` value. This is useful for scheduling pods on nodes with taints.
 
 Example:
 
 ```yaml
 tolerations:
-  - key: "node-role.kubernetes.io/control-plane"
-    operator: "Exists"
-    effect: "NoSchedule"
-  - key: "node-role.kubernetes.io/master"
-    operator: "Exists"
-    effect: "NoSchedule"
-  - key: "dedicated"
-    operator: "Equal"
-    value: "lumigo"
-    effect: "NoSchedule"
+  global:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+  watchdog:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  clusterAgent:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  controllerManager:
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+  telemetryProxy:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  targetAllocator:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+  installHook:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  uninstallHook:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
 ```
 
-The tolerations will be applied to all pod-creating resources including:
-- Controller manager deployment
-- Telemetry proxy deployment
-- Cluster agent daemonset
-- Watchdog deployment
-- Target allocator deployment
+The tolerations can be configured for the following components:
+- `global` - Global fallback tolerations applied to all components when component-specific tolerations are not defined. Specific tolerations for a component will take precedence over these global tolerations.
+- `watchdog` - Watchdog deployment
+- `clusterAgent` - Cluster agent daemonset
+- `controllerManager` - Controller manager deployment
+- `telemetryProxy` - Telemetry proxy deployment
+- `targetAllocator` - Target allocator deployment
+- `installHook` - Install/upgrade hook job
+- `uninstallHook` - Uninstall hook job
 
 # Detailed documentation
 

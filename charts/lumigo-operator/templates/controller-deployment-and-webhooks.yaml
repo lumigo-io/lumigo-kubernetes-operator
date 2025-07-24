@@ -329,9 +329,8 @@ spec:
         fsGroup: 1234
       serviceAccountName: lumigo-kubernetes-operator
       terminationGracePeriodSeconds: 10
-{{- if .Values.tolerations }}
-      tolerations:
-{{- toYaml .Values.tolerations | nindent 8 }}
+{{- if or .Values.tolerations.controllerManager .Values.tolerations.global }}
+      tolerations: {{- toYaml (.Values.tolerations.controllerManager | default .Values.tolerations.global) | nindent 8 }}
 {{- end }}
       volumes:
       - name: cert
@@ -497,9 +496,8 @@ spec:
         fsGroup: 1234
       serviceAccountName: lumigo-kubernetes-operator
       terminationGracePeriodSeconds: 10
-{{- if .Values.tolerations }}
-      tolerations:
-{{- toYaml .Values.tolerations | nindent 8 }}
+{{- if or .Values.tolerations.telemetryProxy .Values.tolerations.global }}
+      tolerations: {{- toYaml (.Values.tolerations.telemetryProxy | default .Values.tolerations.global) | nindent 8 }}
 {{- end }}
       volumes:
       - name: namespace-configurations

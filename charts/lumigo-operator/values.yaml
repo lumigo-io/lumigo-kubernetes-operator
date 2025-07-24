@@ -5,7 +5,15 @@ output:
   showOperatorStatus: true
 cluster:
   name:
-tolerations: []
+tolerations:
+  global:
+  watchdog:
+  clusterAgent:
+  controllerManager:
+  telemetryProxy:
+  targetAllocator:
+  installHook:
+  uninstallHook:
 watchdog:
   enabled: true
   image:
