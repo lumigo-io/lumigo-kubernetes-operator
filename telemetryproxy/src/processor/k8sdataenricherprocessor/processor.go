@@ -360,11 +360,6 @@ func (kp *kubernetesprocessor) processResourceLogs(ctx context.Context, resource
 			{
 				kp.processKubernetesObjectScopeLogs(ctx, &sl)
 			}
-		case "opentelemetry.sdk._logs._internal":
-			{
-				// This is the scope used by the OpenTelemetry SDK to emit logs
-				// We do not need to process these logs, as they are not related to Kubernetes objects
-			}
 		default:
 			{
 				kp.logger.Debug("Unexpected logs scope", zap.String("scope-name", sl.Scope().Name()))
