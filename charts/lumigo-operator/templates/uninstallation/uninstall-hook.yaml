@@ -43,3 +43,7 @@ spec:
         runAsNonRoot: true
         fsGroup: 1234
       serviceAccountName: lumigo-kubernetes-operator
+{{- if .Values.tolerations }}
+      tolerations:
+{{- toYaml .Values.tolerations | nindent 8 }}
+{{- end }}

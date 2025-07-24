@@ -5,6 +5,7 @@ output:
   showOperatorStatus: true
 cluster:
   name:
+tolerations: []
 watchdog:
   enabled: true
   image:
