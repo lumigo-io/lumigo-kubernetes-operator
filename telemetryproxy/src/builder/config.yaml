@@ -34,6 +34,8 @@ processors:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.103.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.103.0"
 
+connectors:
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.103.0"
 
 replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/extension/lumigoauthextension v0.103.0 => github.com/lumigo-io/lumigo-otel-collector-contrib/extension/lumigoauthextension 70facbfc76f45838afc0d103e9c8c022a67d82c6
