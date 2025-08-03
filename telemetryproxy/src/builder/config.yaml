@@ -10,7 +10,7 @@ dist:
 
 exporters:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter v0.103.0"
-  - gomod: go.opentelemetry.io/collector/exporter/loggingexporter v0.103.0
+  - gomod: "go.opentelemetry.io/collector/exporter/debugexporter v0.103.0"
   - gomod: "go.opentelemetry.io/collector/exporter/otlphttpexporter v0.103.0"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.103.0"
 

@@ -80,7 +80,7 @@ exporters:
 {{- end }}
 
 {{- if $debug }}
-  logging:
+  debug:
     verbosity: detailed
     sampling_initial: 1
     sampling_thereafter: 1
@@ -212,7 +212,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -230,7 +230,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -251,7 +251,7 @@ service:
       exporters:
       - otlphttp/lumigo
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 
     logs:
@@ -265,6 +265,6 @@ service:
       - transform/inject_operator_details_into_resource
       exporters:
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_logs

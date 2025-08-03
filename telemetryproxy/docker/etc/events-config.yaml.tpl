@@ -15,14 +15,14 @@ receivers:
       http:
 
 exporters:
-  logging:
+  debug:
 
 service:
   pipelines:
     logs:
       receivers: [otlp]
       processors: []
-      exporters: [logging]
+      exporters: [debug]
 {{- else }}
 
 receivers:
@@ -156,7 +156,7 @@ exporters:
 {{- end }}
 
 {{- if $debug }}
-  logging:
+  debug:
     verbosity: detailed
     sampling_initial: 1
     sampling_thereafter: 1
@@ -286,7 +286,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -304,7 +304,7 @@ service:
       - transform/inject_operator_details_into_resource
       exporters:
 {{- if $config.debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
 
@@ -323,7 +323,7 @@ service:
       - batch/k8s_objects_ns_{{ $namespace.name }}
       exporters:
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
 
@@ -342,7 +342,7 @@ service:
       - batch/k8s_events_ns_{{ $namespace.name }}
       exporters:
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_ns_{{ $namespace.name }}
 {{- end }}
