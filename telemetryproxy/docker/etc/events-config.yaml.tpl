@@ -102,16 +102,14 @@ connectors:
   routing/k8s_objects:
     table:
 {{- range $i, $namespace := $namespaces }}
-      - context: log
-        condition: resource["k8s.namespace.name"] == "{{ $namespace.name }}"
+      - statement: route() where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_objects_ns_{{ $namespace.name }}]
 {{- end }}
 
   routing/k8s_events:
     table:
 {{- range $i, $namespace := $namespaces }}
-      - context: log
-        condition: resource["k8s.namespace.name"] == "{{ $namespace.name }}"
+      - statement: route() where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_events_ns_{{ $namespace.name }}]
 {{- end }}
 
