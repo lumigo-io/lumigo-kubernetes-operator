@@ -102,15 +102,19 @@ connectors:
   routing/k8s_objects:
     table:
 {{- range $i, $namespace := $namespaces }}
-      - statement: route() where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
+      - context: log
+        condition: body["metadata"]["namespace"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_objects_ns_{{ $namespace.name }}]
+        on_error: ignore
 {{- end }}
 
   routing/k8s_events:
     table:
 {{- range $i, $namespace := $namespaces }}
-      - statement: route() where attributes["k8s.namespace.name"] == "{{ $namespace.name }}"
+      - context: log
+        condition: body["rootOwnerReference"]["namespace"] == "{{ $namespace.name }}" or body["involvedObject"]["namespace"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_events_ns_{{ $namespace.name }}]
+        on_error: ignore
 {{- end }}
 
 extensions:
