@@ -105,7 +105,7 @@ connectors:
       - context: log
         condition: body["metadata"]["namespace"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_objects_ns_{{ $namespace.name }}]
-        on_error: ignore
+        error_mode: ignore
 {{- end }}
 
   routing/k8s_events:
@@ -114,7 +114,7 @@ connectors:
       - context: log
         condition: body["rootOwnerReference"]["namespace"] == "{{ $namespace.name }}" or body["involvedObject"]["namespace"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_events_ns_{{ $namespace.name }}]
-        on_error: ignore
+        error_mode: ignore
 {{- end }}
 
 extensions:
