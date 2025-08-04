@@ -28,7 +28,7 @@ func createDefaultConfig() component.Config {
 	return &Config{}
 }
 
-func createLumigooperatorheartbeatReceiver(_ context.Context, params receiver.CreateSettings, baseCfg component.Config, consumer consumer.Logs) (receiver.Logs, error) {
+func createLumigooperatorheartbeatReceiver(_ context.Context, params receiver.Settings, baseCfg component.Config, consumer consumer.Logs) (receiver.Logs, error) {
 	if consumer == nil {
 		return nil, fmt.Errorf("nextConsumer cannot be nil")
 	}
