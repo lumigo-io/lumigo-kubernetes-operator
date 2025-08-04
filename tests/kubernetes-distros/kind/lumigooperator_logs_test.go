@@ -977,10 +977,6 @@ func filterNamespaceAppLogRecords(namespaceName string) LogRecordFilter {
 	}
 }
 
-func filterWatchdogLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.k8s-events", "*", "lumigo-kubernetes-operator-watchdog")
-}
-
 func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string, filteredNamespaceName string, filteredServiceName string) ([]plog.LogRecord, error) {
 	l := resourceLogs.ScopeLogs().Len()
 	filteredScopeLogRecords := make([]plog.LogRecord, 0)
