@@ -100,21 +100,23 @@ receivers:
 
 connectors:
   routing/k8s_objects:
+    match_once: true
+    error_mode: ignore
     table:
 {{- range $i, $namespace := $namespaces }}
       - context: log
         condition: body["metadata"]["namespace"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_objects_ns_{{ $namespace.name }}]
-        error_mode: ignore
 {{- end }}
 
   routing/k8s_events:
+    match_once: true
+    error_mode: ignore
     table:
 {{- range $i, $namespace := $namespaces }}
       - context: log
         condition: body["rootOwnerReference"]["namespace"] == "{{ $namespace.name }}" or body["involvedObject"]["namespace"] == "{{ $namespace.name }}"
         pipelines: [logs/k8s_events_ns_{{ $namespace.name }}]
-        error_mode: ignore
 {{- end }}
 
 extensions:
@@ -152,7 +154,7 @@ exporters:
 
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: $LUMIGO_LOGS_ENDPOINT
+    endpoint: {{ getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
