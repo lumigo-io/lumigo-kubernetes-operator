@@ -31,9 +31,9 @@ receivers:
     config:
       scrape_configs: []
     target_allocator:
-      endpoint: {{ getenv "LUMIGO_TARGET_ALLOCATOR_ENDPOINT" }}
+      endpoint: ${env:LUMIGO_TARGET_ALLOCATOR_ENDPOINT}
       interval: 30s
-      collector_id: {{ getenv "HOSTNAME" }}
+      collector_id: ${env:HOSTNAME}
 {{- end }}
 
 extensions:
@@ -61,18 +61,18 @@ extensions:
 exporters:
 
   otlphttp/lumigo:
-    endpoint: {{ getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: headers_setter/lumigo
 
   otlphttp/lumigo_logs:
-    endpoint: {{ getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: headers_setter/lumigo
 
 {{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
-    endpoint: {{ getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_METRICS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     headers:
       # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
       # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
@@ -88,7 +88,7 @@ exporters:
 
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: $LUMIGO_ENDPOINT
+    endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}

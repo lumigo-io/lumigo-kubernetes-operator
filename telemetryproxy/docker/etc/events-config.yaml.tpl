@@ -145,7 +145,7 @@ exporters:
 
 {{- if $watchdogEnabled }}
   otlphttp/lumigo_metrics:
-    endpoint: {{ getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_METRICS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     headers:
       # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
       # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
@@ -154,7 +154,7 @@ exporters:
 
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: {{ getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
