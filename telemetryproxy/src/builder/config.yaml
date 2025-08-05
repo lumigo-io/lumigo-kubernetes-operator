@@ -1,5 +1,5 @@
 dist:
-  module: github.com/lumigo-io/opentelemetry-collector-contrib
+  module: github.com/lumigo-io/lumigo-otel-collector-contrib
   # The `name` field becomes the `service.name` resource-attribute of internal metrics exported by the collector,
   # recognized by the Lumigo backend. Do not change this without changing it in the backend accordingly.
   name: lumigo-collector
