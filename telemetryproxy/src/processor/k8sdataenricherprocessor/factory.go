@@ -76,7 +76,7 @@ func createTracesProcessorWithOptions(
 	if kp, err := createKubernetesProcessor(set, cfg); err != nil {
 		return nil, err
 	} else {
-		return processorhelper.NewTracesProcessor(
+		return processorhelper.NewTraces(
 			ctx,
 			set,
 			cfg,
@@ -106,7 +106,7 @@ func createLogsProcessorWithOptions(
 	if kp, err := createKubernetesProcessor(set, cfg); err != nil {
 		return nil, err
 	} else {
-		return processorhelper.NewLogsProcessor(
+		return processorhelper.NewLogs(
 			ctx,
 			set,
 			cfg,
@@ -136,7 +136,7 @@ func createMetricsProcessorWithOptions(
 	if kp, err := createKubernetesProcessor(set, cfg); err != nil {
 		return nil, err
 	} else {
-		return processorhelper.NewMetricsProcessor(
+		return processorhelper.NewMetrics(
 			ctx,
 			set,
 			cfg,

@@ -27,7 +27,7 @@ import (
 )
 
 type k8sobjectsreceiver struct {
-	setting         receiver.CreateSettings
+	setting         receiver.Settings
 	objects         []*K8sObjectsConfig
 	stopperChanList []chan struct{}
 	client          dynamic.Interface
@@ -36,7 +36,7 @@ type k8sobjectsreceiver struct {
 	mu              sync.Mutex
 }
 
-func newReceiver(params receiver.CreateSettings, config *Config, consumer consumer.Logs) (receiver.Logs, error) {
+func newReceiver(params receiver.Settings, config *Config, consumer consumer.Logs) (receiver.Logs, error) {
 	transport := "http"
 	client, err := config.getDynamicClient()
 	if err != nil {

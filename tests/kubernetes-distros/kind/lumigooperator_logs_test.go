@@ -144,6 +144,12 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 											corev1.ResourceMemory: resource.MustParse("768Mi"),
 										},
 									},
+									Env: []corev1.EnvVar{
+										{
+											Name:  "LUMIGO_DEBUG_LOGDUMP",
+											Value: "/code", // will be created in the Python test-app Dockerfile
+										},
+									},
 								},
 								{
 									Name:    envconf.RandomName(ctx.Value(internal.ContextTestAppBusyboxIncludedContainerNamePrefix).(string), 12),
@@ -975,10 +981,6 @@ func filterNamespaceAppLogRecords(namespaceName string) LogRecordFilter {
 	return func(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
 		return resourceLogsToScopedLogRecords(resourceLogs, SCOPE_LOGGER_NAME, namespaceName, "*")
 	}
-}
-
-func filterWatchdogLogRecords(resourceLogs plog.ResourceLogs) ([]plog.LogRecord, error) {
-	return resourceLogsToScopedLogRecords(resourceLogs, "lumigo-operator.k8s-events", "*", "lumigo-kubernetes-operator-watchdog")
 }
 
 func resourceLogsToScopedLogRecords(resourceLogs plog.ResourceLogs, filteredScopeName string, filteredNamespaceName string, filteredServiceName string) ([]plog.LogRecord, error) {

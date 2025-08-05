@@ -14,6 +14,7 @@ receivers:
   otlp:
     protocols:
       http:
+        endpoint: 0.0.0.0:4318
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
@@ -31,9 +32,9 @@ receivers:
     config:
       scrape_configs: []
     target_allocator:
-      endpoint: {{ getenv "LUMIGO_TARGET_ALLOCATOR_ENDPOINT" }}
+      endpoint: ${env:LUMIGO_TARGET_ALLOCATOR_ENDPOINT}
       interval: 30s
-      collector_id: {{ getenv "HOSTNAME" }}
+      collector_id: ${env:HOSTNAME}
 {{- end }}
 
 extensions:
@@ -61,18 +62,18 @@ extensions:
 exporters:
 
   otlphttp/lumigo:
-    endpoint: {{ getenv "LUMIGO_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: headers_setter/lumigo
 
   otlphttp/lumigo_logs:
-    endpoint: {{ getenv "LUMIGO_LOGS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: headers_setter/lumigo
 
 {{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
-    endpoint: {{ getenv "LUMIGO_METRICS_ENDPOINT" "https://ga-otlp.lumigo-tracer-edge.golumigo.com" }}
+    endpoint: ${env:LUMIGO_METRICS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     headers:
       # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
       # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
@@ -80,7 +81,7 @@ exporters:
 {{- end }}
 
 {{- if $debug }}
-  logging:
+  debug:
     verbosity: detailed
     sampling_initial: 1
     sampling_thereafter: 1
@@ -88,7 +89,7 @@ exporters:
 
 {{- range $i, $namespace := $namespaces }}
   otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: $LUMIGO_ENDPOINT
+    endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: lumigoauth/ns_{{ $namespace.name }}
 {{- end }}
@@ -212,7 +213,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -230,7 +231,7 @@ service:
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 {{- end }}
 
@@ -251,7 +252,7 @@ service:
       exporters:
       - otlphttp/lumigo
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
 
     logs:
@@ -265,6 +266,6 @@ service:
       - transform/inject_operator_details_into_resource
       exporters:
 {{- if $debug }}
-      - logging
+      - debug
 {{- end }}
       - otlphttp/lumigo_logs
