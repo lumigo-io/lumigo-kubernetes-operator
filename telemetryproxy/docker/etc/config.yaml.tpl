@@ -14,6 +14,7 @@ receivers:
   otlp:
     protocols:
       http:
+        endpoint: 0.0.0.0:4318
         auth:
           authenticator: lumigoauth/server
         include_metadata: true # Needed by `headers_setter/lumigo`
