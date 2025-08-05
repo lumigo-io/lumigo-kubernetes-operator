@@ -8,3 +8,4 @@ nodes:
       nodeRegistration:
         kubeletExtraArgs:
           system-reserved: memory=4Gi
+          register-with-taints: "some-test-taint=voila:NoExecute"

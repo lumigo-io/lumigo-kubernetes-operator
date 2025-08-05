@@ -89,6 +89,9 @@ spec:
   {{- end }}
         resources: {{- toYaml .Values.prometheusNodeExporter.resources | nindent 10 }}
 {{- end }}
+{{- if or .Values.tolerations.clusterAgent .Values.tolerations.global }}
+      tolerations: {{- toYaml (.Values.tolerations.clusterAgent | default .Values.tolerations.global) | nindent 8 }}
+{{- end }}
       volumes:
       - name: collector-config
         configMap:

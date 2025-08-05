@@ -72,6 +72,65 @@ helm delete lumigo --namespace lumigo-system
 
 All the `Lumigo` resources you have created in your namespaces are going to be automatically deleted.
 
+## Advanced Configuration
+
+### Tolerations
+
+You can configure tolerations for specific components created by the Lumigo operator by setting the `tolerations` value. This is useful for scheduling pods on nodes with taints.
+
+Example:
+
+```yaml
+tolerations:
+  global:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+  watchdog:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  clusterAgent:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  controllerManager:
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+  telemetryProxy:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  targetAllocator:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+  installHook:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+  uninstallHook:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "lumigo"
+      effect: "NoSchedule"
+```
+
+The tolerations can be configured for the following components:
+- `global` - Global fallback tolerations applied to all components when component-specific tolerations are not defined. Specific tolerations for a component will take precedence over these global tolerations.
+- `watchdog` - Watchdog deployment
+- `clusterAgent` - Cluster agent daemonset
+- `controllerManager` - Controller manager deployment
+- `telemetryProxy` - Telemetry proxy deployment
+- `targetAllocator` - Target allocator deployment
+- `installHook` - Install/upgrade hook job
+- `uninstallHook` - Uninstall hook job
+
 # Detailed documentation
 
 See the [repository documentation](https://github.com/lumigo-io/lumigo-kubernetes-operator) for more information on how to use the Lumigo Kubernetes Operator.
