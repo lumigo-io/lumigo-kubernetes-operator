@@ -182,8 +182,9 @@ jobs:
           if ! make e2e-tests; then
             kubectl describe all -A
             kubectl logs -l control-plane=controller-manager -n lumigo-system -c manager
-            kubectl logs -l control-plane=controller-manager -n lumigo-system -c telemetry-proxy
-            kubectl logs -l control-plane=controller-manager -n lumigo-system -c watchdog
+            kubectl logs -l control-plane=controller-manager -n lumigo-system -c events-scraper
+            kubectl logs -l control-plane=watchdog -n lumigo-system -c watchdog
+            kubectl logs -l control-plane=telemetry-proxy -n lumigo-system -c telemetry-proxy
             exit 1
           fi
 
