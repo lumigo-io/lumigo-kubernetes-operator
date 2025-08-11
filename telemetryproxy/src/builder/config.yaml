@@ -1,5 +1,5 @@
 dist:
-  module: github.com/lumigo-io/opentelemetry-collector-contrib
+  module: github.com/lumigo-io/lumigo-otel-collector-contrib
   # The `name` field becomes the `service.name` resource-attribute of internal metrics exported by the collector,
   # recognized by the Lumigo backend. Do not change this without changing it in the backend accordingly.
   name: lumigo-collector
@@ -8,10 +8,8 @@ dist:
   output_path: dist
 
 exporters:
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter v0.116.0"
   - gomod: "go.opentelemetry.io/collector/exporter/debugexporter v0.116.0"
   - gomod: "go.opentelemetry.io/collector/exporter/otlphttpexporter v0.116.0"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.116.0"
 
 extensions:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/extension/headerssetterextension v0.116.0"
