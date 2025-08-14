@@ -4,7 +4,7 @@
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
 {{- $infraMetricsFrequency := getenv "LUMIGO_INFRA_METRICS_SCRAPING_FREQUENCY" "15s" }}
-{{- $otelcolInternalMetricsFrequency := getenv "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY" "15s" }}
+{{- $otelcolInternalMetricsFrequency := getenv "LUMIGO_OTELCOL_METRICS_SCRAPING_FREQUENCY" "30s" }}
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 {{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
 {{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
@@ -73,6 +73,14 @@ exporters:
 
 {{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
+    endpoint: ${env:LUMIGO_METRICS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
+    headers:
+      # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
+      # since we're scraping Prometheus metrics and not receiving any metrics from customer code - we don't have any incoming headers.
+      Authorization: "LumigoToken {{ $infraMetricsToken }}"
+{{- end }}
+{{- if $watchdogEnabled }}
+  otlphttp/lumigo_watchdog_metrics:
     endpoint: ${env:LUMIGO_METRICS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     headers:
       # We cannot use headers_setter/lumigo since it assumes the headers are already set by the sender, and in this case -
@@ -211,7 +219,7 @@ service:
       - transform/add_cluster_name
 {{- end }}
       exporters:
-      - otlphttp/lumigo_metrics
+      - otlphttp/lumigo_watchdog_metrics
 {{- if $debug }}
       - debug
 {{- end }}
