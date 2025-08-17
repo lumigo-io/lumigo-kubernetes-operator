@@ -228,6 +228,7 @@ service:
 {{- if $clusterName }}
       - transform/add_cluster_name
 {{- end }}
+      - batch
       exporters:
       - otlphttp/lumigo_metrics
 {{- if $debug }}
