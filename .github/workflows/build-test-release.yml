@@ -152,7 +152,6 @@ jobs:
             --set "telemetryProxy.image.tag=${{ github.run_id }}" \
             --set "watchdog.image.repository=${WATCHDOG_IMG}" \
             --set "watchdog.image.tag=${{ github.run_id }}" \
-            --set "watchdog.enabled=true" \
             --dry-run
 
           if ! helm upgrade --install lumigo charts/lumigo-operator \
@@ -165,7 +164,6 @@ jobs:
             --set "telemetryProxy.image.tag=${{ github.run_id }}" \
             --set "watchdog.image.repository=${WATCHDOG_IMG}" \
             --set "watchdog.image.tag=${{ github.run_id }}" \
-            --set "watchdog.enabled=true" \
             --debug --wait --timeout 4m; then
 
             kubectl describe all -n lumigo-system

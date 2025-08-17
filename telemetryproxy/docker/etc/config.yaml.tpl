@@ -206,7 +206,7 @@ service:
 
   pipelines:
 
-{{- if $watchdogEnabled }}
+{{- if and $watchdogEnabled $infraMetricsToken }}
     metrics/watchdog:
       receivers:
       - prometheus/collector-self-metrics
