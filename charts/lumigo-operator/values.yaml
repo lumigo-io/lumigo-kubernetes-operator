@@ -200,8 +200,17 @@ targetAllocator:
     repository: ghcr.io/open-telemetry/opentelemetry-operator/target-allocator
     tag: 0.124.0
 kube-state-metrics:
+  # Override the name to avoid conflicts with existing Deployment
+  nameOverride: "kube-state-metrics-sharded"
+  # Number of replicas for sharding
+  replicas: 1
   service:
     # controls the port in the KSM sub-chart
     port: 8086
+  statefulset:
+    enabled: true
+  autosharding:
+    enabled: true
   extraArgs:
     - --metric-labels-allowlist=namespaces=[namespace],daemonsets=[daemonset,namespace],deployments=[deployment,namespace],replicasets=[replicaset,namespace],statefulsets=[statefulset,namespace],jobs=[job,namespace],cronjobs=[cronjob,namespace],pods=[pod,namespace],nodes=[node]
+    - --use-apiserver-cache=true

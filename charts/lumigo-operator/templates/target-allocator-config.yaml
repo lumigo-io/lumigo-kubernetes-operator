@@ -92,8 +92,15 @@ config:
     - job_name: 'kube-state-metrics'
       metrics_path: /metrics
       scrape_interval: {{ .Values.clusterCollection.metrics.frequency }}
-      static_configs:
-        - targets: ['{{ .Release.Name }}-kube-state-metrics.{{ .Release.Namespace }}.svc.cluster.local:{{ index .Values "kube-state-metrics" "service" "port" }}']
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+              - {{ .Release.Namespace }}
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_name]
+          regex: {{ .Release.Name }}-{{ index .Values "kube-state-metrics" "nameOverride" | default "kube-state-metrics" }}
+          action: keep
       {{- if .Values.clusterCollection.metrics.essentialOnly }}
       metric_relabel_configs:
         - source_labels: [__name__]
