@@ -195,6 +195,12 @@ clusterCollection:
     frequency: 15s
   logs:
     enabled: false
+    # Batch processor configuration
+    batchProcessor:
+      enabled: false
+      sendBatchSize: 200
+      sendBatchMaxSize: 200
+      timeout: 200ms
 targetAllocator:
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-operator/target-allocator
