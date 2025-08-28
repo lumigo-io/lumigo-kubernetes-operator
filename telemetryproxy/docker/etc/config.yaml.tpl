@@ -8,6 +8,10 @@
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 {{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
 {{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
+{{- $batchProcessorEnabled := getenv "LUMIGO_BATCH_PROCESSOR_ENABLED" "false" | conv.ToBool }}
+{{- $batchProcessorSize := getenv "LUMIGO_BATCH_PROCESSOR_SIZE" "200" }}
+{{- $batchProcessorMaxSize := getenv "LUMIGO_BATCH_PROCESSOR_MAX_SIZE" "200" }}
+{{- $batchProcessorTimeout := getenv "LUMIGO_BATCH_PROCESSOR_TIMEOUT" "200ms" }}
 
 receivers:
 
@@ -70,6 +74,7 @@ exporters:
     endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
     auth:
       authenticator: headers_setter/lumigo
+    compression: gzip
 
 {{- if $metricsScrapingEnabled }}
   otlphttp/lumigo_metrics:
@@ -106,6 +111,17 @@ exporters:
 processors:
 
   batch:
+
+{{- if $batchProcessorEnabled }}
+  # Keep log export payloads small and per-tenant
+  batch/logs:
+    send_batch_size: {{ $batchProcessorSize }}
+    send_batch_max_size: {{ $batchProcessorMaxSize }}
+    timeout: {{ $batchProcessorTimeout }}
+    # Ensure records with different inbound auth headers are never mixed
+    metadata_keys:
+      - http.header.authorization
+{{- end }}
 
   k8sdataenricherprocessor:
     auth_type: serviceAccount
@@ -273,6 +289,9 @@ service:
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
+{{- if $batchProcessorEnabled }}
+      - batch/logs
+{{- end }}
       exporters:
 {{- if $debug }}
       - debug
