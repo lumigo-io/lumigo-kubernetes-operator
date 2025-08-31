@@ -154,10 +154,16 @@ spec:
             - mountPath: /lumigo/etc/namespaces/
               name: namespace-configurations
               readOnly: false
+            - mountPath: /lumigo/etc/telemetry-proxy/
+              name: telemetry-proxy-config
+              readOnly: true
       volumes:
         - emptyDir: {}
           name: namespace-configurations
         - emptyDir: {}
           name: telemetry-proxy-configurations
+        - configMap:
+            name: telemetry-proxy-extra-config
+          name: telemetry-proxy-config
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

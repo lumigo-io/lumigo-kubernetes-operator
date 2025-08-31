@@ -342,6 +342,24 @@ spec:
       - name: telemetry-proxy-configurations
         emptyDir: {}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.fullname" . }}-telemetry-proxy-extra-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+data:
+  extra-config.json: |
+    {
+      "batchProcessor": {
+        "enabled": {{ .Values.telemetryProxy.logs.batchProcessor.enabled | quote }},
+        "size": {{ .Values.telemetryProxy.logs.batchProcessor.sendBatchSize | quote }},
+        "maxSize": {{ .Values.telemetryProxy.logs.batchProcessor.sendBatchMaxSize | quote }},
+        "timeout": {{ .Values.telemetryProxy.logs.batchProcessor.timeout | quote }}
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -472,16 +490,6 @@ spec:
               fieldPath: spec.nodeName
         - name: LUMIGO_OPERATOR_NAMESPACE_LIST_URL
           value: "http://{{ include "helm.fullname" . }}-webhooks-service.{{ .Release.Namespace }}.svc.cluster.local:8077/namespaces_to_monitor.json"
-{{- if .Values.clusterCollection.logs.enabled }}
-        - name: LUMIGO_BATCH_PROCESSOR_ENABLED
-          value: "{{ .Values.clusterCollection.logs.batchProcessor.enabled }}"
-        - name: LUMIGO_BATCH_PROCESSOR_SIZE
-          value: "{{ .Values.clusterCollection.logs.batchProcessor.sendBatchSize }}"
-        - name: LUMIGO_BATCH_PROCESSOR_MAX_SIZE
-          value: "{{ .Values.clusterCollection.logs.batchProcessor.sendBatchMaxSize }}"
-        - name: LUMIGO_BATCH_PROCESSOR_TIMEOUT
-          value: "{{ .Values.clusterCollection.logs.batchProcessor.timeout }}"
-{{- end }}
         ports:
         - containerPort: 4318
           name: otlphttp
@@ -501,6 +509,9 @@ spec:
         - name: namespace-configurations
           mountPath: /lumigo/etc/namespaces/
           readOnly: false
+        - name: telemetry-proxy-config
+          mountPath: /lumigo/etc/telemetry-proxy/
+          readOnly: true
       securityContext:
         runAsNonRoot: true
         fsGroup: 1234
@@ -514,3 +525,6 @@ spec:
         emptyDir: {}
       - name: telemetry-proxy-configurations
         emptyDir: {}
+      - name: telemetry-proxy-config
+        configMap:
+          name: {{ include "helm.fullname" . }}-telemetry-proxy-extra-config

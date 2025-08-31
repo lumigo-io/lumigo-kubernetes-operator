@@ -43,6 +43,12 @@ telemetryProxy: # for the standalone deployment version of the telemetry-proxy
     requests:
       cpu: 10m
       memory: 256Mi
+  logs:
+    batchProcessor:
+      enabled: false
+      sendBatchSize: 200
+      sendBatchMaxSize: 200
+      timeout: 200ms
 controllerManager:
   kubeRbacProxy:
     image:
@@ -195,12 +201,6 @@ clusterCollection:
     frequency: 15s
   logs:
     enabled: false
-    # Batch processor configuration
-    batchProcessor:
-      enabled: false
-      sendBatchSize: 200
-      sendBatchMaxSize: 200
-      timeout: 200ms
 targetAllocator:
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-operator/target-allocator

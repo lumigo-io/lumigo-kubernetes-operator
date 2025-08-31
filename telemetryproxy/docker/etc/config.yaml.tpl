@@ -1,5 +1,6 @@
 {{- $namespaces := (datasource "namespaces") -}}
 {{- $config := (datasource "config") -}}
+{{- $telemetryProxy := (datasource "telemetryProxy") -}}
 {{- $debug := $config.debug | conv.ToBool -}}
 {{- $clusterName := getenv "KUBERNETES_CLUSTER_NAME" "" }}
 {{- $infraMetricsToken := getenv "LUMIGO_INFRA_METRICS_TOKEN" "" }}
@@ -8,10 +9,6 @@
 {{- $watchdogEnabled := getenv "LUMIGO_WATCHDOG_ENABLED" "" | conv.ToBool }}
 {{- $infraMetricsEnabled := getenv "LUMIGO_INFRA_METRICS_ENABLED" "" | conv.ToBool }}
 {{- $metricsScrapingEnabled := or $watchdogEnabled $infraMetricsEnabled}}
-{{- $batchProcessorEnabled := getenv "LUMIGO_BATCH_PROCESSOR_ENABLED" "false" | conv.ToBool }}
-{{- $batchProcessorSize := getenv "LUMIGO_BATCH_PROCESSOR_SIZE" "200" }}
-{{- $batchProcessorMaxSize := getenv "LUMIGO_BATCH_PROCESSOR_MAX_SIZE" "200" }}
-{{- $batchProcessorTimeout := getenv "LUMIGO_BATCH_PROCESSOR_TIMEOUT" "200ms" }}
 
 receivers:
 
@@ -53,14 +50,10 @@ extensions:
     - key: authorization
       from_context: Authorization
       action: upsert
+
   lumigoauth/server:
     type: server
 
-{{- range $i, $namespace := $namespaces }}
-  lumigoauth/ns_{{ $namespace.name }}:
-    type: client
-    token: {{ $namespace.token }}
-{{- end }}
 
 
 exporters:
@@ -100,27 +93,20 @@ exporters:
     sampling_thereafter: 1
 {{- end }}
 
-{{- range $i, $namespace := $namespaces }}
-  otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
-    auth:
-      authenticator: lumigoauth/ns_{{ $namespace.name }}
-{{- end }}
-
 
 processors:
 
   batch:
 
-{{- if $batchProcessorEnabled }}
+{{- if $telemetryProxy.batchProcessor.enabled | conv.ToBool }}
   # Keep log export payloads small and per-tenant
   batch/logs:
-    send_batch_size: {{ $batchProcessorSize }}
-    send_batch_max_size: {{ $batchProcessorMaxSize }}
-    timeout: {{ $batchProcessorTimeout }}
+    send_batch_size: {{ $telemetryProxy.batchProcessor.size }}
+    send_batch_max_size: {{ $telemetryProxy.batchProcessor.maxSize }}
+    timeout: {{ $telemetryProxy.batchProcessor.timeout }}
     # Ensure records with different inbound auth headers are never mixed
     metadata_keys:
-      - http.header.authorization
+    - Authorization
 {{- end }}
 
   k8sdataenricherprocessor:
@@ -216,9 +202,6 @@ service:
   - headers_setter/lumigo
   - health_check
   - lumigoauth/server
-{{- range $i, $namespace := $namespaces }}
-  - lumigoauth/ns_{{ $namespace.name }}
-{{- end }}
 
   pipelines:
 
@@ -289,7 +272,7 @@ service:
       - transform/add_cluster_name
 {{- end }}
       - transform/inject_operator_details_into_resource
-{{- if $batchProcessorEnabled }}
+{{- if $telemetryProxy.batchProcessor.enabled | conv.ToBool }}
       - batch/logs
 {{- end }}
       exporters:

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telemetry-proxy-extra-config
+  labels:
+    app.kubernetes.io/name: telemetry-proxy-extra-config
+    app.kubernetes.io/instance: telemetry-proxy-extra-config
+    app.kubernetes.io/component: telemetry-proxy
+    app.kubernetes.io/created-by: lumigo
+    app.kubernetes.io/part-of: lumigo
+data:
+  extra-config.json: |
+    {
+      "batchProcessor": {
+        "enabled": false,
+        "size": "200",
+        "maxSize": "200",
+        "timeout": "200ms"
+      }
+    }
