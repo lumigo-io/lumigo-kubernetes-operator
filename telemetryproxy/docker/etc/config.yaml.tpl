@@ -120,7 +120,7 @@ processors:
     timeout: {{ $batchProcessorTimeout }}
     # Ensure records with different inbound auth headers are never mixed
     metadata_keys:
-      - http.header.authorization
+      - auth.lumigo-token
 {{- end }}
 
   k8sdataenricherprocessor:
