@@ -342,6 +342,24 @@ spec:
       - name: telemetry-proxy-configurations
         emptyDir: {}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.fullname" . }}-telemetry-proxy-extra-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+data:
+  telemetry-proxy-extra-config.json: |
+    {
+      "batchProcessor": {
+        "enabled": {{ .Values.telemetryProxy.logs.batchProcessor.enabled | quote }},
+        "size": {{ .Values.telemetryProxy.logs.batchProcessor.sendBatchSize | quote }},
+        "maxSize": {{ .Values.telemetryProxy.logs.batchProcessor.sendBatchMaxSize | quote }},
+        "timeout": {{ .Values.telemetryProxy.logs.batchProcessor.timeout | quote }}
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -501,6 +519,9 @@ spec:
         - name: namespace-configurations
           mountPath: /lumigo/etc/namespaces/
           readOnly: false
+        - name: telemetry-proxy-config
+          mountPath: /lumigo/etc/telemetry/
+          readOnly: true
       securityContext:
         runAsNonRoot: true
         fsGroup: 1234
@@ -514,3 +535,6 @@ spec:
         emptyDir: {}
       - name: telemetry-proxy-configurations
         emptyDir: {}
+      - name: telemetry-proxy-config
+        configMap:
+          name: {{ include "helm.fullname" . }}-telemetry-proxy-extra-config
