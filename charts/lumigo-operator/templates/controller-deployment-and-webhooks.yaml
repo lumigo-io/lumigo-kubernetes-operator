@@ -490,16 +490,6 @@ spec:
               fieldPath: spec.nodeName
         - name: LUMIGO_OPERATOR_NAMESPACE_LIST_URL
           value: "http://{{ include "helm.fullname" . }}-webhooks-service.{{ .Release.Namespace }}.svc.cluster.local:8077/namespaces_to_monitor.json"
-{{- if .Values.clusterCollection.logs.enabled }}
-        - name: LUMIGO_BATCH_PROCESSOR_ENABLED
-          value: "{{ .Values.telemetryProxy.logs.batchProcessor.enabled }}"
-        - name: LUMIGO_BATCH_PROCESSOR_SIZE
-          value: "{{ .Values.telemetryProxy.logs.batchProcessor.sendBatchSize }}"
-        - name: LUMIGO_BATCH_PROCESSOR_MAX_SIZE
-          value: "{{ .Values.telemetryProxy.logs.batchProcessor.sendBatchMaxSize }}"
-        - name: LUMIGO_BATCH_PROCESSOR_TIMEOUT
-          value: "{{ .Values.telemetryProxy.logs.batchProcessor.timeout }}"
-{{- end }}
         ports:
         - containerPort: 4318
           name: otlphttp
