@@ -53,14 +53,10 @@ extensions:
     - key: authorization
       from_context: Authorization
       action: upsert
+
   lumigoauth/server:
     type: server
 
-{{- range $i, $namespace := $namespaces }}
-  lumigoauth/ns_{{ $namespace.name }}:
-    type: client
-    token: {{ $namespace.token }}
-{{- end }}
 
 
 exporters:
@@ -100,13 +96,6 @@ exporters:
     sampling_thereafter: 1
 {{- end }}
 
-{{- range $i, $namespace := $namespaces }}
-  otlphttp/lumigo_ns_{{ $namespace.name }}:
-    endpoint: ${env:LUMIGO_LOGS_ENDPOINT:-https://ga-otlp.lumigo-tracer-edge.golumigo.com}
-    auth:
-      authenticator: lumigoauth/ns_{{ $namespace.name }}
-{{- end }}
-
 
 processors:
 
@@ -120,7 +109,7 @@ processors:
     timeout: {{ $batchProcessorTimeout }}
     # Ensure records with different inbound auth headers are never mixed
     metadata_keys:
-      - auth.lumigo-token
+    - Authorization
 {{- end }}
 
   k8sdataenricherprocessor:
@@ -216,9 +205,6 @@ service:
   - headers_setter/lumigo
   - health_check
   - lumigoauth/server
-{{- range $i, $namespace := $namespaces }}
-  - lumigoauth/ns_{{ $namespace.name }}
-{{- end }}
 
   pipelines:
 
