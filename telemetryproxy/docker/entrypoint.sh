@@ -5,7 +5,7 @@ set -eo pipefail
 readonly OTELCOL_CONFIG_FILE_PATH="/lumigo/etc/otelcol/config.yaml"
 readonly OTELCOL_CONFIG_TEMPLATE_FILE_PATH=${OTELCOL_CONFIG_TEMPLATE_FILE_PATH:-"/lumigo/etc/otelcol-config.yaml.tpl"}
 readonly GENERATION_CONFIG_FILE_PATH="/lumigo/etc/otelcol/generation-config.json"
-readonly TELEMETRY_PROXY_EXTRA_CONFIG_FILE_PATH="/lumigo/etc/telemetry/telemetry-proxy-extra-config.json"
+readonly TELEMETRY_PROXY_EXTRA_CONFIG_FILE_PATH="/lumigo/etc/telemetry-proxy/extra-config.json"
 readonly NAMESPACES_FILE_PATH="/lumigo/etc/namespaces/namespaces_to_monitor.json"
 readonly NAMESPACES_FILE_SHA_PATH="${NAMESPACES_FILE_PATH}.sha1"
 

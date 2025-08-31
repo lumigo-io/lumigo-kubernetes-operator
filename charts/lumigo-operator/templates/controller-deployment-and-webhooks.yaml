@@ -350,7 +350,7 @@ metadata:
   labels:
     {{- include "helm.labels" . | nindent 4 }}
 data:
-  telemetry-proxy-extra-config.json: |
+  extra-config.json: |
     {
       "batchProcessor": {
         "enabled": {{ .Values.telemetryProxy.logs.batchProcessor.enabled | quote }},
@@ -510,7 +510,7 @@ spec:
           mountPath: /lumigo/etc/namespaces/
           readOnly: false
         - name: telemetry-proxy-config
-          mountPath: /lumigo/etc/telemetry/
+          mountPath: /lumigo/etc/telemetry-proxy/
           readOnly: true
       securityContext:
         runAsNonRoot: true
