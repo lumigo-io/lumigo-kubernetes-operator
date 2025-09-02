@@ -59,9 +59,12 @@ jobs:
           ip a
           echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
       - name: Check token scopes
-        env: { TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }} }
+        env:
+          TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
         run: |
-          echo "token_scopes=$(curl -sI -H "Authorization: token $TOKEN" https://api.github.com/ | tr -d '\r' | grep -i ^X-OAuth-Scopes:)" >> ${GITHUB_OUTPUT}
+          hdr=$(curl -sI -H "Authorization: token $TOKEN" https://api.github.com/ | tr -d '\r')
+          scopes=$(echo "$hdr" | awk -F': ' '/^X-OAuth-Scopes:/ {print $2}')
+          echo "token_scopes=${scopes}" >> "$GITHUB_OUTPUT"
       - name: Install regctl
         env:
           GH_TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
