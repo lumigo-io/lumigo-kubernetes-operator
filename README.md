@@ -343,9 +343,10 @@ helm upgrade -i lumigo lumigo/lumigo-operator \
 ```
 
 **Configuration options:**
-- `sendBatchSize`: The number of logs to batch before sending (default: 200)
-- `sendBatchMaxSize`: Maximum number of logs in a batch (default: 200)
-- `timeout`: Maximum time to wait before sending a batch (default: 200ms)
+- `telemetryProxy.logs.batchProcessor.enabled`: Whether to activate batching mode or not (default: false)
+- `telemetryProxy.logs.batchProcessor.sendBatchSize`: The number of logs to batch before sending (default: 200)
+- `telemetryProxy.logs.batchProcessor.sendBatchMaxSize`: Maximum number of logs in a batch (default: 200)
+- `telemetryProxy.logs.batchProcessor.timeout`: Maximum time to wait before sending a batch (default: 200ms)
 
 **Note:** Batching is only available for logs sent via OTLP instrumentation and requires operator version 67 or higher.
 
