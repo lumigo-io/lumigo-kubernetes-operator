@@ -161,7 +161,7 @@ helm upgrade -i lumigo lumigo/lumigo-operator \
 - **No manual sharding required**: The operator handles load distribution automatically
 
 **Configuration options:**
-- `kubeStateMetrics.replicas`: Number of kube-state-metrics replicas (default: 1)
+- `kube-state-metrics.replicas`: Number of kube-state-metrics replicas (default: 1)
 
 **Performance Tuning:**
 For very large clusters (> 10,000 resources), consider:
