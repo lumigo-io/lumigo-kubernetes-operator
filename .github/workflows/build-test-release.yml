@@ -58,18 +58,6 @@ jobs:
         run: |
           ip a
           echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
-      - name: Check token scopes
-        env:
-          TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
-        run: |
-          set -euo pipefail
-          hdr=$(curl -sI -H "Authorization: token $TOKEN" https://api.github.com/ | tr -d '\r')
-          status=$(echo "$hdr" | awk '/^HTTP/{print $2; exit}')
-          scopes=$(echo "$hdr" | awk -F': ' 'tolower($1)=="x-oauth-scopes" {print $2}')
-          accepted=$(echo "$hdr" | awk -F': ' 'tolower($1)=="x-accepted-oauth-scopes" {print $2}')
-          echo "::notice title=HTTP status::$status"
-          echo "::notice title=X-OAuth-Scopes::${scopes:-<none>}"
-          echo "::notice title=X-Accepted-OAuth-Scopes::${accepted:-<none>}"
       - name: Install regctl
         env:
           GH_TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
