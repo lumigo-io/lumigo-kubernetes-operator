@@ -218,7 +218,7 @@ jobs:
           echo "ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)" >> ${GITHUB_OUTPUT}
       - name: Install regctl
         env:
-          GH_TOKEN: ${{ secrets.TRIGGER_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release download v0.5.0 --repo regclient/regclient --pattern regctl-linux-amd64 --output /tmp/regctl
           chmod 0755 /tmp/regctl
