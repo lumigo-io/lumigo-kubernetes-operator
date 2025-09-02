@@ -152,7 +152,7 @@ You can set the number of replicas using Helm values:
 
 ```sh
 helm upgrade -i lumigo lumigo/lumigo-operator \
-  --set "kubeStateMetrics.replicas=3"
+  --set "kube-state-metrics.replicas=3"
 ```
 
 **How it works:**
@@ -340,9 +340,6 @@ To enable log batching, use the following Helm settings:
 ```sh
 helm upgrade -i lumigo lumigo/lumigo-operator \
   --set "telemetryProxy.logs.batchProcessor.enabled=true" \
-  --set "telemetryProxy.logs.batchProcessor.sendBatchSize=200" \
-  --set "telemetryProxy.logs.batchProcessor.sendBatchMaxSize=200" \
-  --set "telemetryProxy.logs.batchProcessor.timeout=200ms"
 ```
 
 **Configuration options:**
