@@ -143,6 +143,32 @@ helm upgrade lumigo lumigo/lumigo-operator --namespace lumigo-system
 Metrics are only available at the cluster level at the moment (i.e. infrastrucute metrics and not application metrics), and are enabled by default assuming you either set `lumigoToken.value` in the Helm values, or reference an existing Kubernetes secret.
 By default, only metrics essential to the Lumigo K8s functionality are collected, but you can enable additional metrics by setting the `clusterCollection.metrics.essentialOnly` field to `false` in the Helm values during installation.
 
+#### Kube-State-Metrics Scaling
+
+The Lumigo Kubernetes operator includes kube-state-metrics which can be scaled horizontally for improved performance in large clusters. By default, kube-state-metrics runs as a single replica, but you can configure multiple replicas based on your cluster size and performance requirements.
+
+**Configuration:**
+You can set the number of replicas using Helm values:
+
+```sh
+helm upgrade -i lumigo lumigo/lumigo-operator \
+  --set "kube-state-metrics.replicas=3"
+```
+
+**How it works:**
+- **Single replica (default)**: Suitable for small to medium clusters
+- **Multiple replicas**: kube-state-metrics automatically distributes the load between replicas
+- **No manual sharding required**: The operator handles load distribution automatically
+
+**Configuration options:**
+- `kube-state-metrics.replicas`: Number of kube-state-metrics replicas (default: 1)
+
+**Performance Tuning:**
+For very large clusters (> 10,000 resources), consider:
+- Increasing the number of replicas to 3-4 based on cluster size
+- Monitoring memory usage and adjusting accordingly
+- The operator automatically balances the workload across replicas
+
 ### Enabling automatic tracing
 
 #### Supported resource types
@@ -304,6 +330,25 @@ Notes about the settings:
 2. If a pattern is not provided for one of the components, it will be considered as a wildcard pattern - e.g. including pods while specifying `podPattern` will include all containers of those pods in all namespaces.
 3. Each `exclude` value is checked against the paths matched by `include`, meaning if a path is matched by both `include` and `exclude`, it will be excluded.
 4. By default, all logs from all pods in all namespaces are included, with no exclusions. Exceptions are the `kube-system` and `lumigo-system` namespaces, that will be always added to the default or provided exclusion list.
+
+#### Logs Batching
+
+The Lumigo Kubernetes operator supports batching for logs to improve performance and reduce network overhead. Batching can be enabled for logs sent via the Lumigo OTEL distro.
+
+To enable log batching, use the following Helm settings:
+
+```sh
+helm upgrade -i lumigo lumigo/lumigo-operator \
+  --set "telemetryProxy.logs.batchProcessor.enabled=true" \
+```
+
+**Configuration options:**
+- `telemetryProxy.logs.batchProcessor.enabled`: Whether to activate batching mode or not (default: false)
+- `telemetryProxy.logs.batchProcessor.sendBatchSize`: The number of logs to batch before sending (default: 200)
+- `telemetryProxy.logs.batchProcessor.sendBatchMaxSize`: Maximum number of logs in a batch (default: 200)
+- `telemetryProxy.logs.batchProcessor.timeout`: Maximum time to wait before sending a batch (default: 200ms)
+
+**Note:** Batching is only available for logs sent via OTLP instrumentation and requires operator version 67 or higher.
 
 #### Opting out for specific resources
 
