@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-deployment
+  labels:
+    app: hello-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-deployment
+  template:
+    metadata:
+      labels:
+        app: hello-deployment
+    spec:
+      containers:
+      - name: hello
+        image: busybox:1.37.0
+        command: ["/bin/sh"]
+        args: ["-c", "while true; do echo 'Hello there'; sleep 3600; done"]
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi

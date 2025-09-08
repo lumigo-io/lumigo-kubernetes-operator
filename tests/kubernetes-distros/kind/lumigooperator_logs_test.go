@@ -484,6 +484,20 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					return false, nil
 				}
 
+				for _, appLog := range applicationLogs {
+					for _, expectedResourceAttribute := range [5]string{
+						"k8s.pod.uid",
+						"k8s.pod.name",
+						"k8s.namespace.name",
+						"k8s.replicaset.name",
+						"k8s.deployment.name",
+					} {
+						if resourceAttribute, found := appLog.Attributes().Get(expectedResourceAttribute); !found || resourceAttribute.AsString() == "" {
+							t.Fatalf("Found an application log with a missing or empty '%s' attribute: %v", expectedResourceAttribute, appLog.Attributes().AsRaw())
+						}
+					}
+				}
+
 				t.Logf("Found application logs: %d", len(applicationLogs))
 				return true, nil
 			}); err != nil {

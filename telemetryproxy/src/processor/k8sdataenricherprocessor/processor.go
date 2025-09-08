@@ -201,18 +201,14 @@ func (kp *kubernetesprocessor) addResourceAttributes(ctx context.Context, resour
 }
 
 func (kp *kubernetesprocessor) getPod(ctx context.Context, resource *pcommon.Resource) (*corev1.Pod, bool) {
-	// Try to look for k8s.pod.uid and see if we have a match in our cache
+	// Try to look for k8s.pod.uid and see if we have a match in our cache.
+	// The pod is expected to be present there by the pod informer that is watching the pods as they are created or when the operator first starts.lo
 	if podUID, found := resource.Attributes().Get(string(semconv.K8SPodUIDKey)); found {
 		podUISAsStr := podUID.AsString()
 
 		if pod, found := kp.kube.GetPodByUID(types.UID(podUISAsStr)); found {
 			return pod, true
 		}
-	}
-
-	// Try to look by connection ip, matching the pod ips known by the Kube API
-	if pod, found := kp.kube.GetPodByNetworkConnection(ctx); found {
-		return pod, true
 	}
 
 	return nil, false
