@@ -109,7 +109,9 @@ processors:
       - context: log
         statements:
           - set(instrumentation_scope.name, "lumigo-operator.log_file_collector")
+{{- if .Values.cluster.name }}
           - set(resource.attributes["k8s.cluster.name"], "${env:KUBERNETES_CLUSTER_NAME}")
+{{- end }}
   batch:
 service:
 {{- if .Values.debug.enabled }}
