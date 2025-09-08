@@ -3,12 +3,14 @@ package internal // import "github.com/open-telemetry/opentelemetry-collector-co
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"strings"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.opentelemetry.io/collector/client"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -678,6 +680,67 @@ func (c *KubeClient) RegisterCronJob(cronJob *batchv1.CronJob) {
 
 func (c *KubeClient) RegisterJob(job *batchv1.Job) {
 	c.jobCache.Add(*job)
+}
+
+func (c *KubeClient) GetPodByNetworkConnection(ctx context.Context) (*corev1.Pod, bool) {
+	podIpAddress := connectionIP(ctx)
+	if pod, err := retry(
+		fmt.Sprintf("Get v1.Pod with IP address '%s' from the Kube API", podIpAddress),
+		retryAttempts,
+		retryAttempStep,
+		func() (*corev1.Pod, error) {
+			if podList, err := c.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+				FieldSelector: fmt.Sprintf("status.podIP=%s", podIpAddress),
+			}); err != nil {
+				return nil, err
+			} else if len(podList.Items) > 0 {
+				pod := podList.Items[0]
+				return &pod, nil
+			} else {
+				return nil, fmt.Errorf("Unexpected length of podlist: %v", podList.Items)
+			}
+		},
+		c.logger,
+	); err != nil {
+		if !errors.IsNotFound(err) {
+			c.logger.Error(
+				"Cannot lookup pod by ip address",
+				zap.String("ip-address", podIpAddress),
+				zap.Error(err),
+			)
+		}
+		return nil, false
+	} else {
+		c.RegisterPod(pod)
+		return pod, true
+	}
+}
+
+func connectionIP(ctx context.Context) string {
+	// From https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/fbd85e02bd03a144a6b96d4b5fd6b6b4c6e1594c/processor/k8sattributesprocessor/pod_association.go#L101
+	c := client.FromContext(ctx)
+	if c.Addr == nil {
+		return ""
+	}
+	switch addr := c.Addr.(type) {
+	case *net.UDPAddr:
+		return addr.IP.String()
+	case *net.TCPAddr:
+		return addr.IP.String()
+	case *net.IPAddr:
+		return addr.IP.String()
+	}
+	// If this is not a known address type, check for known "untyped" formats.
+	// 1.1.1.1:<port>
+	lastColonIndex := strings.LastIndex(c.Addr.String(), ":")
+	if lastColonIndex != -1 {
+		ipString := c.Addr.String()[:lastColonIndex]
+		ip := net.ParseIP(ipString)
+		if ip != nil {
+			return ip.String()
+		}
+	}
+	return c.Addr.String()
 }
 
 func registerObject(informer cache.SharedInformer, logger *zap.Logger, kind string, object runtime.Object) {

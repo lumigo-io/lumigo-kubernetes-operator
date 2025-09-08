@@ -211,6 +211,11 @@ func (kp *kubernetesprocessor) getPod(ctx context.Context, resource *pcommon.Res
 		}
 	}
 
+	// Try to look by connection ip, matching the pod ips known by the Kube API
+	if pod, found := kp.kube.GetPodByNetworkConnection(ctx); found {
+		return pod, true
+	}
+
 	return nil, false
 }
 
