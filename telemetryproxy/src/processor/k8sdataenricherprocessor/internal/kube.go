@@ -431,9 +431,7 @@ func (c *KubeClient) Start() error {
 				c.logger.Error("Cannot cast object to *corev1.Pod", zap.Any("object", newObj))
 				return
 			}
-			if !c.podUIDCache.Contains(pod.UID) {
-				c.podUIDCache.Add(pod.UID, *pod)
-			}
+			c.podUIDCache.Add(pod.UID, *pod)
 		},
 		DeleteFunc: func(obj interface{}) {
 			// Nothing to do, deletion is managed by LRU
