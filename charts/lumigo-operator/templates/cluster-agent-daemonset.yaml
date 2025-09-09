@@ -44,7 +44,7 @@ spec:
               name: {{ .Values.lumigoToken.secretName }}
               key: {{ .Values.lumigoToken.secretKey }}
         - name: LUMIGO_LOGS_ENDPOINT
-          value: "{{ .Values.endpoint.otlp.logs_url }}"
+          value: "http://{{ include "helm.fullname" . }}-telemetry-proxy-service.{{ .Release.Namespace }}.svc.cluster.local"
         - name: KUBERNETES_CLUSTER_NAME
           value: "{{ .Values.cluster.name }}"
         volumeMounts:

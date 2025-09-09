@@ -176,6 +176,9 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
+{{- if .Values.debug.enabled | default false }}
+        - --zap-log-level=debug
+{{- end }}
         env:
         - name: LUMIGO_DEBUG
           value: "{{ .Values.debug.enabled | default false }}"

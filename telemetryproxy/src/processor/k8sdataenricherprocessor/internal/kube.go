@@ -416,6 +416,30 @@ func (c *KubeClient) Start() error {
 		return fmt.Errorf("cannot register event handler for pod informer: %w", err)
 	}
 
+	if _, err := c.podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			pod, ok := obj.(*corev1.Pod)
+			if !ok {
+				c.logger.Error("Cannot cast object to *corev1.Pod", zap.Any("object", obj))
+				return
+			}
+			c.podUIDCache.Add(pod.UID, *pod)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			pod, ok := newObj.(*corev1.Pod)
+			if !ok {
+				c.logger.Error("Cannot cast object to *corev1.Pod", zap.Any("object", newObj))
+				return
+			}
+			c.podUIDCache.Add(pod.UID, *pod)
+		},
+		DeleteFunc: func(obj interface{}) {
+			// Nothing to do, deletion is managed by LRU
+		},
+	}); err != nil {
+		return fmt.Errorf("cannot register event handler for pod informer: %w", err)
+	}
+
 	if _, err := c.daemonSetInformer.AddEventHandler(cachedEventHandler(&c.daemonSetCache, c.ObjectResourceVersions, c.logger)); err != nil {
 		return fmt.Errorf("cannot register event handler for daemonset informer: %w", err)
 	}
@@ -656,33 +680,8 @@ func (c *KubeClient) RegisterJob(job *batchv1.Job) {
 	c.jobCache.Add(*job)
 }
 
-func registerObject(informer cache.SharedInformer, logger *zap.Logger, kind string, object runtime.Object) {
-	store := informer.GetStore()
-	if err := store.Add(object); err != nil {
-		logger.Debug(
-			"Error while manually registering "+kind+" in "+kind+"'s store",
-			zap.Any(kind, object),
-			zap.Error(err),
-		)
-	} else {
-		logger.Debug(
-			"Manually registered "+kind+" in "+kind+"'s store",
-			zap.Any(kind, object),
-		)
-	}
-}
-
-func (c *KubeClient) GetPodByUID(uid types.UID) (*corev1.Pod, bool) {
-	if pod, found := c.podUIDCache.Get(uid); found {
-		return &pod, true
-	}
-
-	return nil, false
-}
-
 func (c *KubeClient) GetPodByNetworkConnection(ctx context.Context) (*corev1.Pod, bool) {
 	podIpAddress := connectionIP(ctx)
-
 	if pod, err := retry(
 		fmt.Sprintf("Get v1.Pod with IP address '%s' from the Kube API", podIpAddress),
 		retryAttempts,
@@ -729,10 +728,8 @@ func connectionIP(ctx context.Context) string {
 	case *net.IPAddr:
 		return addr.IP.String()
 	}
-
 	// If this is not a known address type, check for known "untyped" formats.
 	// 1.1.1.1:<port>
-
 	lastColonIndex := strings.LastIndex(c.Addr.String(), ":")
 	if lastColonIndex != -1 {
 		ipString := c.Addr.String()[:lastColonIndex]
@@ -741,8 +738,31 @@ func connectionIP(ctx context.Context) string {
 			return ip.String()
 		}
 	}
-
 	return c.Addr.String()
+}
+
+func registerObject(informer cache.SharedInformer, logger *zap.Logger, kind string, object runtime.Object) {
+	store := informer.GetStore()
+	if err := store.Add(object); err != nil {
+		logger.Debug(
+			"Error while manually registering "+kind+" in "+kind+"'s store",
+			zap.Any(kind, object),
+			zap.Error(err),
+		)
+	} else {
+		logger.Debug(
+			"Manually registered "+kind+" in "+kind+"'s store",
+			zap.Any(kind, object),
+		)
+	}
+}
+
+func (c *KubeClient) GetPodByUID(uid types.UID) (*corev1.Pod, bool) {
+	if pod, found := c.podUIDCache.Get(uid); found {
+		return &pod, true
+	}
+
+	return nil, false
 }
 
 func (c *KubeClient) GetClusterUid() (types.UID, bool) {

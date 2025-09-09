@@ -471,6 +471,20 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
 
+					for _, resourceAttributes := range exportLogResourceAttributes(exportRequest, SCOPE_LOGGER_NAME) {
+						for _, expectedResourceAttribute := range []string{
+							"k8s.pod.uid",
+							"k8s.pod.name",
+							"k8s.namespace.name",
+							"k8s.replicaset.name",
+							"k8s.deployment.name",
+						} {
+							if resourceAttribute, found := resourceAttributes.AsRaw()[expectedResourceAttribute].(string); !found || resourceAttribute == "" {
+								t.Fatalf("Found an application log with a missing or empty '%s' attribute: %v", expectedResourceAttribute, resourceAttributes.AsRaw())
+							}
+						}
+					}
+
 					if appLogs, err := exportRequestLogRecords(exportRequest, filterApplicationLogRecords); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
 					} else {
@@ -516,6 +530,20 @@ func TestLumigoOperatorLogsEventsAndObjects(t *testing.T) {
 				for _, exportRequestJson := range exportRequests {
 					exportRequest := plogotlp.NewExportRequest()
 					exportRequest.UnmarshalJSON([]byte(exportRequestJson))
+
+					for _, resourceAttributes := range exportLogResourceAttributes(exportRequest, SCOPE_LOGGER_NAME) {
+						for _, expectedResourceAttribute := range []string{
+							"k8s.pod.uid",
+							"k8s.pod.name",
+							"k8s.namespace.name",
+							"k8s.replicaset.name",
+							"k8s.deployment.name",
+						} {
+							if resourceAttribute, found := resourceAttributes.AsRaw()[expectedResourceAttribute].(string); !found || resourceAttribute == "" {
+								t.Fatalf("Found an application log with a missing or empty '%s' attribute: %v", expectedResourceAttribute, resourceAttributes.AsRaw())
+							}
+						}
+					}
 
 					if appLogs, err := exportRequestLogRecords(exportRequest, filterPodLogRecords); err != nil {
 						t.Fatalf("Cannot extract logs from export request: %v", err)
@@ -937,6 +965,19 @@ func exportRequestLogRecords(exportRequest plogotlp.ExportRequest, filter LogRec
 	}
 
 	return allLogRecords, nil
+}
+
+func exportLogResourceAttributes(exportRequest plogotlp.ExportRequest, scopeName string) []pcommon.Map {
+	allResourceAttributes := make([]pcommon.Map, 0)
+
+	for i := 0; i < exportRequest.Logs().ResourceLogs().Len(); i++ {
+		resourceAttributes := exportRequest.Logs().ResourceLogs().At(i).Resource().Attributes()
+		if exportRequest.Logs().ResourceLogs().At(i).ScopeLogs().AppendEmpty().Scope().Name() == scopeName {
+			allResourceAttributes = append(allResourceAttributes, resourceAttributes)
+		}
+	}
+
+	return allResourceAttributes
 }
 
 func createAndDeleteTempDeployment(ctx context.Context, config *envconf.Config, deployment *appsv1.Deployment, expectedReplicas int32) error {
