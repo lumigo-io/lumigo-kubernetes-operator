@@ -4,15 +4,14 @@ kind: ConfigMap
 metadata:
   name: {{ include "helm.fullname" . }}-cluster-agent-config
 data:
-  otel-collector-config.yaml:
-      {{ include "clusterAgent.otelCollectorConfig" . | toYaml | nindent 4 }}
+  otel-collector-config.yaml: {{ include "clusterAgent.otelCollectorConfig" . | toYaml }}
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ include "helm.fullname" . }}-cluster-agent
   labels:
-  {{- include "helm.labels" . | nindent 4 }}
+    {{- include "helm.labels" . | nindent 4 }}
     app.kubernetes.io/component: cluster-agent
     app.kubernetes.io/created-by: lumigo
     app.kubernetes.io/part-of: lumigo
@@ -22,19 +21,19 @@ spec:
   selector:
     matchLabels:
       control-plane: cluster-agent
-    {{- include "helm.selectorLabels" . | nindent 6 }}
+      {{- include "helm.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
         # This effectively triggers a restart of the Daemonset pods when the config changes, which is otherwise not the case for ConfigMaps in k8s.
         lumigo.io/ca-otel-config-version: {{ include "clusterAgent.otelCollectorConfig" . | sha256sum | substr 0 10 | quote }}
       labels:
-      {{- include "helm.selectorLabels" . | nindent 8 }}
+        {{- include "helm.selectorLabels" . | nindent 8 }}
         control-plane: cluster-agent
         lumigo.auto-trace: 'false' # We don't want the operator to inject itself into pods from this daemonset
     spec:
       containers:
-{{- if .Values.clusterCollection.logs.enabled }}
+      {{- if .Values.clusterCollection.logs.enabled }}
       - name: otel-collector
         image: {{ .Values.logFileCollector.image.repository }}:{{ .Values.logFileCollector.image.tag }}
         env:
@@ -58,8 +57,8 @@ spec:
         - "/otelcol-contrib"
         - "--config=/etc/otel-collector-config/otel-collector-config.yaml"
         resources: {{- toYaml .Values.logFileCollector.resources | nindent 10 }}
-{{- end }}
-{{- if .Values.clusterCollection.metrics.enabled }}
+      {{- end }}
+      {{- if .Values.clusterCollection.metrics.enabled }}
       - name: prometheus-node-exporter
         image: {{ .Values.prometheusNodeExporter.image.repository }}:{{ .Values.prometheusNodeExporter.image.tag }}
         ports:
@@ -79,19 +78,24 @@ spec:
           - "--path.procfs=/host/proc"
           - "--path.sysfs=/host/sys"
           - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($|/)"
-  {{- if .Values.debug.enabled }}
+          {{- if .Values.debug.enabled }}
           - "--log.level=debug"
-  {{- end }}
+          {{- end }}
         resources: {{- toYaml .Values.prometheusNodeExporter.resources | nindent 10 }}
-{{- end }}
-{{- if or .Values.tolerations.clusterAgent .Values.tolerations.global }}
-      tolerations: {{- toYaml (.Values.tolerations.clusterAgent | default .Values.tolerations.global) | nindent 8 }}
-{{- end }}
+      {{- end }}
+      {{- if or .Values.tolerations.clusterAgent .Values.tolerations.global }}
+      tolerations:
+      {{- toYaml (.Values.tolerations.clusterAgent | default .Values.tolerations.global) | nindent 6 }}
+      {{- end }}
+      {{- if or .Values.nodeSelector.clusterAgent .Values.nodeSelector.global }}
+      nodeSelector:
+        {{- toYaml (.Values.nodeSelector.clusterAgent | default .Values.nodeSelector.global) | nindent 8 }}
+      {{- end }}
       volumes:
       - name: collector-config
         configMap:
           name: {{ include "helm.fullname" . }}-cluster-agent-config
-{{- if .Values.clusterCollection.logs.enabled }}
+      {{- if .Values.clusterCollection.logs.enabled }}
       - name: varlogpods
         hostPath:
           path: /var/log/pods/
@@ -103,8 +107,8 @@ spec:
           # We use "" since /var/log/pods is a symlink pointing to different paths on different container engines,
           # we mount all possible actual paths for all container engines, and those that don't exist will be ignored.
           type: ""
-{{- end }}
-{{- if .Values.clusterCollection.metrics.enabled }}
+      {{- end }}
+      {{- if .Values.clusterCollection.metrics.enabled }}
       - name: proc
         hostPath:
           path: /proc
@@ -114,5 +118,5 @@ spec:
       - name: rootfs
         hostPath:
           path: /
-{{- end }}
+      {{- end }}
 {{- end }}
