@@ -77,6 +77,7 @@ func installLumigoOperator(ctx context.Context, client klient.Client, kubeconfig
 		helm.WithArgs(fmt.Sprintf("--set tolerations.global[0].operator=%s", "Equal")),
 		helm.WithArgs(fmt.Sprintf("--set tolerations.global[0].value=%s", "voila")),
 		helm.WithArgs(fmt.Sprintf("--set tolerations.global[0].effect=%s", "NoExecute")),
+		helm.WithArgs(fmt.Sprintf("--set nodeSelector.global.node-type=%s", "really-good")),
 		helm.WithArgs("--set clusterCollection.metrics.essentialOnly=true"), // Collect only metrics essential for the k8s page in the platform, to test this feature
 		helm.WithArgs("--debug"), // Helm debug output on install
 		helm.WithWait(),
