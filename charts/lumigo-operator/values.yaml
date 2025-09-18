@@ -14,6 +14,15 @@ tolerations:
   targetAllocator:
   installHook:
   uninstallHook:
+nodeSelector:
+  global:
+  watchdog:
+  clusterAgent:
+  controllerManager:
+  telemetryProxy:
+  targetAllocator:
+  installHook:
+  uninstallHook:
 watchdog:
   enabled: true
   image:
